@@ -1,0 +1,16 @@
+{
+  "bus_config_path": "message_bus_config.json",
+  "schema_path": "bus_topics_schema.json",
+  "nodes_path": "../hivelink/nodes.json",
+  "main_uav": {
+    "msp_requests": []
+  },
+  "uav_interface": {},
+  "hivelink": {
+    "my_name": "uav1",
+    "udp_host": "0.0.0.0",
+    "udp_port": 5555,
+    "multicast_group": "",
+    "multicast_port": null
+  }
+}
