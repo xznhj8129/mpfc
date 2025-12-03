@@ -27,6 +27,7 @@ from typing import Awaitable, Callable, Dict, Optional, Tuple
 MAX_LINE_BYTES = 1_048_576
 ENCODING = "utf-8"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
+HANDSHAKE_OP = "HANDSHAKE"
 
 
 def _build_logger(name: str) -> logging.Logger:
@@ -82,7 +83,7 @@ class BusClientAsync(_Common):
         host, port = cls._validate_endpoint(host, port)
         reader, writer = await asyncio.open_connection(host, port, limit=MAX_LINE_BYTES)
         client = cls(reader, writer)
-        await client._send({"op": "hello", "client": client_id})
+        await client._send({"op": HANDSHAKE_OP, "client": client_id})
         return client
 
     @classmethod
@@ -91,7 +92,7 @@ class BusClientAsync(_Common):
             raise ValueError("unix socket path is required")
         reader, writer = await asyncio.open_unix_connection(path=path, limit=MAX_LINE_BYTES)
         client = cls(reader, writer)
-        await client._send({"op": "hello", "client": client_id})
+        await client._send({"op": HANDSHAKE_OP, "client": client_id})
         return client
 
     async def _send(self, message: Dict) -> None:
@@ -141,7 +142,7 @@ class BusClientSync(_Common):
         sock = socket.create_connection((host, port))
         log = logger or _build_logger("message_bus_sync_client")
         client = cls(sock, client_id, log)
-        client._send_line({"op": "hello", "client": client_id})
+        client._send_line({"op": HANDSHAKE_OP, "client": client_id})
         client._start_reader()
         return client
 
@@ -153,7 +154,7 @@ class BusClientSync(_Common):
         sock.connect(path)
         log = logger or _build_logger("message_bus_sync_client")
         client = cls(sock, client_id, log)
-        client._send_line({"op": "hello", "client": client_id})
+        client._send_line({"op": HANDSHAKE_OP, "client": client_id})
         client._start_reader()
         return client
 

@@ -12,6 +12,7 @@ MAX_LINE_BYTES = 1_048_576
 ENCODING = "utf-8"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("message_bus_config.json")
+HANDSHAKE_OP = "HANDSHAKE"
 
 
 class MessageBus:
@@ -55,17 +56,24 @@ class MessageBus:
             self.subscriptions[topic].add(client_id)
 
     async def publish(self, client_id: str, topic: str, message: Dict, line_text: str) -> None:
-        self.logger.info("IN %s %s", client_id, line_text)
+        payload = message.get("payload")
+        data_display = payload
+        if isinstance(payload, dict) and "data" in payload:
+            data_display = payload.get("data")
+        try:
+            data_text = json.dumps(data_display, separators=(",", ":"))
+        except (TypeError, ValueError):
+            data_text = str(data_display)
         async with self.lock:
             targets = tuple(self.subscriptions.get(topic, ()))
             writers = {target_id: self.clients.get(target_id) for target_id in targets}
         if not writers:
             self.logger.info("DROP %s topic=%s reason=no_subscribers", client_id, topic)
             return
+        self.logger.info("PUB %s topic=%s targets=%s data=%s", client_id, topic, targets, data_text)
         outgoing = dict(message)
         outgoing["src"] = client_id
         encoded = json.dumps(outgoing, separators=(",", ":")).encode(ENCODING) + b"\n"
-        outgoing_text = encoded.decode(ENCODING).rstrip("\n")
         for target_id, target_writer in writers.items():
             if target_writer is None:
                 self.logger.error("SUBSCRIBER_MISSING writer for client=%s topic=%s", target_id, topic)
@@ -77,7 +85,6 @@ class MessageBus:
                 self.logger.error("SEND_FAIL src=%s dst=%s topic=%s error=%s", client_id, target_id, topic, exc)
                 await self.unregister_client(target_id)
                 continue
-            self.logger.info("OUT %s->%s %s", client_id, target_id, outgoing_text)
 
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         peer = writer.get_extra_info("peername") or "unix-peer"
@@ -85,28 +92,30 @@ class MessageBus:
         try:
             try:
                 first_line = await reader.readline()
+
             except asyncio.LimitOverrunError as exc:
-                self.logger.error("HELLO_FAIL peer=%s error=%s", peer, exc)
+                self.logger.error("HANDSHAKE_FAIL peer=%s error=%s", peer, exc)
                 return
             if not first_line:
-                self.logger.error("HELLO_FAIL peer=%s error=empty_stream", peer)
+                self.logger.error("HANDSHAKE_FAIL peer=%s error=empty_stream", peer)
                 return
             try:
-                line_text, hello_message = self._decode_json_line(first_line)
+                line_text, handshake_message = self._decode_json_line(first_line)
             except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-                self.logger.error("HELLO_FAIL peer=%s error=%s", peer, exc)
+                self.logger.error("HANDSHAKE_FAIL peer=%s error=%s", peer, exc)
                 return
-            if hello_message.get("op") != "hello":
-                self.logger.error("HELLO_FAIL peer=%s error=missing_hello", peer)
+            if handshake_message.get("op") != HANDSHAKE_OP:
+                self.logger.error("HANDSHAKE_FAIL peer=%s error=missing_handshake", peer)
                 return
-            if "client" not in hello_message or not isinstance(hello_message["client"], str) or not hello_message["client"]:
-                self.logger.error("HELLO_FAIL peer=%s error=missing_client_id", peer)
+            if "client" not in handshake_message or not isinstance(handshake_message["client"], str) or not handshake_message["client"]:
+                self.logger.error("HANDSHAKE_FAIL peer=%s error=missing_client_id", peer)
                 return
-            client_id = hello_message["client"]
+            client_id = handshake_message["client"]
+
             try:
                 await self.register_client(client_id, writer)
             except ValueError as exc:
-                self.logger.error("HELLO_FAIL client=%s error=%s", client_id, exc)
+                self.logger.error("HANDSHAKE_FAIL client=%s error=%s", client_id, exc)
                 return
             self.logger.info("IN %s %s", client_id, line_text)
 
@@ -130,7 +139,7 @@ class MessageBus:
                         self.logger.error("SUB_FAIL client=%s error=missing_topic raw=%s", client_id, line_text)
                         continue
                     await self.add_subscription(client_id, topic)
-                    self.logger.info("IN %s %s", client_id, line_text)
+                    self.logger.info("SUB %s topic=%s", client_id, topic)
                 elif op == "pub":
                     topic = message.get("topic")
                     if not isinstance(topic, str) or not topic:
@@ -142,6 +151,11 @@ class MessageBus:
                     await self.publish(client_id, topic, message, line_text)
                 else:
                     self.logger.error("OP_UNKNOWN client=%s raw=%s", client_id, line_text)
+        except asyncio.CancelledError:
+            if client_id is not None:
+                self.logger.info("CANCEL client=%s", client_id)
+            else:
+                self.logger.info("CANCEL_UNIDENTIFIED peer=%s", peer)
         finally:
             if client_id is not None:
                 await self.unregister_client(client_id)

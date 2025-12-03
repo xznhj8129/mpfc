@@ -1,0 +1,867 @@
+2025-12-03 14:36:22,135 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 14:36:22,236 ERROR HELLO_FAIL peer=('127.0.0.1', 56182) error=empty_stream
+2025-12-03 14:36:22,237 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 56182)
+2025-12-03 14:36:22,240 INFO IN testcore {"op":"hello","client":"testcore"}
+2025-12-03 14:36:22,241 INFO IN testcore {"op":"sub","topic":"hello"}
+2025-12-03 14:36:22,241 INFO IN testcore {"op":"sub","topic":"Diag.testcore.PING"}
+2025-12-03 14:36:22,241 INFO IN testcore {"op":"pub","topic":"Diag.testcore.ONLINE","payload":{"client":"testcore","topic":"Diag.testcore.ONLINE","time":1764790582240,"data":{"event":"ONLINE"}}}
+2025-12-03 14:36:22,241 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 14:36:22,242 INFO IN testclient2 {"op":"hello","client":"testclient2"}
+2025-12-03 14:36:22,242 INFO IN testclient2 {"op":"sub","topic":"testclient2.hello"}
+2025-12-03 14:36:22,242 INFO IN testclient2 {"op":"sub","topic":"Diag.testclient2.PING"}
+2025-12-03 14:36:22,243 INFO IN testclient2 {"op":"pub","topic":"Diag.testclient2.ONLINE","payload":{"client":"testclient2","topic":"Diag.testclient2.ONLINE","time":1764790582241,"data":{"event":"ONLINE"}}}
+2025-12-03 14:36:22,243 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 14:36:22,243 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790582241,"data":{"message":"hello"}}}
+2025-12-03 14:36:22,243 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790582241,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:22,244 INFO IN testclient1 {"op":"hello","client":"testclient1"}
+2025-12-03 14:36:22,244 INFO IN testclient1 {"op":"sub","topic":"testclient1.hello"}
+2025-12-03 14:36:22,244 INFO IN testclient1 {"op":"sub","topic":"Diag.testclient1.PING"}
+2025-12-03 14:36:22,244 INFO IN testclient1 {"op":"pub","topic":"Diag.testclient1.ONLINE","payload":{"client":"testclient1","topic":"Diag.testclient1.ONLINE","time":1764790582241,"data":{"event":"ONLINE"}}}
+2025-12-03 14:36:22,244 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 14:36:22,244 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790582241,"data":{"message":"hello"}}}
+2025-12-03 14:36:22,244 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790582241,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:22,245 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790582243,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:22,245 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790582243,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:22,245 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790582244,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:22,245 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790582244,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:23,242 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790583241,"data":{"message":"hello"}}}
+2025-12-03 14:36:23,242 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790583241,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:23,242 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790583241,"data":{"message":"hello"}}}
+2025-12-03 14:36:23,243 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790583241,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:23,243 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790583242,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:23,243 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790583242,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:23,243 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790583243,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:23,244 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790583243,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:24,242 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790584242,"data":{"message":"hello"}}}
+2025-12-03 14:36:24,242 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790584242,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:24,243 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790584242,"data":{"message":"hello"}}}
+2025-12-03 14:36:24,243 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790584242,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:24,244 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790584243,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:24,244 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790584243,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:24,244 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790584243,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:24,245 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790584243,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:25,242 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790585242,"data":{"message":"hello"}}}
+2025-12-03 14:36:25,761 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790585242,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:25,761 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790585242,"data":{"message":"hello"}}}
+2025-12-03 14:36:25,761 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790585242,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:25,762 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790585761,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:25,762 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790585761,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:25,762 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790585762,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:25,763 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790585762,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:26,242 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790586242,"data":{"message":"hello"}}}
+2025-12-03 14:36:26,243 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790586242,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:26,243 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790586242,"data":{"message":"hello"}}}
+2025-12-03 14:36:26,243 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790586242,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:26,243 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790586243,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:26,243 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790586243,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:26,244 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790586243,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:26,244 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790586243,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:27,242 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790587242,"data":{"message":"hello"}}}
+2025-12-03 14:36:27,243 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790587242,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:27,243 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790587242,"data":{"message":"hello"}}}
+2025-12-03 14:36:27,243 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790587242,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:27,244 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790587243,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:27,244 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790587243,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:27,244 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790587244,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:27,245 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790587244,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:28,243 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790588242,"data":{"message":"hello"}}}
+2025-12-03 14:36:28,243 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790588242,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:28,244 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790588242,"data":{"message":"hello"}}}
+2025-12-03 14:36:28,244 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790588242,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:28,245 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790588243,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:28,245 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790588243,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:28,245 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790588244,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:28,246 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790588244,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:29,243 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790589242,"data":{"message":"hello"}}}
+2025-12-03 14:36:29,243 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790589242,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:29,243 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790589242,"data":{"message":"hello"}}}
+2025-12-03 14:36:29,243 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790589242,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:29,243 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790589243,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:29,244 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790589243,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:29,244 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790589244,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:29,244 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790589244,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:30,243 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790590243,"data":{"message":"hello"}}}
+2025-12-03 14:36:30,243 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790590243,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:30,244 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790590243,"data":{"message":"hello"}}}
+2025-12-03 14:36:30,244 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790590243,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:30,245 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790590244,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:30,245 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790590244,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:30,246 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790590245,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:30,246 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790590245,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:31,243 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790591243,"data":{"message":"hello"}}}
+2025-12-03 14:36:31,243 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790591243,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:31,244 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790591243,"data":{"message":"hello"}}}
+2025-12-03 14:36:31,244 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790591243,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:31,244 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790591243,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:31,245 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790591243,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:31,245 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790591244,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:31,245 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790591244,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:32,243 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790592243,"data":{"message":"hello"}}}
+2025-12-03 14:36:32,243 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790592243,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:32,243 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790592243,"data":{"message":"hello"}}}
+2025-12-03 14:36:32,244 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790592243,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:32,244 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790592243,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:32,244 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790592243,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:32,244 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790592244,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:32,244 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790592244,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:33,243 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790593243,"data":{"message":"hello"}}}
+2025-12-03 14:36:33,243 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790593243,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:33,244 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790593243,"data":{"message":"hello"}}}
+2025-12-03 14:36:33,244 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790593243,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:33,244 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790593244,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:33,244 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790593244,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:33,244 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790593244,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:33,244 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790593244,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:34,244 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790594243,"data":{"message":"hello"}}}
+2025-12-03 14:36:34,244 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790594243,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:34,244 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790594243,"data":{"message":"hello"}}}
+2025-12-03 14:36:34,245 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790594243,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:34,245 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790594244,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:34,245 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790594244,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:34,246 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790594245,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:34,246 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790594245,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:35,244 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790595243,"data":{"message":"hello"}}}
+2025-12-03 14:36:35,244 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790595243,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:35,245 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790595243,"data":{"message":"hello"}}}
+2025-12-03 14:36:35,245 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790595243,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:35,245 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790595244,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:35,245 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790595244,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:35,245 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790595245,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:35,246 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790595245,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:36,244 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790596243,"data":{"message":"hello"}}}
+2025-12-03 14:36:36,244 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790596243,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:36,245 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790596244,"data":{"message":"hello"}}}
+2025-12-03 14:36:36,245 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790596244,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:36,246 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790596245,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:36,246 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790596245,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:36,247 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790596246,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:36,247 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790596246,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:37,244 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790597244,"data":{"message":"hello"}}}
+2025-12-03 14:36:37,245 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790597244,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:36:37,245 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790597244,"data":{"message":"hello"}}}
+2025-12-03 14:36:37,246 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790597244,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:36:37,246 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790597245,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:36:37,246 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790597245,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:36:37,247 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790597246,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:36:37,247 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790597246,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:36:37,405 INFO IN testclient2 {"op":"pub","topic":"Diag.testclient2.STOPPED","payload":{"client":"testclient2","topic":"Diag.testclient2.STOPPED","time":1764790597404,"data":{"event":"STOPPED"}}}
+2025-12-03 14:36:37,405 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 14:36:37,405 INFO IN testcore {"op":"pub","topic":"Diag.testcore.STOPPED","payload":{"client":"testcore","topic":"Diag.testcore.STOPPED","time":1764790597404,"data":{"event":"STOPPED"}}}
+2025-12-03 14:36:37,405 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 14:36:37,405 INFO IN testclient1 {"op":"pub","topic":"Diag.testclient1.STOPPED","payload":{"client":"testclient1","topic":"Diag.testclient1.STOPPED","time":1764790597404,"data":{"event":"STOPPED"}}}
+2025-12-03 14:36:37,405 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 14:36:37,406 INFO DISCONNECT client=testcore
+2025-12-03 14:36:37,406 INFO DISCONNECT client=testclient2
+2025-12-03 14:36:37,406 INFO DISCONNECT client=testclient1
+2025-12-03 14:42:12,218 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 14:42:12,317 ERROR HELLO_FAIL peer=('127.0.0.1', 37910) error=empty_stream
+2025-12-03 14:42:12,318 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 37910)
+2025-12-03 14:42:12,322 INFO IN testcore {"op":"hello","client":"testcore"}
+2025-12-03 14:42:12,323 INFO IN testcore {"op":"sub","topic":"hello"}
+2025-12-03 14:42:12,323 INFO IN testcore {"op":"sub","topic":"Diag.testcore.PING"}
+2025-12-03 14:42:12,324 INFO IN testcore {"op":"pub","topic":"Diag.testcore.ONLINE","payload":{"client":"testcore","topic":"Diag.testcore.ONLINE","time":1764790932323,"data":{"event":"ONLINE"}}}
+2025-12-03 14:42:12,324 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 14:42:12,325 INFO IN testclient1 {"op":"hello","client":"testclient1"}
+2025-12-03 14:42:12,325 INFO IN testclient1 {"op":"sub","topic":"testclient1.hello"}
+2025-12-03 14:42:12,326 INFO IN testclient1 {"op":"sub","topic":"Diag.testclient1.PING"}
+2025-12-03 14:42:12,326 INFO IN testclient1 {"op":"pub","topic":"Diag.testclient1.ONLINE","payload":{"client":"testclient1","topic":"Diag.testclient1.ONLINE","time":1764790932325,"data":{"event":"ONLINE"}}}
+2025-12-03 14:42:12,326 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 14:42:12,326 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790932325,"data":{"message":"hello"}}}
+2025-12-03 14:42:12,326 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790932325,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:42:12,327 INFO IN testclient2 {"op":"hello","client":"testclient2"}
+2025-12-03 14:42:12,327 INFO IN testclient2 {"op":"sub","topic":"testclient2.hello"}
+2025-12-03 14:42:12,327 INFO IN testclient2 {"op":"sub","topic":"Diag.testclient2.PING"}
+2025-12-03 14:42:12,327 INFO IN testclient2 {"op":"pub","topic":"Diag.testclient2.ONLINE","payload":{"client":"testclient2","topic":"Diag.testclient2.ONLINE","time":1764790932326,"data":{"event":"ONLINE"}}}
+2025-12-03 14:42:12,328 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 14:42:12,328 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790932326,"data":{"message":"hello"}}}
+2025-12-03 14:42:12,328 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790932326,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:42:12,328 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790932327,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:42:12,328 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790932327,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:42:12,329 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790932328,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:42:12,329 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790932328,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:42:13,326 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790933325,"data":{"message":"hello"}}}
+2025-12-03 14:42:13,326 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790933325,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:42:13,327 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790933326,"data":{"message":"hello"}}}
+2025-12-03 14:42:13,327 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790933326,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:42:13,328 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790933326,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:42:13,328 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790933326,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:42:13,328 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790933328,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:42:13,329 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790933328,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:42:14,326 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790934325,"data":{"message":"hello"}}}
+2025-12-03 14:42:14,326 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790934325,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:42:14,326 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790934326,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:42:14,327 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790934326,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:42:14,327 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790934326,"data":{"message":"hello"}}}
+2025-12-03 14:42:14,327 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790934326,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:42:14,328 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790934327,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:42:14,328 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790934327,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:42:15,326 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790935325,"data":{"message":"hello"}}}
+2025-12-03 14:42:15,326 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764790935325,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:42:15,327 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790935327,"data":{"message":"hello"}}}
+2025-12-03 14:42:15,328 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764790935327,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:42:15,328 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790935327,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:42:15,329 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764790935327,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:42:15,329 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790935329,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:42:15,330 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764790935329,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:42:15,806 INFO IN testcore {"op":"pub","topic":"Diag.testcore.STOPPED","payload":{"client":"testcore","topic":"Diag.testcore.STOPPED","time":1764790935805,"data":{"event":"STOPPED"}}}
+2025-12-03 14:42:15,806 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 14:42:15,806 INFO IN testclient2 {"op":"pub","topic":"Diag.testclient2.STOPPED","payload":{"client":"testclient2","topic":"Diag.testclient2.STOPPED","time":1764790935805,"data":{"event":"STOPPED"}}}
+2025-12-03 14:42:15,807 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 14:42:15,807 INFO IN testclient1 {"op":"pub","topic":"Diag.testclient1.STOPPED","payload":{"client":"testclient1","topic":"Diag.testclient1.STOPPED","time":1764790935805,"data":{"event":"STOPPED"}}}
+2025-12-03 14:42:15,807 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 14:42:15,808 INFO DISCONNECT client=testcore
+2025-12-03 14:42:15,808 INFO DISCONNECT client=testclient1
+2025-12-03 14:42:15,808 INFO DISCONNECT client=testclient2
+2025-12-03 14:44:09,640 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 14:44:09,642 ERROR HELLO_FAIL peer=('127.0.0.1', 35582) error=empty_stream
+2025-12-03 14:44:09,642 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 35582)
+2025-12-03 14:44:09,644 INFO IN testcore {"op":"hello","client":"testcore"}
+2025-12-03 14:44:09,644 INFO IN testcore {"op":"sub","topic":"hello"}
+2025-12-03 14:44:09,645 INFO IN testcore {"op":"sub","topic":"Diag.testcore.PING"}
+2025-12-03 14:44:09,645 INFO IN testcore {"op":"pub","topic":"Diag.testcore.ONLINE","payload":{"client":"testcore","topic":"Diag.testcore.ONLINE","time":1764791049644,"data":{"event":"ONLINE"}}}
+2025-12-03 14:44:09,645 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 14:44:09,645 INFO IN testclient1 {"op":"hello","client":"testclient1"}
+2025-12-03 14:44:09,646 INFO IN testclient1 {"op":"sub","topic":"testclient1.hello"}
+2025-12-03 14:44:09,646 INFO IN testclient1 {"op":"sub","topic":"Diag.testclient1.PING"}
+2025-12-03 14:44:09,646 INFO IN testclient1 {"op":"pub","topic":"Diag.testclient1.ONLINE","payload":{"client":"testclient1","topic":"Diag.testclient1.ONLINE","time":1764791049646,"data":{"event":"ONLINE"}}}
+2025-12-03 14:44:09,646 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 14:44:09,646 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791049646,"data":{"message":"hello"}}}
+2025-12-03 14:44:09,647 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791049646,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:44:09,647 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791049647,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:44:09,647 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791049647,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:44:09,648 INFO IN testclient2 {"op":"hello","client":"testclient2"}
+2025-12-03 14:44:09,648 INFO IN testclient2 {"op":"sub","topic":"testclient2.hello"}
+2025-12-03 14:44:09,648 INFO IN testclient2 {"op":"sub","topic":"Diag.testclient2.PING"}
+2025-12-03 14:44:09,648 INFO IN testclient2 {"op":"pub","topic":"Diag.testclient2.ONLINE","payload":{"client":"testclient2","topic":"Diag.testclient2.ONLINE","time":1764791049647,"data":{"event":"ONLINE"}}}
+2025-12-03 14:44:09,648 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 14:44:09,648 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791049647,"data":{"message":"hello"}}}
+2025-12-03 14:44:09,648 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791049647,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:44:09,648 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791049648,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:44:09,648 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791049648,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:44:10,646 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791050646,"data":{"message":"hello"}}}
+2025-12-03 14:44:10,647 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791050646,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:44:10,647 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791050647,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:44:10,647 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791050647,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:44:10,648 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791050648,"data":{"message":"hello"}}}
+2025-12-03 14:44:10,648 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791050648,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:44:10,648 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791050648,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:44:10,648 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791050648,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:44:11,647 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791051646,"data":{"message":"hello"}}}
+2025-12-03 14:44:11,647 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791051646,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:44:11,648 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791051648,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:44:11,649 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791051648,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:44:11,649 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791051648,"data":{"message":"hello"}}}
+2025-12-03 14:44:11,649 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791051648,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:44:11,650 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791051650,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:44:11,651 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791051650,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:44:12,006 INFO IN testclient2 {"op":"pub","topic":"Diag.testclient2.STOPPED","payload":{"client":"testclient2","topic":"Diag.testclient2.STOPPED","time":1764791052005,"data":{"event":"STOPPED"}}}
+2025-12-03 14:44:12,006 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 14:44:12,006 INFO IN testclient1 {"op":"pub","topic":"Diag.testclient1.STOPPED","payload":{"client":"testclient1","topic":"Diag.testclient1.STOPPED","time":1764791052005,"data":{"event":"STOPPED"}}}
+2025-12-03 14:44:12,007 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 14:44:12,007 INFO IN testcore {"op":"pub","topic":"Diag.testcore.STOPPED","payload":{"client":"testcore","topic":"Diag.testcore.STOPPED","time":1764791052005,"data":{"event":"STOPPED"}}}
+2025-12-03 14:44:12,007 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 14:44:12,008 INFO CANCEL client=testcore
+2025-12-03 14:44:12,009 INFO DISCONNECT client=testcore
+2025-12-03 14:44:12,009 INFO CANCEL client=testclient1
+2025-12-03 14:44:12,010 INFO DISCONNECT client=testclient1
+2025-12-03 14:44:12,010 INFO CANCEL client=testclient2
+2025-12-03 14:44:12,010 INFO DISCONNECT client=testclient2
+2025-12-03 14:55:48,725 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 14:55:48,826 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 46024) error=empty_stream
+2025-12-03 14:55:48,826 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 46024)
+2025-12-03 14:55:48,832 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 14:55:48,833 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 14:55:48,833 INFO IN testcore {"op":"sub","topic":"hello"}
+2025-12-03 14:55:48,833 INFO IN testcore {"op":"sub","topic":"Diag.testcore.PING"}
+2025-12-03 14:55:48,833 INFO IN testcore {"op":"pub","topic":"Diag.testcore.ONLINE","payload":{"client":"testcore","topic":"Diag.testcore.ONLINE","time":1764791748832,"data":{"event":"ONLINE"}}}
+2025-12-03 14:55:48,834 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 14:55:48,836 INFO IN testclient1 {"op":"sub","topic":"testclient1.hello"}
+2025-12-03 14:55:48,836 INFO IN testclient1 {"op":"sub","topic":"Diag.testclient1.PING"}
+2025-12-03 14:55:48,836 INFO IN testclient1 {"op":"pub","topic":"Diag.testclient1.ONLINE","payload":{"client":"testclient1","topic":"Diag.testclient1.ONLINE","time":1764791748834,"data":{"event":"ONLINE"}}}
+2025-12-03 14:55:48,836 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 14:55:48,836 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791748834,"data":{"message":"hello"}}}
+2025-12-03 14:55:48,837 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791748834,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:55:48,837 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791748837,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:55:48,838 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791748837,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:55:48,838 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 14:55:48,838 INFO IN testclient2 {"op":"sub","topic":"testclient2.hello"}
+2025-12-03 14:55:48,838 INFO IN testclient2 {"op":"sub","topic":"Diag.testclient2.PING"}
+2025-12-03 14:55:48,838 INFO IN testclient2 {"op":"pub","topic":"Diag.testclient2.ONLINE","payload":{"client":"testclient2","topic":"Diag.testclient2.ONLINE","time":1764791748836,"data":{"event":"ONLINE"}}}
+2025-12-03 14:55:48,838 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 14:55:48,838 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791748836,"data":{"message":"hello"}}}
+2025-12-03 14:55:48,839 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791748836,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:55:48,839 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791748839,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:55:48,839 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791748839,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:55:49,835 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791749834,"data":{"message":"hello"}}}
+2025-12-03 14:55:49,835 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791749834,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:55:49,835 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791749835,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:55:49,836 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791749835,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:55:49,837 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791749836,"data":{"message":"hello"}}}
+2025-12-03 14:55:49,837 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791749836,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:55:49,837 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791749837,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:55:49,838 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791749837,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:55:50,835 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791750835,"data":{"message":"hello"}}}
+2025-12-03 14:55:50,836 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791750835,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:55:50,836 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791750836,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:55:50,837 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791750836,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:55:50,837 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791750836,"data":{"message":"hello"}}}
+2025-12-03 14:55:50,837 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791750836,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:55:50,838 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791750838,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:55:50,839 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791750838,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:55:51,835 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791751835,"data":{"message":"hello"}}}
+2025-12-03 14:55:51,835 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791751835,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:55:51,836 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791751836,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:55:51,836 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791751836,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:55:51,837 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791751837,"data":{"message":"hello"}}}
+2025-12-03 14:55:51,837 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791751837,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:55:51,838 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791751837,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:55:51,838 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791751837,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:55:52,835 INFO IN testclient1 {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791752835,"data":{"message":"hello"}}}
+2025-12-03 14:55:52,836 INFO OUT testclient1->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient1","topic":"hello","time":1764791752835,"data":{"message":"hello"}},"src":"testclient1"}
+2025-12-03 14:55:52,837 INFO IN testcore {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791752836,"data":{"message":"hi","to":"testclient1"}}}
+2025-12-03 14:55:52,837 INFO OUT testcore->testclient1 {"op":"pub","topic":"testclient1.hello","payload":{"client":"testcore","topic":"testclient1.hello","time":1764791752836,"data":{"message":"hi","to":"testclient1"}},"src":"testcore"}
+2025-12-03 14:55:52,838 INFO IN testclient2 {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791752837,"data":{"message":"hello"}}}
+2025-12-03 14:55:52,838 INFO OUT testclient2->testcore {"op":"pub","topic":"hello","payload":{"client":"testclient2","topic":"hello","time":1764791752837,"data":{"message":"hello"}},"src":"testclient2"}
+2025-12-03 14:55:52,839 INFO IN testcore {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791752838,"data":{"message":"hi","to":"testclient2"}}}
+2025-12-03 14:55:52,839 INFO OUT testcore->testclient2 {"op":"pub","topic":"testclient2.hello","payload":{"client":"testcore","topic":"testclient2.hello","time":1764791752838,"data":{"message":"hi","to":"testclient2"}},"src":"testcore"}
+2025-12-03 14:55:53,821 INFO IN testclient2 {"op":"pub","topic":"Diag.testclient2.STOPPED","payload":{"client":"testclient2","topic":"Diag.testclient2.STOPPED","time":1764791753821,"data":{"event":"STOPPED"}}}
+2025-12-03 14:55:53,822 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 14:55:53,822 INFO IN testclient1 {"op":"pub","topic":"Diag.testclient1.STOPPED","payload":{"client":"testclient1","topic":"Diag.testclient1.STOPPED","time":1764791753821,"data":{"event":"STOPPED"}}}
+2025-12-03 14:55:53,822 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 14:55:53,823 INFO IN testcore {"op":"pub","topic":"Diag.testcore.STOPPED","payload":{"client":"testcore","topic":"Diag.testcore.STOPPED","time":1764791753821,"data":{"event":"STOPPED"}}}
+2025-12-03 14:55:53,823 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 14:55:53,824 INFO CANCEL client=testcore
+2025-12-03 14:55:53,825 INFO DISCONNECT client=testcore
+2025-12-03 14:55:53,825 INFO CANCEL client=testclient1
+2025-12-03 14:55:53,825 INFO DISCONNECT client=testclient1
+2025-12-03 14:55:53,825 INFO CANCEL client=testclient2
+2025-12-03 14:55:53,826 INFO DISCONNECT client=testclient2
+2025-12-03 15:05:14,049 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 15:05:14,148 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 39664) error=empty_stream
+2025-12-03 15:05:14,149 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 39664)
+2025-12-03 15:05:14,155 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 15:05:14,155 INFO SUB testcore topic=hello
+2025-12-03 15:05:14,155 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 15:05:14,156 INFO IN testcore(pub) topic=Diag.testcore.ONLINE data={"event":"ONLINE"}
+2025-12-03 15:05:14,156 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 15:05:14,156 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 15:05:14,156 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 15:05:14,156 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 15:05:14,156 INFO IN testclient1(pub) topic=Diag.testclient1.ONLINE data={"event":"ONLINE"}
+2025-12-03 15:05:14,156 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 15:05:14,156 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:14,156 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:14,157 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 15:05:14,157 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 15:05:14,157 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 15:05:14,157 INFO IN testclient2(pub) topic=Diag.testclient2.ONLINE data={"event":"ONLINE"}
+2025-12-03 15:05:14,157 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 15:05:14,157 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:14,157 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:14,157 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:14,158 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:14,158 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:14,158 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:15,155 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:15,156 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:15,156 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:15,157 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:15,157 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:15,157 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:15,158 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:15,158 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:16,156 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:16,156 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:16,157 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:16,157 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:16,157 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:16,158 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:16,158 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:16,159 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:17,156 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:17,156 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:17,157 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:17,158 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:17,158 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:17,158 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:17,159 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:17,159 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:18,156 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:18,156 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:18,157 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:18,158 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:18,158 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:18,158 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:18,159 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:18,159 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:19,156 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:19,156 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:19,156 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:19,157 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:19,157 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:19,740 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:19,741 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:19,741 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:20,156 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:20,157 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:20,157 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:20,158 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:20,158 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:20,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:20,159 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:20,159 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:21,157 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:21,157 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:21,158 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:21,158 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:21,158 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:21,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:21,159 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:21,159 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:22,157 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:22,157 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:22,158 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:22,158 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:22,159 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:22,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:22,159 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:22,160 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:23,158 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:23,158 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:23,159 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:23,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:23,159 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:23,160 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:23,160 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:23,160 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:24,158 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:24,158 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:24,159 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:24,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:24,159 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:24,160 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:24,160 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:24,160 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:25,158 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:25,158 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:25,159 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:25,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:25,159 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:25,160 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:25,160 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:25,160 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:26,158 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:26,158 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:26,158 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:26,159 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:26,159 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:26,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:26,159 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:26,159 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:27,158 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:27,158 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:27,159 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:27,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:27,160 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:27,160 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:27,160 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:27,161 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:28,158 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:28,158 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:28,159 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:28,159 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:28,159 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:28,159 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:28,159 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:28,160 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:29,158 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:29,159 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:29,159 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:29,160 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:29,160 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:29,161 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:29,161 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:29,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:30,159 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:30,159 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:30,160 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:30,160 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:30,160 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:30,161 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:30,161 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:30,161 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:31,159 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:31,159 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:31,160 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:31,160 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:31,161 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:31,161 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:31,161 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:31,161 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:32,159 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:32,159 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:32,160 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:32,160 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:32,161 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:32,161 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:32,161 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:32,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:33,159 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:33,160 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:33,160 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:33,160 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:33,161 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:33,161 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:33,161 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:33,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:34,159 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:34,160 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:34,160 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:34,160 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:34,160 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:34,161 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:34,161 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:34,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:35,159 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:35,160 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:35,160 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:35,160 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:35,161 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:35,161 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:35,161 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:35,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:36,160 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:36,160 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:36,161 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:36,161 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:36,161 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:36,162 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:36,162 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:36,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:37,160 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:37,160 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:37,161 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:37,161 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:37,161 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:37,161 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:37,162 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:37,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:38,160 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:38,160 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:38,161 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:38,161 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:38,162 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:38,162 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:38,162 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:38,163 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:39,160 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:39,160 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:39,161 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:39,161 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:39,161 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:39,162 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:39,162 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:39,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:40,160 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:40,161 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:40,162 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:40,162 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:40,162 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:40,163 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:40,163 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:40,163 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:41,161 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:41,161 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:41,162 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:41,162 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:41,162 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:41,163 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:41,163 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:41,163 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:42,161 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:42,161 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:42,161 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:42,161 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:42,162 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:42,162 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:42,162 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:42,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:43,161 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:43,161 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:43,161 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:43,162 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:43,162 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:43,162 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:43,162 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:43,162 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:44,161 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:44,162 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:44,162 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:44,163 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:44,163 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:44,164 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:44,164 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:44,164 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:45,161 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:45,161 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:45,162 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:45,162 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:45,162 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:45,163 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:45,163 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:45,163 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:46,161 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:46,162 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:46,162 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:46,163 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:46,163 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:46,164 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:46,164 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:46,165 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:47,162 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:47,162 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:47,163 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:47,163 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:47,164 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:47,164 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:47,165 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:47,165 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:48,162 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:48,162 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:48,162 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:48,162 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:48,163 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:48,163 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:48,164 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:48,164 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:49,162 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:49,162 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:49,162 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:49,163 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:49,163 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:49,163 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:49,164 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:49,164 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:50,162 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:50,163 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:50,163 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:50,163 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:50,164 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:50,164 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:50,165 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:50,165 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:51,162 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:51,163 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:51,163 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:51,163 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:51,164 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:51,164 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:51,164 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:51,165 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:52,162 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:52,163 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:52,163 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:52,163 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:52,163 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:52,163 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:52,164 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:52,164 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:53,163 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:53,163 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:53,164 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:53,164 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:53,164 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:53,165 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:53,165 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:53,165 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:54,163 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:54,163 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:54,164 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:54,164 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:54,164 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:54,165 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:54,165 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:54,165 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:55,163 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:55,163 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:55,164 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:55,164 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:55,165 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:55,165 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:55,165 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:55,166 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:56,163 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:56,164 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:56,164 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:56,164 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:56,165 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:56,165 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:56,165 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:56,166 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:57,163 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:57,164 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:57,164 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:57,165 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:57,165 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:57,166 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:57,166 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:57,166 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:58,163 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:58,163 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:58,164 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:58,164 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:58,164 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:58,164 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:58,164 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:58,164 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:59,164 INFO IN testclient1(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:59,164 INFO OUT testclient1(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:59,165 INFO IN testclient2(pub) topic=hello data={"message":"hello"}
+2025-12-03 15:05:59,165 INFO OUT testclient2(pub)->testcore topic=hello data={"message":"hello"}
+2025-12-03 15:05:59,165 INFO IN testcore(pub) topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:59,166 INFO OUT testcore(pub)->testclient1 topic=testclient1.hello data={"message":"hi"}
+2025-12-03 15:05:59,166 INFO IN testcore(pub) topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:59,167 INFO OUT testcore(pub)->testclient2 topic=testclient2.hello data={"message":"hi"}
+2025-12-03 15:05:59,324 INFO IN testclient2(pub) topic=Diag.testclient2.STOPPED data={"event":"STOPPED"}
+2025-12-03 15:05:59,324 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 15:05:59,324 INFO IN testclient1(pub) topic=Diag.testclient1.STOPPED data={"event":"STOPPED"}
+2025-12-03 15:05:59,324 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 15:05:59,325 INFO IN testcore(pub) topic=Diag.testcore.STOPPED data={"event":"STOPPED"}
+2025-12-03 15:05:59,325 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 15:05:59,327 INFO CANCEL client=testcore
+2025-12-03 15:05:59,327 INFO DISCONNECT client=testcore
+2025-12-03 15:05:59,329 INFO CANCEL client=testclient1
+2025-12-03 15:05:59,330 INFO DISCONNECT client=testclient1
+2025-12-03 15:05:59,330 INFO CANCEL client=testclient2
+2025-12-03 15:05:59,330 INFO DISCONNECT client=testclient2
+2025-12-03 15:07:27,984 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 15:07:28,086 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 45506) error=empty_stream
+2025-12-03 15:07:28,087 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 45506)
+2025-12-03 15:07:28,090 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 15:07:28,090 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 15:07:28,090 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 15:07:28,091 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 15:07:28,091 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 15:07:28,091 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 15:07:28,092 INFO SUB testcore topic=hello
+2025-12-03 15:07:28,092 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 15:07:28,092 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 15:07:28,094 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 15:07:28,095 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 15:07:28,095 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 15:07:28,095 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 15:07:28,095 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:28,096 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:29,091 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:29,092 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:29,095 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:29,096 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:30,091 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:30,092 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:30,096 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:30,097 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:31,091 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:31,092 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:31,096 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:31,097 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:32,091 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:32,093 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:32,096 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:32,097 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:33,091 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:33,092 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:33,580 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:33,581 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:34,092 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:34,093 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:34,097 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:34,098 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:35,092 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:35,092 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:35,097 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:35,097 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:36,092 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:36,093 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:36,097 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:36,098 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:37,092 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:37,093 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:37,097 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:37,098 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:38,092 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:38,094 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:38,097 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:38,098 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:39,093 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:39,093 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:39,097 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:39,098 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:40,093 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:40,094 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:40,097 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:40,098 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:41,093 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:41,094 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:41,098 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:41,098 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:42,093 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:42,094 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:42,098 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:42,099 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:43,093 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:43,094 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:43,098 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:43,099 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:44,094 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:44,095 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:44,098 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:44,099 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:45,094 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:45,094 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:45,098 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:45,099 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:46,094 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:46,095 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:46,098 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:46,099 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:47,094 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:47,095 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:47,099 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:47,100 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:48,094 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:48,095 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:48,099 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:48,099 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:49,094 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:49,095 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:49,099 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:49,100 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:50,094 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:50,095 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:50,099 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:50,099 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:51,095 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:51,096 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:51,099 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:51,100 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:52,095 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:52,096 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:52,100 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:52,101 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:53,095 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:53,096 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:53,100 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:53,101 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:54,095 INFO PUB testclient1 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:54,096 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hi"}
+2025-12-03 15:07:54,100 INFO PUB testclient2 topic=hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 15:07:54,100 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hi"}
+2025-12-03 15:07:54,558 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 15:07:54,559 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 15:07:54,560 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 15:07:54,561 INFO CANCEL client=testclient1
+2025-12-03 15:07:54,561 INFO DISCONNECT client=testclient1
+2025-12-03 15:07:54,562 INFO CANCEL client=testcore
+2025-12-03 15:07:54,563 INFO DISCONNECT client=testcore
+2025-12-03 15:07:54,564 INFO CANCEL client=testclient2
+2025-12-03 15:07:54,564 INFO DISCONNECT client=testclient2
