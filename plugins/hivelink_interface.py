@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Usage:
-    python hivelink_interface.py
-Reads process_config.json beside this file for all settings; no CLI arguments are used.
+* Connect to Bus
+- Any publisher → `Hivelink.OUT` (unencoded payload) → bus → `hivelink_interface.py` → encodes → `DatalinkInterface.send`.
+- HiveLink radios → `DatalinkInterface.receive` → `hivelink_interface.py` → `Hivelink.IN` (decoded payload) → bus → subscribers.
 """
 
 import asyncio
@@ -17,16 +17,14 @@ from hivelink.msglib import decode_message, encode_message, messageid, message_s
 from hivelink.protocol import Messages
 from message_bus_client import BusClientAsync
 
+IS_DATALINK = True
 DATALINK_IN_TOPIC = "Datalink.IN"
 DATALINK_OUT_TOPIC = "Datalink.OUT"
 POLL_INTERVAL_S = 0.1
-CONFIG_PATH = Path(__file__).resolve().with_name("process_config.json")
-CLIENT_ID = "hivelink"
+CONFIG_PATH = "? fed from main" #Path(__file__).resolve().with_name("process_config.json")
+CLIENT_ID = "Hivelink"
 
 
-def load_json(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
 
 
 def build_bus_envelope(client_id: str, topic: str, data: Any) -> Dict[str, Any]:
@@ -120,62 +118,7 @@ class HivelinkBusBridge:
 
 
 async def main_async() -> None:
-    if not CONFIG_PATH.is_file():
-        raise FileNotFoundError(f"process config not found: {CONFIG_PATH}")
-    process_config = load_json(CONFIG_PATH)
-    for key in ("bus_config_path", "nodes_path", "hivelink"):
-        if key not in process_config:
-            raise KeyError(f"process_config missing required key: {key}")
-
-    base_dir = CONFIG_PATH.parent
-
-    bus_config_path = Path(process_config["bus_config_path"])
-    if not bus_config_path.is_absolute():
-        bus_config_path = base_dir / bus_config_path
-    if not bus_config_path.is_file():
-        raise FileNotFoundError(f"bus config not found: {bus_config_path}")
-    bus_config = load_json(bus_config_path)
-
-    nodes_path = Path(process_config["nodes_path"])
-    if not nodes_path.is_absolute():
-        nodes_path = base_dir / nodes_path
-    if not nodes_path.is_file():
-        raise FileNotFoundError(f"nodes file not found: {nodes_path}")
-    nodemap = load_json(nodes_path)
-
-    hcfg = process_config["hivelink"]
-    for key in ("my_name", "udp_host", "udp_port", "multicast_group", "multicast_port"):
-        if key not in hcfg:
-            raise KeyError(f"hivelink config missing key: {key}")
-
-    my_name = hcfg["my_name"]
-    if my_name not in nodemap:
-        raise KeyError(f"node {my_name} not found in nodes map")
-    my_info = nodemap[my_name]
-    if "meshid" not in my_info:
-        raise KeyError(f"node {my_name} missing meshid")
-
-    endpoint = bus_config["endpoint"]
-    endpoint_type = endpoint.get("type")
-    if endpoint_type == "tcp":
-        host = endpoint.get("host")
-        port = endpoint.get("port")
-        if host is None or port is None:
-            raise KeyError("tcp endpoint requires host and port")
-        client = await BusClientAsync.connect_tcp(str(host), int(port), CLIENT_ID)
-    elif endpoint_type == "unix":
-        path = endpoint.get("path")
-        if not path:
-            raise KeyError("unix endpoint requires path")
-        client = await BusClientAsync.connect_unix(str(path), CLIENT_ID)
-    else:
-        raise ValueError("endpoint.type must be tcp or unix")
-
-    multicast_group = hcfg["multicast_group"]
-    multicast_port = hcfg["multicast_port"]
-    if multicast_group and multicast_port is None:
-        raise ValueError("multicast_port required when multicast_group is set")
-    resolved_multicast_port = multicast_port if multicast_port is not None else hcfg["udp_port"]
+    # TODO: Reimplement config
 
     datalink = DatalinkInterface(
         use_meshtastic=False,

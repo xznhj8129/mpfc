@@ -1,0 +1,77 @@
+{
+  "template": {
+    "client": "Bus sender id",
+    "topic": "Exact bus topic string (routing key)",
+    "time": "Unix epoch milliseconds when the payload is issued",
+    "data": "Topic specific payload"
+  },
+  "topics": {
+    "Datalink.IN": {
+      "direction": "datalink interface -> any",
+      "summary": "Decoded hivelink frames coming from physical datalinks",
+      "data": {
+        "interface": "Transport name such as udp, multicast, meshtastic",
+        "source": "Remote node id that sent the frame",
+        "type": "Message path string e.g. Status.INAV.TELEM",
+        "payload": "JSON payload dictionary"
+      }
+    },
+    "Datalink.OUT": {
+      "direction": "any -> datalink interface",
+      "summary": "Unencoded hivelink messages that should be encoded and forwarded",
+      "data": {
+        "interface": "Transport name such as udp, multicast, meshtastic",
+        "source": "node id that sent the frame",
+        "type": "Message path string e.g. Status.INAV.TELEM",
+        "payload": "JSON payload dictionary"
+      }
+    },
+    "<any_client_id>.GET": {
+      "direction": "any <-> any",
+      "summary": "General inter-client configuration/parameter get topic",
+      "data": {}
+    },
+    "<any_client_id>.SET": {
+      "direction": "any <-> any",
+      "summary": "General inter-client configuration/parameter setting topic",
+      "data": {
+        "<name>": "value key",
+        "<value>": "value to set"
+      }
+    },
+    "MSP.REQUEST": {
+      "direction": "any -> uav_interface",
+      "summary": "Base prefix for MSP request",
+      "data": {
+        "data": "MSP payload (JSON)"
+      }
+    },
+    "MSP.REPLY": {
+      "direction": "uav_interface -> any",
+      "summary": "Base prefix for MSP replies following request operations",
+      "data": {
+        "data": "MSP payload (JSON)"
+      }
+    },
+    "MAVLINK": {
+      "direction": "any <-> any",
+      "summary": "Base prefix for MAVLink messages",
+      "data": {
+        "sysid": "mavlink sysid",
+        "compid": "mavlink component id",
+        "type": "mavlink message type from msg.get_type() ie MAV_GPS_GLOBAL_ORIGIN",
+        "data": "JSON payload"
+      }
+    },
+    "<client_id>": {
+      "direction": "any <-> any",
+      "summary": "Per-client ad hoc topics; the literal topic matches the emitter id prefix",
+      "data": "JSON, Client defined"
+    },
+    "DIAG.<client_id>": {
+      "direction": "broadcast",
+      "summary": "Diagnostics and health events, ie crash, shutdown, errors",
+      "data": "schema-defined"
+    }
+  }
+}

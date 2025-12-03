@@ -5,7 +5,9 @@ import time
 
 from message_bus_client import BusClientSync
 
-SEND_INTERVAL = 1.0
+cfg = {
+    "name": ""
+}
 
 
 def connect(args: argparse.Namespace) -> BusClientSync:
@@ -53,13 +55,7 @@ def run_client(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Hello message bus example client (blocking)")
-    endpoint = parser.add_mutually_exclusive_group(required=True)
-    endpoint.add_argument("--tcp", help="Connect to TCP host:port")
-    endpoint.add_argument("--unix", help="Connect to Unix domain socket path")
-    parser.add_argument("--id", required=True, help="Client id")
-    parser.add_argument("--dest", required=True, help="Destination client id for hello topic")
-    args = parser.parse_args()
+    # set from cfg
     run_client(args)
 
 

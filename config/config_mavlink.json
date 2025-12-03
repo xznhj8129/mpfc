@@ -1,0 +1,44 @@
+{
+  "my_name": "uav1",
+  "core": {
+    "id": "mavlink_core",
+    "cfg": {
+      "sysid": 1,
+      "mav_autopilot": "MAV_AUTOPILOT_PX4",
+      "mav_type": "MAV_TYPE_QUADROTOR"
+    }
+  },
+  "bus_config": {
+    "schema_path": "schema/bus_topics_schema.json",
+    "log_file": "hivebus.log",
+    "endpoint": {
+      "type": "tcp",
+      "host": "127.0.0.1",
+      "port": 7777
+    }
+  },
+
+  "plugins": [
+    {"mav_interface": {
+      "id": "mav_uav",
+      "is_interface": true,
+      "cfg": {
+        "conn_type": "udp",
+        "conn_str": "udp:127.0.0.1:14550",
+        "conn_bitrate": 115200
+        }
+      }
+    },
+    {
+      "mav_interface": {
+      "id": "mav_datalink",
+      "is_datalink": true,
+      "cfg": {
+        "conn_type": "udp",
+        "conn_str": "udp:127.0.0.1:14550",
+        "conn_bitrate": 115200
+        }
+    }
+    }
+  ]
+}

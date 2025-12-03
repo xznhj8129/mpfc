@@ -1,0 +1,40 @@
+{
+  "my_name": "uav1",
+  "core": {
+    "id": "msp_core",
+    "cfg": {
+      "type": "PLATFORM_MULTIROTOR"
+    }
+  },
+  "bus_config": {
+    "schema_path": "schema/bus_topics_schema.json",
+    "log_file": "hivebus.log",
+    "endpoint": {
+      "type": "tcp",
+      "host": "127.0.0.1",
+      "port": 7777
+    }
+  },
+  "plugins": [
+    {
+      "msp_interface": {
+        "id": "FlightController",
+        "cfg": {
+          "is_interface": true,
+          "conn_type": "serial",
+          "conn_str": "/dev/ttyACM0",
+          "conn_bitrate": 115200
+        }
+      }
+    },
+    {
+      "hivelink_interface": {
+        "id": "Hivelink",
+        "cfg": {
+          "cfg_path": "hivelink_config.json",
+          "is_datalink": true
+        }
+      }
+    }
+  ]
+}

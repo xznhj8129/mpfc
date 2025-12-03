@@ -1,0 +1,34 @@
+{
+    "my_name": "test",
+    "core": {
+        "name": "test_core",
+        "cfg": {
+            "id": "testcore"
+        }
+    },
+    "bus_config": {
+        "schema_path": "schema/bus_topics_schema.json",
+        "log_file": "hivebus.log",
+        "endpoint": {
+            "type": "tcp",
+            "host": "127.0.0.1",
+            "port": 7777
+        }
+    },
+    "plugins": [
+        {
+            "plugin": "example_hello",
+            "cfg": {
+                "id": "testclient1",
+                "send_interval": 1.0
+            }
+        },
+        {
+            "plugin": "example_hello",
+            "cfg": {
+                "id": "testclient2",
+                "send_interval": 1.0
+            }
+        }
+    ]
+}

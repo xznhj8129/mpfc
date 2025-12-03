@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Usage:
-    python uav_interface.py
-Reads process_config.json beside this file for all settings; no CLI arguments are used.
-"""
 
 import asyncio
 import json
@@ -12,6 +6,7 @@ from typing import Any, Dict
 
 from message_bus_client import BusClientAsync
 
+IS_INTERFACE = True
 CONFIG_PATH = Path(__file__).resolve().with_name("process_config.json")
 CLIENT_ID = "FlightController"
 MSP_REQUEST_TOPIC = "MSP.REQUEST"
@@ -30,7 +25,7 @@ class UAVInterface:
 
     async def _handle_request(self, message: Dict[str, Any], raw: str) -> None:
         topic = message.get("topic")
-        if topic != MSP_REQUEST_TOPIC:
+        if topic != MSP_REQUEST_TOPIC: #must be MSP.REQUEST.<anything>, not just first two
             return
         payload = message.get("payload")
         requester = payload["client"]

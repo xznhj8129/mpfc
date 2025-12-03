@@ -4,13 +4,12 @@
 - Start the hivelink bridge: `python hivelink_interface.py` (uses `process_config.json` for nodes/datalink bindings).
 - Launch ArduPilot SITL (example QuadPlane TCP-udp bridge):
   - `sim_vehicle.py -v ArduPlane -w --console --map --out=udp:127.0.0.1:14550`
-  - Ensure `main_uav.py` `process_config.json` has:
-    - `main_uav.mode`: `"mavlink"`
+  - Set `MAIN_UAV_CONFIG=process_config_mavlink.json` (or another config with `mode: mavlink`), ensure:
     - `main_uav.mavlink.conn_str`: `"udp:127.0.0.1:14550"` (matches SITL `--out`)
     - `main_uav.mavlink.hl_rate_hz`: telemetry rate (e.g., 1.0)
     - `main_uav.datalink.destination`: target hivelink node id (empty for broadcast)
     - `main_uav.datalink.transport`: `udp`/`multicast`/`meshtastic` as applicable
-- Start the MAVLink-driven UAV loop: `python main_uav.py`.
+- Start the MAVLink-driven UAV loop: `MAIN_UAV_CONFIG=process_config_mavlink.json python main_uav.py`.
 - Verify telemetry/control with QGroundControl:
   - Connect QGC to the same SITL endpoint (e.g., UDP 14550).
   - Observe attitude/position updates; arm/mode changes from QGC should reflect in SITL and be mirrored in `main_uav` logs (`[HL_TELEM]` lines).
@@ -18,5 +17,5 @@
   - Publish `Datalink.OUT` messages with `message_path` set to `Command.AP.ARM`, `Command.AP.DISARM`, `Command.AP.SET_MODE`, `Command.AP.TAKEOFF`, `Command.AP.LAND`, or `Command.AP.SELECT_MISSION` and appropriate payload fields. The `hivelink_interface.py` will encode and forward to `Datalink.IN` which `main_uav.py` consumes.
 - Missing pieces to supply yourself:
   - A sender that publishes the command envelopes onto the bus (e.g., reuse `example_hello_client.py` logic to emit JSON with `message_path` and `payload` under `Datalink.OUT`).
-  - Confirm your `nodes.json` and `process_config.json` destinations/transport match your hivelink network (broadcast vs specific node).
+  - Confirm your `nodes.json` and `process_config_mavlink.json` destinations/transport match your hivelink network (broadcast vs specific node).
   - Ensure SITL and bus are reachable from the same host/network ports you configure.***
