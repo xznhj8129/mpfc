@@ -3,7 +3,18 @@
   "schema_path": "bus_topics_schema.json",
   "nodes_path": "../hivelink/nodes.json",
   "main_uav": {
-    "msp_requests": []
+    "mode": "mavlink",
+    "mavlink": {
+      "conn_str": "udp:127.0.0.1:14550",
+      "hl_rate_hz": 1.0
+    },
+    "datalink": {
+      "destination": "",
+      "transport": "udp"
+    },
+    "msp": {
+      "requests": []
+    }
   },
   "uav_interface": {},
   "hivelink": {
