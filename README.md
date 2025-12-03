@@ -12,8 +12,8 @@ Program process structure
 Processes:
 * message_bus: Sole broker, every module registers a hardcoded client id and uses JSON envelopes described in `bus_topics_schema.json`.
 * core: Controller program that loads a flight core plugin within itself
-* flight_core: main setup, state control and loop specific to UAV type (MSP or Mavlink)
-* user_plugin: User provided code connected to bus and exchanges information, can be blocking
+* flight_core: main central client, setup, state control and loop specific to UAV type (MSP or Mavlink)
+* user_plugin: User provided client code connected to bus and exchanges information, can be blocking
 
 See config/config_*.json for examples and structure:
 
@@ -23,6 +23,8 @@ See config/config_*.json for examples and structure:
 Flight cores:
 * mavlink_core: MAVLink-specific core flight code
 * msp_core: INAV-specific core flight code
+* test_core: non-UAV test/debug code
+Cores control the master on/off switch. They can send a Control.Shutdown message that all clients will take as a sign to shut down cleanly. Cores encountering an unrecoverable error will also send Control.Shutdown.
 
 Base plugins:
 * msp_interface: Bus-connected MSP Flight Controller interface using MSPAPI2, tcp or serial
@@ -30,17 +32,13 @@ Base plugins:
 * hivelink_interface: Bus-connected Hivelink interface
 
 Common characteristics:
-- All cores and plugins have a configurable `id` for IPC
-- All cores and plugins can be configured from their call from the main config with the `cfg` or `cfg_path` key. Same exact schema, but can be in main config or split, or combined.
+- All clients have a configurable `id` for IPC
+- All clients can be configured from the main config with the `cfg` or `cfg_path` key. Same exact schema, but can be in main config or split, or combined.
 - main config -> load cfg_path if provided -> add cfg fields if provided -> pass to plugin
 - JSON schema of topics and payload fields lives in `bus_topics_schema.json`.
-
-# Messaging schematic
-- Core envelope: `client` (sender id), `topic` (bus route), `time` (epoch ms), `data` (topic payload).
-- Flows:
-  * MSP mode: `main_uav.py` → `MSP.REQUEST.x` (`data`) → bus
-  * bus → `msp_interface` (stub) 
-  * `MSP.REPLY.x` → bus → `main_uav.py`.
-
-
+- All clients will respond to a Diag.<their_id>.PING with a Diag.<their_id>.PONG ASAP
+- All clients upon starting and connecting send a Diag.<id>.ONLINE broadcast
+- All clients upon encountering a recovered exception send a Diag.<id>.ERROR broadcast with data=JSON exception traceback
+- All clients upon encountering an unrecoverable exception send a Diag.<id>.CRASH broadcast with data=JSON exception traceback
+- All clients upon normal shutdown send a Diag.<id>.STOPPED broadcast
 

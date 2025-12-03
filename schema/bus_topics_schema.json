@@ -70,7 +70,7 @@
     },
     "DIAG.<client_id>": {
       "direction": "broadcast",
-      "summary": "Diagnostics and health events, ie crash, shutdown, errors",
+      "summary": "Diagnostics and health events, ie startup, crash, shutdown, errors",
       "data": "schema-defined"
     }
   }

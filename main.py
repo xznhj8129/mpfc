@@ -4,11 +4,7 @@ import os
 import time
 from lib.common import *
 
-CONFIG_PATH = Path(__file__).resolve().with_name("process_config.json")
-
-DATALINK_IN_TOPIC = "Datalink.IN"
-DATALINK_OUT_TOPIC = "Datalink.OUT"
-CONFIG_ENV = "MAIN_UAV_CONFIG"
+CONFIG_ENV = "MAIN_CONFIG"
 
 def main() -> None:
     env_value = os.environ.get(CONFIG_ENV)

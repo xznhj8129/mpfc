@@ -20,17 +20,13 @@ def main() -> None:
 
     # get config here
 
-    plugin = None
-    # plugin = get cfg['main_uav']['core']
+    # get core here
 
-    plugin.start()
+    # get plugins here
 
-    try:
-        # run core here
+    # run core and plugins seperately, safe from each other, not blocking each other, 
 
-    finally:
-        plugin.stop()
-        client.close()
+    # shutdown cleanly when all have shutdown
 
 
 if __name__ == "__main__":
