@@ -1,4 +1,9 @@
+"""
+see mspapi2/mspapi2/msp_server.py
+Implement msp_server, except requests are now bus topic/schema based. 
 
+
+"""
 import asyncio
 import json
 from pathlib import Path
@@ -7,8 +12,8 @@ from typing import Any, Dict
 from message_bus_client import BusClientAsync
 
 IS_INTERFACE = True
-CONFIG_PATH = Path(__file__).resolve().with_name("process_config.json")
-CLIENT_ID = "FlightController"
+IS_INTERFACE = True
+CLIENT_ID = "MSPPI"
 MSP_REQUEST_TOPIC = "MSP.REQUEST"
 MSP_REPLY_TOPIC = "MSP.REPLY"
 

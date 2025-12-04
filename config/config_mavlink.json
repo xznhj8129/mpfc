@@ -35,7 +35,7 @@
       "is_datalink": true,
       "cfg": {
         "conn_type": "udp",
-        "conn_str": "udp:127.0.0.1:14550",
+        "conn_str": "udp:127.0.0.1:14551",
         "conn_bitrate": 115200
         }
     }

@@ -1,0 +1,109 @@
+2025-12-03 21:07:05,881 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:07:05,982 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 49906) error=empty_stream
+2025-12-03 21:07:05,983 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 49906)
+2025-12-03 21:07:05,985 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:07:05,986 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:07:05,986 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:07:05,987 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:07:05,988 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:07:05,988 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:07:05,988 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:07:05,989 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:07:05,989 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
+2025-12-03 21:07:05,990 INFO DISCONNECT client=testcore
+2025-12-03 21:07:05,991 INFO DISCONNECT client=testclient1
+2025-12-03 21:07:05,991 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:07:05,991 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:07:05,992 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:07:05,992 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:07:05,992 INFO DISCONNECT client=testclient2
+2025-12-03 21:07:06,186 INFO CANCEL client=testcore
+2025-12-03 21:07:06,186 INFO DISCONNECT client=testcore
+2025-12-03 21:07:23,646 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:07:23,744 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 35580) error=empty_stream
+2025-12-03 21:07:23,745 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 35580)
+2025-12-03 21:07:23,749 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:07:23,750 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:07:23,750 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:07:23,751 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:07:23,753 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
+2025-12-03 21:07:23,754 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:07:23,755 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:07:23,755 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:07:23,755 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:07:23,755 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:07:23,756 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:07:23,756 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:07:23,756 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:07:23,757 INFO DISCONNECT client=testcore
+2025-12-03 21:07:23,757 INFO DISCONNECT client=testclient1
+2025-12-03 21:07:23,757 INFO DISCONNECT client=testclient2
+2025-12-03 21:07:23,953 INFO CANCEL client=testcore
+2025-12-03 21:07:23,953 INFO DISCONNECT client=testcore
+2025-12-03 21:07:40,991 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:07:40,992 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 34390) error=empty_stream
+2025-12-03 21:07:40,992 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 34390)
+2025-12-03 21:07:40,995 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:07:40,996 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:07:40,996 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:07:40,997 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:07:40,997 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:07:40,997 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:07:40,998 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
+2025-12-03 21:07:40,998 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:07:40,998 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:07:40,998 INFO DISCONNECT client=testcore
+2025-12-03 21:07:40,999 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:07:40,999 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:07:40,999 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:07:40,999 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:07:41,000 INFO DISCONNECT client=testclient1
+2025-12-03 21:07:41,000 INFO DISCONNECT client=testclient2
+2025-12-03 21:07:41,197 INFO CANCEL client=testcore
+2025-12-03 21:07:41,197 INFO DISCONNECT client=testcore
+2025-12-03 21:11:25,998 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:11:26,099 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 55136) error=empty_stream
+2025-12-03 21:11:26,099 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 55136)
+2025-12-03 21:11:26,104 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:11:26,104 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:11:26,104 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:11:26,104 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:11:26,106 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:11:26,106 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 21:11:26,107 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
+2025-12-03 21:11:26,107 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:11:26,107 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:11:26,108 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:11:26,108 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:11:26,108 INFO DISCONNECT client=testcore
+2025-12-03 21:11:26,108 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:11:26,108 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:11:26,109 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:11:26,109 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:11:26,109 INFO DISCONNECT client=testclient1
+2025-12-03 21:11:26,109 INFO DISCONNECT client=testclient2
+2025-12-03 21:11:26,303 INFO CANCEL client=testcore
+2025-12-03 21:11:26,304 INFO DISCONNECT client=testcore
+2025-12-03 21:11:36,468 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:11:36,569 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 34326) error=empty_stream
+2025-12-03 21:11:36,570 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 34326)
+2025-12-03 21:11:36,573 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:11:36,574 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:11:36,575 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:11:36,576 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:11:36,576 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:11:36,577 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:11:36,577 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:11:36,577 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:11:36,578 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:11:36,578 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:11:36,578 INFO DISCONNECT client=testclient1
+2025-12-03 21:11:36,579 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
+2025-12-03 21:11:36,579 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:11:36,579 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:11:36,579 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:11:36,579 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:11:36,579 INFO DISCONNECT client=testcore
+2025-12-03 21:11:36,580 INFO DISCONNECT client=testclient2
+2025-12-03 21:11:36,772 INFO CANCEL client=testcore
+2025-12-03 21:11:36,773 INFO DISCONNECT client=testcore

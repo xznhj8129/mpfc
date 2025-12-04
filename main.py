@@ -31,6 +31,7 @@ def _run_bus(bus_config: Dict[str, Any]) -> None:
 def start_from_config(config_path: Path) -> None:
     config = load_json(config_path)
     base_dir = config_path.parent
+    repo_root = base_dir.parent if base_dir.name == "config" else base_dir
     if "bus_config" not in config:
         raise KeyError("config missing bus_config")
     raw_bus_config = config["bus_config"]
@@ -48,7 +49,7 @@ def start_from_config(config_path: Path) -> None:
 
     log_file = Path(raw_bus_config["log_file"])
     if not log_file.is_absolute():
-        log_file = base_dir / log_file
+        log_file = repo_root / log_file
     log_parent = log_file.parent
     if log_parent and not log_parent.exists():
         raise FileNotFoundError(f"log directory does not exist: {log_parent}")
@@ -140,11 +141,11 @@ def start_from_config(config_path: Path) -> None:
                 raise TimeoutError("bus did not create unix socket before timeout")
             time.sleep(BUS_READY_INTERVAL_S)
 
-    core_proc = mp.Process(target=run_core, args=(bus_config, core_cfg), name="core")
+    core_proc = mp.Process(target=run_core, args=(core_cfg, bus_config), name="core")
     core_proc.start()
     plugin_procs = []
     for plugin_cfg in plugin_cfgs:
-        proc = mp.Process(target=run_plugin, args=(bus_config, plugin_cfg), name=f"plugin-{plugin_cfg.get('id','?')}")
+        proc = mp.Process(target=run_plugin, args=(plugin_cfg, bus_config), name=f"plugin-{plugin_cfg.get('id','?')}")
         proc.start()
         plugin_procs.append(proc)
 

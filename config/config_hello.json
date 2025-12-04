@@ -3,7 +3,8 @@
     "core": {
         "name": "test_core",
         "cfg": {
-            "id": "testcore"
+            "id": "testcore",
+            "send_interval": 1.0
         }
     },
     "bus_config": {

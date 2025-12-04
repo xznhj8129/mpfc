@@ -17,8 +17,8 @@ from lib.common import build_envelope, load_json
 from message_bus_client import BusClientAsync
 
 IS_DATALINK = True
-DATALINK_IN_TOPIC = "Hivelink.IN"
-DATALINK_OUT_TOPIC = "Hivelink.OUT"
+HIVELINK_IN_TOPIC = "Hivelink.IN"
+HIVELINK_OUT_TOPIC = "Hivelink.OUT"
 POLL_INTERVAL_S = 0.1
 
 
@@ -146,7 +146,7 @@ async def run_plugin(bus_config: Dict[str, Any], cfg: Dict[str, Any]) -> None:
     diag_pong_topic = f"Diag.{client_id}.PONG"
     diag_online_topic = f"Diag.{client_id}.ONLINE"
     diag_stopped_topic = f"Diag.{client_id}.STOPPED"
-    await client.subscribe(DATALINK_OUT_TOPIC)
+    await client.subscribe(HIVELINK_OUT_TOPIC)
     await client.subscribe(diag_ping_topic)
     await client.publish(diag_online_topic, build_envelope(client_id, diag_online_topic, {"event": "ONLINE"}))
 
@@ -159,13 +159,13 @@ async def run_plugin(bus_config: Dict[str, Any], cfg: Dict[str, Any]) -> None:
             )
             await client.publish(diag_pong_topic, pong_payload)
             return
-        if topic != DATALINK_OUT_TOPIC:
+        if topic != HIVELINK_OUT_TOPIC:
             return
         payload = message.get("payload")
         if not isinstance(payload, dict):
             raise TypeError(f"datalink outbound bus message missing payload object raw={raw}")
         envelope_topic = payload.get("topic")
-        if envelope_topic != DATALINK_OUT_TOPIC:
+        if envelope_topic != HIVELINK_OUT_TOPIC:
             raise ValueError(f"datalink outbound envelope topic mismatch envelope_topic={envelope_topic} raw={raw}")
         data = payload.get("data")
         if not isinstance(data, dict):
@@ -206,7 +206,7 @@ async def run_plugin(bus_config: Dict[str, Any], cfg: Dict[str, Any]) -> None:
                 enum_member, decoded_payload = decode_message(packet["data"])
                 envelope = build_envelope(
                     client_id,
-                    DATALINK_IN_TOPIC,
+                    HIVELINK_IN_TOPIC,
                     {
                         "interface": packet["intf"],
                         "source": packet["from"],
@@ -214,7 +214,7 @@ async def run_plugin(bus_config: Dict[str, Any], cfg: Dict[str, Any]) -> None:
                         "payload": decoded_payload,
                     },
                 )
-                await client.publish(DATALINK_IN_TOPIC, envelope)
+                await client.publish(HIVELINK_IN_TOPIC, envelope)
             await asyncio.sleep(POLL_INTERVAL_S)
     except asyncio.CancelledError:
         raise
