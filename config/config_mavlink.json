@@ -1,15 +1,19 @@
 {
   "my_name": "uav1",
   "core": {
-    "id": "mavlink_core",
+    "name": "mavlink_core",
     "cfg": {
+      "id": "mavlink_core",
       "sysid": 1,
-      "mav_autopilot": "MAV_AUTOPILOT_PX4",
-      "mav_type": "MAV_TYPE_QUADROTOR"
+      "mav_autopilot": "MAV_AUTOPILOT_ARDUPILOT",
+      "mav_type": "MAV_TYPE_QUADROTOR",
+      "system_address": "udp://127.0.0.1:14551",
+      "takeoff_altitude_m": 10.0,
+      "post_takeoff_hold_s": 10.0
     }
   },
   "bus_config": {
-    "schema_path": "schema/bus_topics_schema.json",
+    "schema_path": "bus_topics_schema.json",
     "log_file": "hivebus.log",
     "endpoint": {
       "type": "tcp",
@@ -19,26 +23,25 @@
   },
 
   "plugins": [
-    {"mav_interface": {
-      "id": "mav_uav",
-      "is_interface": true,
+    {
+      "plugin": "mav_interface",
       "cfg": {
+        "id": "mav_uav",
+        "is_interface": true,
         "conn_type": "udp",
         "conn_str": "udp:127.0.0.1:14550",
         "conn_bitrate": 115200
-        }
       }
     },
     {
-      "mav_interface": {
-      "id": "mav_datalink",
-      "is_datalink": true,
+      "plugin": "mav_interface",
       "cfg": {
+        "id": "mav_datalink",
+        "is_datalink": true,
         "conn_type": "udp",
         "conn_str": "udp:127.0.0.1:14551",
         "conn_bitrate": 115200
-        }
-    }
+      }
     }
   ]
 }

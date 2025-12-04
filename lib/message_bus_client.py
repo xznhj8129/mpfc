@@ -43,33 +43,17 @@ def _build_logger(name: str) -> logging.Logger:
 class _Common:
     @staticmethod
     def _encode(message: Dict) -> bytes:
-        if "op" not in message:
-            raise ValueError("message missing op")
         encoded = json.dumps(message, separators=(",", ":")).encode(ENCODING) + b"\n"
-        if len(encoded) > MAX_LINE_BYTES:
-            raise ValueError("message exceeds max line size")
         return encoded
 
     @staticmethod
     def _decode_line(line: bytes) -> Tuple[Dict, str]:
-        if not line:
-            raise ValueError("empty line")
-        if not line.endswith(b"\n"):
-            raise ValueError("line missing newline terminator")
-        if len(line) > MAX_LINE_BYTES:
-            raise ValueError("line exceeds max length")
         raw = line.decode(ENCODING).rstrip("\n")
         message = json.loads(raw)
-        if not isinstance(message, dict):
-            raise ValueError("message is not a JSON object")
         return message, raw
 
     @staticmethod
     def _validate_endpoint(host: Optional[str], port: Optional[int]) -> Tuple[str, int]:
-        if not host or port is None:
-            raise ValueError("host and port are required")
-        if port < 1 or port > 65535:
-            raise ValueError("port must be between 1 and 65535")
         return host, port
 
 
@@ -88,8 +72,6 @@ class BusClientAsync(_Common):
 
     @classmethod
     async def connect_unix(cls, path: str, client_id: str) -> "BusClientAsync":
-        if not path:
-            raise ValueError("unix socket path is required")
         reader, writer = await asyncio.open_unix_connection(path=path, limit=MAX_LINE_BYTES)
         client = cls(reader, writer)
         await client._send({"op": HANDSHAKE_OP, "client": client_id})
@@ -101,15 +83,9 @@ class BusClientAsync(_Common):
         await self.writer.drain()
 
     async def subscribe(self, topic: str) -> None:
-        if not topic:
-            raise ValueError("topic is required for subscribe")
         await self._send({"op": "sub", "topic": topic})
 
     async def publish(self, topic: str, payload: Dict) -> None:
-        if not topic:
-            raise ValueError("topic is required for publish")
-        if payload is None:
-            raise ValueError("payload is required for publish")
         await self._send({"op": "pub", "topic": topic, "payload": payload})
 
     async def receive_loop(self, handler: Callable[[Dict, str], Awaitable[None]]) -> None:
@@ -148,8 +124,6 @@ class BusClientSync(_Common):
 
     @classmethod
     def connect_unix(cls, path: str, client_id: str, logger: Optional[logging.Logger] = None) -> "BusClientSync":
-        if not path:
-            raise ValueError("unix socket path is required")
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(path)
         log = logger or _build_logger("message_bus_sync_client")
@@ -159,16 +133,10 @@ class BusClientSync(_Common):
         return client
 
     def subscribe(self, topic: str) -> None:
-        if not topic:
-            raise ValueError("topic is required for subscribe")
         self._ensure_alive()
         self._send_line({"op": "sub", "topic": topic})
 
     def publish(self, topic: str, payload: Dict) -> None:
-        if not topic:
-            raise ValueError("topic is required for publish")
-        if payload is None:
-            raise ValueError("payload is required for publish")
         self._ensure_alive()
         self._send_line({"op": "pub", "topic": topic, "payload": payload})
 
@@ -207,10 +175,7 @@ class BusClientSync(_Common):
         self.close()
 
     def _ensure_alive(self) -> None:
-        if self.stop_event.is_set():
-            if self.reader_error is not None:
-                raise RuntimeError(f"bus reader stopped: {self.reader_error}")
-            raise RuntimeError("bus client is closed")
+        return None
 
     def _send_line(self, obj: Dict) -> None:
         encoded = self._encode(obj)
@@ -241,6 +206,5 @@ class BusClientSync(_Common):
                 self.logger.info("reader stopped client=%s", self.client_id)
 
     def _start_reader(self) -> None:
-        if self.reader_thread.is_alive():
-            raise RuntimeError("reader already started")
-        self.reader_thread.start()
+        if not self.reader_thread.is_alive():
+            self.reader_thread.start()

@@ -1,13 +1,14 @@
 {
   "my_name": "uav1",
   "core": {
-    "id": "msp_core",
+    "name": "msp_core",
     "cfg": {
+      "id": "msp_core",
       "type": "PLATFORM_MULTIROTOR"
     }
   },
   "bus_config": {
-    "schema_path": "schema/bus_topics_schema.json",
+    "schema_path": "bus_topics_schema.json",
     "log_file": "hivebus.log",
     "endpoint": {
       "type": "tcp",
@@ -17,23 +18,21 @@
   },
   "plugins": [
     {
-      "msp_interface": {
+      "plugin": "msp_interface",
+      "cfg": {
         "id": "FlightController",
-        "cfg": {
-          "is_interface": true,
-          "conn_type": "serial",
-          "conn_str": "/dev/ttyACM0",
-          "conn_bitrate": 115200
-        }
+        "is_interface": true,
+        "conn_type": "serial",
+        "conn_str": "/dev/ttyACM0",
+        "conn_bitrate": 115200
       }
     },
     {
-      "hivelink_interface": {
+      "plugin": "hivelink_interface",
+      "cfg": {
         "id": "Hivelink",
-        "cfg": {
-          "cfg_path": "hivelink_config.json",
-          "is_datalink": true
-        }
+        "config_path": "hivelink_config.json",
+        "is_datalink": true
       }
     }
   ]

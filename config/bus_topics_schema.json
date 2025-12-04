@@ -6,7 +6,7 @@
     "data": "Topic specific payload"
   },
   "topics": {
-    "Datalink.IN": {
+    "<datalink_id>.Datalink.IN": {
       "direction": "datalink interface -> any",
       "summary": "Decoded hivelink frames coming from physical datalinks",
       "data": {
@@ -16,7 +16,7 @@
         "payload": "JSON payload dictionary"
       }
     },
-    "Datalink.OUT": {
+    "<datalink_id>.Datalink.OUT": {
       "direction": "any -> datalink interface",
       "summary": "Unencoded hivelink messages that should be encoded and forwarded",
       "data": {
@@ -39,21 +39,21 @@
         "<value>": "value to set"
       }
     },
-    "MSP.REQUEST": {
-      "direction": "any -> uav_interface",
+    "<interface_id>.MSP.REQUEST": {
+      "direction": "any -> msp_interface",
       "summary": "Base prefix for MSP request",
       "data": {
         "data": "MSP payload (JSON)"
       }
     },
-    "MSP.REPLY": {
-      "direction": "uav_interface -> any",
+    "<interface_id>.MSP.REPLY": {
+      "direction": "msp_interface -> any",
       "summary": "Base prefix for MSP replies following request operations",
       "data": {
         "data": "MSP payload (JSON)"
       }
     },
-    "MAVLINK": {
+    "<interface_id>.MAVLINK": {
       "direction": "any <-> any",
       "summary": "Base prefix for MAVLink messages",
       "data": {

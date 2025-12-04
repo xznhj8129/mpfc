@@ -44,14 +44,8 @@ class CoreBase:
             message, _ = self.client.receive(timeout=timeout)
         except queue.Empty:
             return None, None, None
-        if not isinstance(message, dict):
-            raise TypeError("bus message must be a dictionary")
         topic = message.get("topic")
         payload = message.get("payload")
-        if not isinstance(topic, str) or not topic:
-            raise KeyError("bus message missing topic")
-        if not isinstance(payload, dict):
-            raise TypeError("bus message payload must be a dictionary")
         if topic == self.diag_ping_topic:
             pong_payload = build_envelope(self.client_id, self.diag_pong_topic, {"ping_time": payload.get("time")})
             self.client.publish(self.diag_pong_topic, pong_payload)

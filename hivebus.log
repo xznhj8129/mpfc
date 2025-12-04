@@ -366,3 +366,127 @@
 2025-12-03 21:33:38,474 INFO DISCONNECT client=testclient1
 2025-12-03 21:33:38,474 INFO CANCEL client=testclient2
 2025-12-03 21:33:38,475 INFO DISCONNECT client=testclient2
+2025-12-04 02:00:40,226 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-04 02:00:40,326 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 40224) error=empty_stream
+2025-12-04 02:00:40,327 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 40224)
+2025-12-04 02:00:40,330 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-04 02:00:40,331 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-04 02:00:40,332 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-04 02:00:40,332 INFO SUB testcore topic=testcore.hello
+2025-12-04 02:00:40,333 INFO DROP testcore topic=testclient1.hello reason=no_subscribers
+2025-12-04 02:00:40,334 INFO DROP testcore topic=testclient2.hello reason=no_subscribers
+2025-12-04 02:00:40,335 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-04 02:00:40,335 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-04 02:00:40,335 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-04 02:00:40,335 INFO SUB testclient1 topic=testclient1.hello
+2025-12-04 02:00:40,336 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-04 02:00:40,336 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-04 02:00:40,336 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-04 02:00:40,336 INFO SUB testclient2 topic=testclient2.hello
+2025-12-04 02:00:41,332 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 02:00:41,332 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 02:00:41,333 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:41,333 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:42,332 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 02:00:42,333 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:42,333 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 02:00:42,334 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:43,332 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 02:00:43,333 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:43,334 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 02:00:43,334 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:44,333 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 02:00:44,334 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:44,334 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 02:00:44,335 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:45,333 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 02:00:45,334 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:45,334 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 02:00:45,334 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:46,333 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 02:00:46,334 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:46,335 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 02:00:46,335 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:47,334 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 02:00:47,335 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:47,335 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 02:00:47,336 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 02:00:47,867 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-04 02:00:47,867 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-04 02:00:47,867 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-04 02:00:47,869 INFO CANCEL client=testcore
+2025-12-04 02:00:47,869 INFO DISCONNECT client=testcore
+2025-12-04 02:00:47,869 INFO CANCEL client=testclient1
+2025-12-04 02:00:47,870 INFO DISCONNECT client=testclient1
+2025-12-04 02:00:47,870 INFO CANCEL client=testclient2
+2025-12-04 02:00:47,870 INFO DISCONNECT client=testclient2
+2025-12-04 03:02:01,773 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-04 03:02:01,774 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 52862) error=empty_stream
+2025-12-04 03:02:01,774 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 52862)
+2025-12-04 03:02:01,777 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-04 03:02:01,778 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-04 03:02:01,778 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-04 03:02:01,778 INFO SUB testcore topic=testcore.hello
+2025-12-04 03:02:01,778 INFO DROP testcore topic=testclient1.hello reason=no_subscribers
+2025-12-04 03:02:01,779 INFO DROP testcore topic=testclient2.hello reason=no_subscribers
+2025-12-04 03:02:01,779 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-04 03:02:01,780 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-04 03:02:01,780 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-04 03:02:01,780 INFO SUB testclient1 topic=testclient1.hello
+2025-12-04 03:02:01,781 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-04 03:02:01,782 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-04 03:02:01,782 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-04 03:02:01,782 INFO SUB testclient2 topic=testclient2.hello
+2025-12-04 03:02:02,778 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 03:02:02,779 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 03:02:02,780 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 03:02:02,780 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 03:02:03,779 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-04 03:02:03,779 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 03:02:03,779 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-04 03:02:03,780 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-04 03:02:03,905 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-04 03:02:03,906 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-04 03:02:03,906 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-04 03:02:03,907 INFO CANCEL client=testcore
+2025-12-04 03:02:03,908 INFO DISCONNECT client=testcore
+2025-12-04 03:02:03,908 INFO CANCEL client=testclient1
+2025-12-04 03:02:03,908 INFO DISCONNECT client=testclient1
+2025-12-04 03:02:03,908 INFO CANCEL client=testclient2
+2025-12-04 03:02:03,908 INFO DISCONNECT client=testclient2
+2025-12-04 03:08:13,199 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-04 03:08:25,700 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-04 03:08:25,800 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 39270) error=empty_stream
+2025-12-04 03:08:25,800 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 39270)
+2025-12-04 03:08:25,804 INFO IN mav_uav {"op":"HANDSHAKE","client":"mav_uav"}
+2025-12-04 03:08:25,805 INFO IN mavlink_core {"op":"HANDSHAKE","client":"mavlink_core"}
+2025-12-04 03:08:25,805 INFO SUB mav_uav topic=Diag.mav_uav.PING
+2025-12-04 03:08:25,806 INFO DROP mav_uav topic=Diag.mav_uav.ONLINE reason=no_subscribers
+2025-12-04 03:08:25,806 INFO SUB mavlink_core topic=Diag.mavlink_core.PING
+2025-12-04 03:08:25,806 INFO DROP mavlink_core topic=Diag.mavlink_core.ONLINE reason=no_subscribers
+2025-12-04 03:08:25,807 INFO IN mav_datalink {"op":"HANDSHAKE","client":"mav_datalink"}
+2025-12-04 03:08:25,808 INFO SUB mav_datalink topic=Diag.mav_datalink.PING
+2025-12-04 03:08:25,809 INFO DROP mav_datalink topic=Diag.mav_datalink.ONLINE reason=no_subscribers
+2025-12-04 03:08:25,810 INFO DISCONNECT client=mavlink_core
+2025-12-04 03:08:25,811 INFO DISCONNECT client=mav_uav
+2025-12-04 03:08:25,813 INFO DISCONNECT client=mav_datalink
+2025-12-04 03:10:40,078 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-04 03:10:40,179 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 51308) error=empty_stream
+2025-12-04 03:10:40,180 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 51308)
+2025-12-04 03:10:40,186 INFO IN mavlink_core {"op":"HANDSHAKE","client":"mavlink_core"}
+2025-12-04 03:10:40,186 INFO SUB mavlink_core topic=Diag.mavlink_core.PING
+2025-12-04 03:10:40,187 INFO DROP mavlink_core topic=Diag.mavlink_core.ONLINE reason=no_subscribers
+2025-12-04 03:10:40,189 INFO IN mav_uav {"op":"HANDSHAKE","client":"mav_uav"}
+2025-12-04 03:10:40,189 INFO SUB mav_uav topic=Diag.mav_uav.PING
+2025-12-04 03:10:40,190 INFO DROP mav_uav topic=Diag.mav_uav.ONLINE reason=no_subscribers
+2025-12-04 03:10:40,190 INFO SUB mav_uav topic=MAVLINK.RAW
+2025-12-04 03:10:40,191 INFO IN mav_datalink {"op":"HANDSHAKE","client":"mav_datalink"}
+2025-12-04 03:10:40,191 INFO SUB mav_datalink topic=Diag.mav_datalink.PING
+2025-12-04 03:10:40,192 INFO DROP mav_datalink topic=Diag.mav_datalink.ONLINE reason=no_subscribers
+2025-12-04 03:10:40,192 INFO SUB mav_datalink topic=MAVLINK.RAW
+2025-12-04 03:11:01,901 INFO CANCEL client=mavlink_core
+2025-12-04 03:11:01,902 INFO DISCONNECT client=mavlink_core
+2025-12-04 03:11:01,902 INFO CANCEL client=mav_uav
+2025-12-04 03:11:01,902 INFO DISCONNECT client=mav_uav
+2025-12-04 03:11:01,903 INFO CANCEL client=mav_datalink
+2025-12-04 03:11:01,903 INFO DISCONNECT client=mav_datalink

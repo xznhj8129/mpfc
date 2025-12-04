@@ -23,18 +23,12 @@ class MessageBus:
         self.lock = asyncio.Lock()
 
     def _decode_json_line(self, line: bytes) -> tuple[str, Dict]:
-        if not line.endswith(b"\n"):
-            raise ValueError("message line missing newline terminator")
         text = line.decode(ENCODING).rstrip("\n")
         parsed = json.loads(text)
-        if not isinstance(parsed, dict):
-            raise ValueError("message is not a JSON object")
         return text, parsed
 
     async def register_client(self, client_id: str, writer: asyncio.StreamWriter) -> None:
         async with self.lock:
-            if client_id in self.clients:
-                raise ValueError("duplicate client id")
             self.clients[client_id] = writer
 
     async def unregister_client(self, client_id: str) -> None:
@@ -112,11 +106,7 @@ class MessageBus:
                 return
             client_id = handshake_message["client"]
 
-            try:
-                await self.register_client(client_id, writer)
-            except ValueError as exc:
-                self.logger.error("HANDSHAKE_FAIL client=%s error=%s", client_id, exc)
-                return
+            await self.register_client(client_id, writer)
             self.logger.info("IN %s %s", client_id, line_text)
 
             while True:
@@ -135,19 +125,10 @@ class MessageBus:
                 op = message.get("op")
                 if op == "sub":
                     topic = message.get("topic")
-                    if not isinstance(topic, str) or not topic:
-                        self.logger.error("SUB_FAIL client=%s error=missing_topic raw=%s", client_id, line_text)
-                        continue
                     await self.add_subscription(client_id, topic)
                     self.logger.info("SUB %s topic=%s", client_id, topic)
                 elif op == "pub":
                     topic = message.get("topic")
-                    if not isinstance(topic, str) or not topic:
-                        self.logger.error("PUB_FAIL client=%s error=missing_topic raw=%s", client_id, line_text)
-                        continue
-                    if "payload" not in message:
-                        self.logger.error("PUB_FAIL client=%s error=missing_payload raw=%s", client_id, line_text)
-                        continue
                     await self.publish(client_id, topic, message, line_text)
                 else:
                     self.logger.error("OP_UNKNOWN client=%s raw=%s", client_id, line_text)
@@ -217,38 +198,22 @@ def main() -> None:
     args = parser.parse_args()
 
     config_path = Path(args.config)
-    if not config_path.is_file():
-        raise FileNotFoundError(f"config file not found: {config_path}")
     with config_path.open("r", encoding=ENCODING) as handle:
         config_data = json.load(handle)
-    if not isinstance(config_data, dict):
-        raise ValueError("config root must be an object")
-    if "endpoint" not in config_data or not isinstance(config_data["endpoint"], dict):
-        raise ValueError("config.endpoint is required")
     endpoint_config = config_data["endpoint"]
     endpoint_type = endpoint_config.get("type")
     if endpoint_type == "tcp":
         host = endpoint_config.get("host")
         port = endpoint_config.get("port")
-        if not isinstance(host, str) or not host:
-            raise ValueError("endpoint.host is required for tcp")
-        if not isinstance(port, int) or port < 1 or port > 65535:
-            raise ValueError("endpoint.port must be int 1-65535 for tcp")
         endpoint = {"type": "tcp", "host": host, "port": port}
     elif endpoint_type == "unix":
         path = endpoint_config.get("path")
-        if not isinstance(path, str) or not path:
-            raise ValueError("endpoint.path is required for unix")
         endpoint = {"type": "unix", "path": path}
     else:
-        raise ValueError("endpoint.type must be 'tcp' or 'unix'")
+        endpoint = endpoint_config
 
-    if "log_file" not in config_data or not isinstance(config_data["log_file"], str) or not config_data["log_file"]:
-        raise ValueError("log_file is required in config")
     log_file = config_data["log_file"]
     log_parent = Path(log_file).parent
-    if log_parent and not log_parent.exists():
-        raise FileNotFoundError(f"log directory does not exist: {log_parent}")
 
     asyncio.run(run_server(endpoint, log_file))
 
