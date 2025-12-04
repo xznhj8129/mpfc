@@ -14,42 +14,29 @@ class HelloPlugin(PluginBase):
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
         super().__init__(cfg, bus_config)
         self.send_interval = float(cfg.get("send_interval"))
-
-        if self.send_interval is None:
-            raise ValueError("cfg missing send_interval")
-        if self.send_interval <= 0:
-            raise ValueError("send_interval must be positive")
-
         self.my_topic = f"{self.client_id}.hello"
         self.client.subscribe(self.my_topic)
 
     def run(self) -> None:
-        
-        next_send = time.monotonic()
+        deadline = time.monotonic() + self.send_interval
         try:
             while True:
-                now = time.monotonic()
-                if now >= next_send:
-                    envelope = build_envelope(self.client_id, HELLO_TOPIC, {"message": "hello"})
-                    self.client.publish(HELLO_TOPIC, envelope)
-                    print(
-                        f"[PLUGIN_HELLO] id={self.client_id} topic={HELLO_TOPIC} payload={json.dumps(envelope, separators=(',', ':'))}",
-                        flush=True,
-                    )
-                    next_send = now + self.send_interval
-
-                topic, payload, message = self.recv_until(next_send)
-
+                topic, payload, message = self.recv_until(deadline)
                 if topic is None:
+                    deadline = time.monotonic() + self.send_interval
                     continue
                 if topic == self.my_topic:
                     sender = payload.get("client") or message.get("src")
+                    reply_topic = f"{sender}.{HELLO_TOPIC}"
+                    envelope = build_envelope(self.client_id, reply_topic, {"message": f"hello {sender}"})
+                    self.client.publish(reply_topic, envelope)
                     print(
-                        f"[PLUGIN_RECV] id={self.client_id} reply_topic={topic} src={sender} data={payload.get('data')}",
+                        f"[PLUGIN_RECV] id={self.client_id} reply_topic={reply_topic} src={sender} data={payload.get('data')}",
                         flush=True,
                     )
+                    deadline = time.monotonic() + self.send_interval
                     continue
-                
+                deadline = time.monotonic() + self.send_interval
         except RuntimeError:
             error_topic = f"DIAG.{self.client_id}.ERROR"
             error_payload = build_envelope(
@@ -64,4 +51,4 @@ class HelloPlugin(PluginBase):
 
 
 def run_plugin(cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
-    HelloPlugin(cfg, bus_config)
+    HelloPlugin(cfg, bus_config).run()

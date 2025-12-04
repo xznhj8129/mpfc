@@ -1,109 +1,368 @@
-2025-12-03 21:07:05,881 INFO LISTEN tcp 127.0.0.1:7777
-2025-12-03 21:07:05,982 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 49906) error=empty_stream
-2025-12-03 21:07:05,983 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 49906)
-2025-12-03 21:07:05,985 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
-2025-12-03 21:07:05,986 INFO SUB testcore topic=Diag.testcore.PING
-2025-12-03 21:07:05,986 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
-2025-12-03 21:07:05,987 INFO SUB testcore topic=testcore.hello
-2025-12-03 21:07:05,988 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
-2025-12-03 21:07:05,988 INFO SUB testclient1 topic=Diag.testclient1.PING
-2025-12-03 21:07:05,988 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
-2025-12-03 21:07:05,989 INFO SUB testclient1 topic=testclient1.hello
-2025-12-03 21:07:05,989 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
-2025-12-03 21:07:05,990 INFO DISCONNECT client=testcore
-2025-12-03 21:07:05,991 INFO DISCONNECT client=testclient1
-2025-12-03 21:07:05,991 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
-2025-12-03 21:07:05,991 INFO SUB testclient2 topic=Diag.testclient2.PING
-2025-12-03 21:07:05,992 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
-2025-12-03 21:07:05,992 INFO SUB testclient2 topic=testclient2.hello
-2025-12-03 21:07:05,992 INFO DISCONNECT client=testclient2
-2025-12-03 21:07:06,186 INFO CANCEL client=testcore
-2025-12-03 21:07:06,186 INFO DISCONNECT client=testcore
-2025-12-03 21:07:23,646 INFO LISTEN tcp 127.0.0.1:7777
-2025-12-03 21:07:23,744 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 35580) error=empty_stream
-2025-12-03 21:07:23,745 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 35580)
-2025-12-03 21:07:23,749 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
-2025-12-03 21:07:23,750 INFO SUB testcore topic=Diag.testcore.PING
-2025-12-03 21:07:23,750 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
-2025-12-03 21:07:23,751 INFO SUB testcore topic=testcore.hello
-2025-12-03 21:07:23,753 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
-2025-12-03 21:07:23,754 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
-2025-12-03 21:07:23,755 INFO SUB testclient1 topic=Diag.testclient1.PING
-2025-12-03 21:07:23,755 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
-2025-12-03 21:07:23,755 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
-2025-12-03 21:07:23,755 INFO SUB testclient2 topic=Diag.testclient2.PING
-2025-12-03 21:07:23,756 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
-2025-12-03 21:07:23,756 INFO SUB testclient2 topic=testclient2.hello
-2025-12-03 21:07:23,756 INFO SUB testclient1 topic=testclient1.hello
-2025-12-03 21:07:23,757 INFO DISCONNECT client=testcore
-2025-12-03 21:07:23,757 INFO DISCONNECT client=testclient1
-2025-12-03 21:07:23,757 INFO DISCONNECT client=testclient2
-2025-12-03 21:07:23,953 INFO CANCEL client=testcore
-2025-12-03 21:07:23,953 INFO DISCONNECT client=testcore
-2025-12-03 21:07:40,991 INFO LISTEN tcp 127.0.0.1:7777
-2025-12-03 21:07:40,992 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 34390) error=empty_stream
-2025-12-03 21:07:40,992 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 34390)
-2025-12-03 21:07:40,995 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
-2025-12-03 21:07:40,996 INFO SUB testcore topic=Diag.testcore.PING
-2025-12-03 21:07:40,996 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
-2025-12-03 21:07:40,997 INFO SUB testcore topic=testcore.hello
-2025-12-03 21:07:40,997 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
-2025-12-03 21:07:40,997 INFO SUB testclient1 topic=Diag.testclient1.PING
-2025-12-03 21:07:40,998 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
-2025-12-03 21:07:40,998 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
-2025-12-03 21:07:40,998 INFO SUB testclient1 topic=testclient1.hello
-2025-12-03 21:07:40,998 INFO DISCONNECT client=testcore
-2025-12-03 21:07:40,999 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
-2025-12-03 21:07:40,999 INFO SUB testclient2 topic=Diag.testclient2.PING
-2025-12-03 21:07:40,999 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
-2025-12-03 21:07:40,999 INFO SUB testclient2 topic=testclient2.hello
-2025-12-03 21:07:41,000 INFO DISCONNECT client=testclient1
-2025-12-03 21:07:41,000 INFO DISCONNECT client=testclient2
-2025-12-03 21:07:41,197 INFO CANCEL client=testcore
-2025-12-03 21:07:41,197 INFO DISCONNECT client=testcore
-2025-12-03 21:11:25,998 INFO LISTEN tcp 127.0.0.1:7777
-2025-12-03 21:11:26,099 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 55136) error=empty_stream
-2025-12-03 21:11:26,099 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 55136)
-2025-12-03 21:11:26,104 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
-2025-12-03 21:11:26,104 INFO SUB testcore topic=Diag.testcore.PING
-2025-12-03 21:11:26,104 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
-2025-12-03 21:11:26,104 INFO SUB testcore topic=testcore.hello
-2025-12-03 21:11:26,106 INFO DROP testcore topic=hello reason=no_subscribers
-2025-12-03 21:11:26,106 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
-2025-12-03 21:11:26,107 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
-2025-12-03 21:11:26,107 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
-2025-12-03 21:11:26,107 INFO SUB testclient1 topic=Diag.testclient1.PING
-2025-12-03 21:11:26,108 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
-2025-12-03 21:11:26,108 INFO SUB testclient1 topic=testclient1.hello
-2025-12-03 21:11:26,108 INFO DISCONNECT client=testcore
-2025-12-03 21:11:26,108 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
-2025-12-03 21:11:26,108 INFO SUB testclient2 topic=Diag.testclient2.PING
-2025-12-03 21:11:26,109 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
-2025-12-03 21:11:26,109 INFO SUB testclient2 topic=testclient2.hello
-2025-12-03 21:11:26,109 INFO DISCONNECT client=testclient1
-2025-12-03 21:11:26,109 INFO DISCONNECT client=testclient2
-2025-12-03 21:11:26,303 INFO CANCEL client=testcore
-2025-12-03 21:11:26,304 INFO DISCONNECT client=testcore
-2025-12-03 21:11:36,468 INFO LISTEN tcp 127.0.0.1:7777
-2025-12-03 21:11:36,569 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 34326) error=empty_stream
-2025-12-03 21:11:36,570 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 34326)
-2025-12-03 21:11:36,573 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
-2025-12-03 21:11:36,574 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
-2025-12-03 21:11:36,575 INFO SUB testclient1 topic=Diag.testclient1.PING
-2025-12-03 21:11:36,576 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
-2025-12-03 21:11:36,576 INFO SUB testclient1 topic=testclient1.hello
-2025-12-03 21:11:36,577 INFO SUB testcore topic=Diag.testcore.PING
-2025-12-03 21:11:36,577 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
-2025-12-03 21:11:36,577 INFO SUB testcore topic=testcore.hello
-2025-12-03 21:11:36,578 INFO DROP testcore topic=hello reason=no_subscribers
-2025-12-03 21:11:36,578 INFO DROP testcore topic=hello reason=no_subscribers
-2025-12-03 21:11:36,578 INFO DISCONNECT client=testclient1
-2025-12-03 21:11:36,579 ERROR HANDSHAKE_FAIL client=testcore error=duplicate client id
-2025-12-03 21:11:36,579 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
-2025-12-03 21:11:36,579 INFO SUB testclient2 topic=Diag.testclient2.PING
-2025-12-03 21:11:36,579 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
-2025-12-03 21:11:36,579 INFO SUB testclient2 topic=testclient2.hello
-2025-12-03 21:11:36,579 INFO DISCONNECT client=testcore
-2025-12-03 21:11:36,580 INFO DISCONNECT client=testclient2
-2025-12-03 21:11:36,772 INFO CANCEL client=testcore
-2025-12-03 21:11:36,773 INFO DISCONNECT client=testcore
+2025-12-03 21:20:59,123 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:20:59,225 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 48098) error=empty_stream
+2025-12-03 21:20:59,226 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 48098)
+2025-12-03 21:20:59,233 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:20:59,233 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:20:59,234 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:20:59,234 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:20:59,234 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:20:59,235 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:20:59,235 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:20:59,235 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:20:59,235 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:20:59,235 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:20:59,236 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:20:59,236 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:20:59,236 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:20:59,236 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:20:59,236 INFO DISCONNECT client=testclient1
+2025-12-03 21:20:59,238 INFO DISCONNECT client=testclient2
+2025-12-03 21:20:59,431 INFO CANCEL client=testcore
+2025-12-03 21:20:59,432 INFO DISCONNECT client=testcore
+2025-12-03 21:27:29,251 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:27:29,350 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 41862) error=empty_stream
+2025-12-03 21:27:29,350 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 41862)
+2025-12-03 21:27:29,355 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:27:29,355 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:27:29,355 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:27:29,355 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:27:29,356 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:29,356 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:29,357 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:27:29,358 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:27:29,358 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:27:29,358 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:27:29,359 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:27:29,359 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:27:29,359 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:27:29,359 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:27:29,359 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:27:29,360 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:27:30,356 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:30,356 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:30,359 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:27:30,359 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:27:31,356 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:31,357 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:31,359 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:27:31,360 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:27:32,357 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:32,357 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:32,359 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:27:32,360 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:27:33,357 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:33,357 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:33,359 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:27:33,360 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:27:34,357 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:34,358 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:34,359 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:27:34,361 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:27:35,358 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:35,358 INFO DROP testcore topic=hello reason=no_subscribers
+2025-12-03 21:27:35,359 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:27:35,361 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:27:35,721 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 21:27:35,721 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 21:27:35,722 INFO CANCEL client=testcore
+2025-12-03 21:27:35,722 INFO DISCONNECT client=testcore
+2025-12-03 21:27:35,723 INFO CANCEL client=testclient2
+2025-12-03 21:27:35,723 INFO DISCONNECT client=testclient2
+2025-12-03 21:27:35,723 INFO CANCEL client=testclient1
+2025-12-03 21:27:35,723 INFO DISCONNECT client=testclient1
+2025-12-03 21:28:41,044 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:28:41,135 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 53984) error=empty_stream
+2025-12-03 21:28:41,136 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 53984)
+2025-12-03 21:28:41,139 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:28:41,139 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:28:41,140 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:28:41,140 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:28:41,140 INFO DROP testcore topic=testclient1.hello reason=no_subscribers
+2025-12-03 21:28:41,140 INFO DROP testcore topic=testclient2.hello reason=no_subscribers
+2025-12-03 21:28:41,141 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:28:41,141 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:28:41,141 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:28:41,141 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:28:41,141 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:28:41,143 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:28:41,144 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:28:41,144 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:28:41,144 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:28:41,145 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:28:42,140 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:28:42,140 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:28:42,141 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:28:42,144 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:28:43,140 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:28:43,141 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:28:43,141 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:28:43,145 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:28:44,141 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:28:44,141 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:28:44,142 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:28:44,145 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:28:45,141 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:28:45,142 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:28:45,142 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:28:45,145 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:28:46,142 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:28:46,142 INFO DROP testclient1 topic=hello reason=no_subscribers
+2025-12-03 21:28:46,143 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:28:46,145 INFO DROP testclient2 topic=hello reason=no_subscribers
+2025-12-03 21:28:46,426 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 21:28:46,426 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 21:28:46,427 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 21:28:46,429 INFO CANCEL client=testcore
+2025-12-03 21:28:46,430 INFO DISCONNECT client=testcore
+2025-12-03 21:28:46,431 INFO CANCEL client=testclient1
+2025-12-03 21:28:46,431 INFO DISCONNECT client=testclient1
+2025-12-03 21:28:46,431 INFO CANCEL client=testclient2
+2025-12-03 21:28:46,431 INFO DISCONNECT client=testclient2
+2025-12-03 21:31:56,770 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:31:56,868 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 36674) error=empty_stream
+2025-12-03 21:31:56,869 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 36674)
+2025-12-03 21:31:56,871 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:31:56,872 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:31:56,872 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:31:56,872 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:31:56,873 INFO DROP testcore topic=testclient1.hello reason=no_subscribers
+2025-12-03 21:31:56,873 INFO DROP testcore topic=testclient2.hello reason=no_subscribers
+2025-12-03 21:31:56,874 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:31:56,874 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:31:56,875 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:31:56,875 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:31:56,875 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:31:56,876 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:31:56,876 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:31:56,876 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:31:57,872 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:31:57,873 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:31:57,874 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:31:57,874 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:31:58,873 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:31:58,873 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:31:58,874 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:31:58,875 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:31:59,873 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:31:59,874 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:31:59,874 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:31:59,875 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:00,874 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:00,874 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:00,875 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:00,876 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:01,874 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:01,874 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:01,875 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:01,875 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:02,874 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:02,876 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:02,876 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:02,877 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:03,875 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:03,876 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:03,876 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:03,877 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:04,875 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:04,876 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:04,876 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:04,877 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:05,876 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:05,877 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:05,877 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:05,879 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:06,876 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:06,877 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:06,877 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:06,878 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:07,876 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:07,877 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:07,878 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:07,878 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:08,877 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:08,877 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:08,878 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:08,879 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:09,877 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:09,878 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:09,878 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:09,879 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:10,877 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:10,878 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:10,879 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:10,879 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:11,878 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:11,879 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:11,879 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:11,880 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:12,878 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:12,879 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:12,879 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:12,880 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:13,879 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:13,879 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:13,880 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:13,881 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:14,879 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:14,880 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:14,880 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:14,881 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:15,879 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:15,880 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:15,881 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:15,882 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:16,880 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:16,881 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:16,882 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:16,882 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:17,880 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:17,881 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:17,881 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:17,882 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:18,880 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:18,881 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:18,882 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:18,883 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:19,881 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:19,881 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:19,882 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:19,882 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:20,881 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:20,882 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:20,882 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:20,883 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:21,882 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:21,882 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:21,883 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:21,884 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:22,882 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:22,883 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:22,883 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:22,884 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:23,883 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:23,883 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:23,884 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:23,884 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:24,883 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:24,884 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:24,884 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:24,885 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:25,883 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello"}
+2025-12-03 21:32:25,884 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:25,885 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello"}
+2025-12-03 21:32:25,885 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello"}
+2025-12-03 21:32:26,117 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 21:32:26,118 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 21:32:26,118 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 21:32:26,119 INFO CANCEL client=testcore
+2025-12-03 21:32:26,120 INFO DISCONNECT client=testcore
+2025-12-03 21:32:26,120 INFO CANCEL client=testclient1
+2025-12-03 21:32:26,120 INFO DISCONNECT client=testclient1
+2025-12-03 21:32:26,120 INFO CANCEL client=testclient2
+2025-12-03 21:32:26,120 INFO DISCONNECT client=testclient2
+2025-12-03 21:33:17,448 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-03 21:33:17,546 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 38568) error=empty_stream
+2025-12-03 21:33:17,547 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 38568)
+2025-12-03 21:33:17,550 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+2025-12-03 21:33:17,551 INFO SUB testcore topic=Diag.testcore.PING
+2025-12-03 21:33:17,551 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-03 21:33:17,551 INFO SUB testcore topic=testcore.hello
+2025-12-03 21:33:17,551 INFO DROP testcore topic=testclient1.hello reason=no_subscribers
+2025-12-03 21:33:17,551 INFO DROP testcore topic=testclient2.hello reason=no_subscribers
+2025-12-03 21:33:17,552 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-03 21:33:17,552 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-03 21:33:17,552 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-03 21:33:17,552 INFO SUB testclient1 topic=testclient1.hello
+2025-12-03 21:33:17,554 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+2025-12-03 21:33:17,554 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-03 21:33:17,554 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-03 21:33:17,554 INFO SUB testclient2 topic=testclient2.hello
+2025-12-03 21:33:18,551 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:18,551 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:18,552 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:18,552 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:19,552 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:19,553 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:19,553 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:19,554 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:20,552 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:20,553 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:20,553 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:20,553 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:21,552 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:21,553 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:21,553 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:21,554 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:22,553 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:22,554 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:22,554 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:22,554 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:23,553 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:23,554 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:23,554 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:23,555 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:24,553 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:24,554 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:24,555 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:24,556 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:25,554 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:25,554 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:25,555 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:25,555 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:26,554 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:26,555 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:26,556 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:26,556 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:27,555 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:27,555 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:27,556 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:27,557 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:28,555 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:28,556 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:28,557 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:28,557 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:29,556 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:29,556 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:29,557 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:29,557 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:30,556 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:30,557 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:30,557 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:30,557 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:31,556 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:31,557 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:31,557 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:31,558 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:32,557 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:32,558 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:32,558 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:32,559 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:33,557 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:33,558 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:33,558 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:33,559 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:34,557 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:34,558 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:34,558 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:34,559 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:35,558 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:35,558 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:35,559 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:35,559 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:36,558 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:36,559 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:36,560 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:36,560 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:37,558 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-03 21:33:37,559 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:37,560 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+2025-12-03 21:33:37,561 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-03 21:33:38,471 INFO DROP testclient1 topic=Diag.testclient1.STOPPED reason=no_subscribers
+2025-12-03 21:33:38,471 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-03 21:33:38,472 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+2025-12-03 21:33:38,474 INFO CANCEL client=testcore
+2025-12-03 21:33:38,474 INFO DISCONNECT client=testcore
+2025-12-03 21:33:38,474 INFO CANCEL client=testclient1
+2025-12-03 21:33:38,474 INFO DISCONNECT client=testclient1
+2025-12-03 21:33:38,474 INFO CANCEL client=testclient2
+2025-12-03 21:33:38,475 INFO DISCONNECT client=testclient2

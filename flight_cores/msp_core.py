@@ -18,12 +18,6 @@ class MSPPlugin:
 
     def start(self, client) -> None:
         for entry in self.requests:
-            if not isinstance(entry, dict):
-                raise TypeError("msp_requests entries must be objects")
-            if "op" not in entry:
-                raise KeyError("msp_request entry missing op")
-            if "data" not in entry:
-                raise KeyError("msp_request entry missing data")
             op = entry["op"]
             payload_data = entry["data"]
             envelope = {

@@ -1,235 +1,257 @@
 #!/usr/bin/env python3
 """
 HiveLink datalink bridge.
-Subscribes to `Hivelink.OUT` on the bus, encodes and forwards via HiveLink radios; publishes decoded inbound frames as `Hivelink.IN`.
+Usage example (main config fragment):
+    {
+        "plugins": [
+            {
+                "plugin": "hivelink_interface",
+                "cfg": {
+                    "id": "hivelink",
+                    "config_path": "hivelink_config.json",
+                    "rx_poll_interval": 0.1,
+                    "bus_poll_interval": 0.1
+                }
+            }
+        ]
+    }
+Subscribes to `Datalink.OUT` on the bus, encodes and forwards via HiveLink transports; publishes decoded inbound frames as `Datalink.IN`.
 """
 
 import asyncio
-import contextlib
+import base64
+import queue
+import threading
+import time
+import traceback
 from pathlib import Path
-from typing import Any, Dict, Iterable
+from typing import Any, Dict
 
-from hivelink.datalinks import DatalinkInterface
-from hivelink.msglib import decode_message, encode_message, messageid, message_str_from_id
-from hivelink.protocol import Messages
+from hivelink.datalinks import DatalinkInterface, _to_jsonable
+from hivelink.msglib import Messages, decode_message, encode_message, message_str_from_id, messageid
 
 from lib.common import build_envelope, load_json
-from message_bus_client import BusClientAsync
+from lib.plugin_base import PluginBase
 
-IS_DATALINK = True
-HIVELINK_IN_TOPIC = "Hivelink.IN"
-HIVELINK_OUT_TOPIC = "Hivelink.OUT"
-POLL_INTERVAL_S = 0.1
-
-
-def _parse_bool(field: Any, name: str) -> bool:
-    if isinstance(field, bool):
-        return field
-    raise TypeError(f"{name} must be boolean")
+DATALINK_OUT_TOPIC = "Datalink.OUT"
+DATALINK_IN_TOPIC = "Datalink.IN"
+START_TIMEOUT = 5.0
 
 
-def _require_str(field: Any, name: str) -> str:
-    if isinstance(field, str) and field:
-        return field
-    raise TypeError(f"{name} must be a non-empty string")
+class HiveLinkPlugin(PluginBase):
+    def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
+        super().__init__(cfg, bus_config)
+        self.cfg = cfg
+        self.bus_config = bus_config
 
+        self.bus_poll_interval = float(cfg["bus_poll_interval"])
+        self.rx_poll_interval = float(cfg["rx_poll_interval"])
 
-def _require_int(field: Any, name: str) -> int:
-    if isinstance(field, int):
-        return field
-    if isinstance(field, str) and field.isdecimal():
-        return int(field)
-    raise TypeError(f"{name} must be an int")
+        self.loop = None
+        self.loop_thread: threading.Thread | None = None
+        self.loop_stop_event = threading.Event()
+        self.datalink_ready = threading.Event()
+        self.datalink: DatalinkInterface | None = None
+        self.loop_error: BaseException | None = None
+        self.inbound_queue: "queue.Queue[Dict[str, Any]]" = queue.Queue()
 
+        config_path = cfg.get("config_path")
+        inline_cfg = cfg.get("link_config")
+        link_cfg = load_json(Path(config_path)) if config_path else inline_cfg
 
-async def run_plugin(bus_config: Dict[str, Any], cfg: Dict[str, Any]) -> None:
-    client_id = cfg.get("id")
-    if not client_id:
-        raise ValueError("hivelink plugin cfg missing id")
-    cfg_path_text = cfg.get("cfg_path")
-    if not cfg_path_text:
-        raise ValueError("hivelink plugin cfg missing cfg_path")
-    cfg_path = Path(cfg_path_text)
-    if not cfg_path.is_absolute():
-        cfg_path = Path.cwd() / cfg_path
-    if not cfg_path.is_file():
-        raise FileNotFoundError(f"hivelink cfg file not found: {cfg_path}")
-    hcfg = load_json(cfg_path)
+        my_name = link_cfg["my_name"]
+        my_mesh_id = int(link_cfg["my_id"])
+        nodemap = link_cfg["nodemap"]
 
-    if "my_name" not in hcfg or "my_id" not in hcfg:
-        raise KeyError("hivelink cfg missing my_name or my_id")
-    my_name = _require_str(hcfg["my_name"], "my_name")
-    my_id = _require_int(hcfg["my_id"], "my_id")
+        udp_cfg = link_cfg["udp"]
+        udp_use = bool(udp_cfg["use"])
+        udp_host = udp_cfg["host"]
+        udp_port = udp_cfg["port"]
+        udp_mc = bool(udp_cfg["use_multicast"])
+        mc_group = udp_cfg["multicast_group"]
+        mc_port = udp_cfg["multicast_port"]
 
-    if "udp" not in hcfg or "meshtastic" not in hcfg or "mqtt" not in hcfg:
-        raise KeyError("hivelink cfg missing udp/meshtastic/mqtt sections")
-    udp_cfg = hcfg["udp"]
-    meshtastic_cfg = hcfg["meshtastic"]
-    mqtt_cfg = hcfg["mqtt"]
-    if not isinstance(udp_cfg, dict) or not isinstance(meshtastic_cfg, dict) or not isinstance(mqtt_cfg, dict):
-        raise TypeError("udp/meshtastic/mqtt must be objects")
+        mesh_cfg = link_cfg["meshtastic"]
+        mesh_use = bool(mesh_cfg["use"])
+        mesh_port = mesh_cfg["radio_serial"]
+        mesh_app_port = mesh_cfg["app_portnum"]
+        mesh_channel = mesh_cfg["channel"]
 
-    udp_use = _parse_bool(udp_cfg.get("use"), "udp.use")
-    udp_host = _require_str(udp_cfg.get("host"), "udp.host") if udp_use else ""
-    udp_port = _require_int(udp_cfg.get("port"), "udp.port") if udp_use else 0
-    udp_multicast = _parse_bool(udp_cfg.get("use_multicast"), "udp.use_multicast") if udp_use else False
-    udp_mc_group = _require_str(udp_cfg.get("multicast_group"), "udp.multicast_group") if udp_use and udp_multicast else ""
-    udp_mc_port = _require_int(udp_cfg.get("multicast_port"), "udp.multicast_port") if udp_use and udp_multicast else 0
+        mqtt_cfg = link_cfg["mqtt"]
+        mqtt_use = bool(mqtt_cfg["use"])
+        mqtt_base = mqtt_cfg["base"]
+        mqtt_broker = mqtt_cfg["broker"]
+        mqtt_port = mqtt_cfg["port"]
+        mqtt_client_id = mqtt_cfg.get("client_id") or ""
+        mqtt_username = mqtt_cfg.get("username")
+        mqtt_password = mqtt_cfg.get("password")
 
-    meshtastic_use = _parse_bool(meshtastic_cfg.get("use"), "meshtastic.use")
-    meshtastic_port = meshtastic_cfg.get("radio_serial")
-    meshtastic_dataport = _require_int(meshtastic_cfg.get("app_portnum"), "meshtastic.app_portnum") if meshtastic_use else 0
-    meshtastic_channel = _require_int(meshtastic_cfg.get("channel"), "meshtastic.channel") if meshtastic_use else 0
-    if meshtastic_use and not meshtastic_port:
-        raise ValueError("meshtastic.use true requires radio_serial")
+        mqtt_client_id_final = mqtt_client_id if mqtt_client_id else my_name
+        self.interface_params = {
+            "use_meshtastic": mesh_use,
+            "use_udp": udp_use,
+            "use_multicast": udp_mc,
+            "socket_host": udp_host,
+            "socket_port": udp_port,
+            "multicast_group": mc_group,
+            "multicast_port": mc_port,
+            "my_name": my_name,
+            "my_id": my_mesh_id,
+            "nodemap": nodemap,
+            "radio_port": mesh_port,
+            "meshtastic_dataport": mesh_app_port,
+            "meshtastic_channel": mesh_channel,
+            "mqtt_enable": mqtt_use,
+            "mqtt_broker": mqtt_broker,
+            "mqtt_port": mqtt_port,
+            "mqtt_client_id": mqtt_client_id_final,
+            "mqtt_username": mqtt_username,
+            "mqtt_password": mqtt_password,
+            "mqtt_base": mqtt_base
+        }
 
-    mqtt_use = _parse_bool(mqtt_cfg.get("use"), "mqtt.use")
-    mqtt_base = _require_str(mqtt_cfg.get("base"), "mqtt.base") if mqtt_use else ""
-    mqtt_broker = _require_str(mqtt_cfg.get("broker"), "mqtt.broker") if mqtt_use else ""
-    mqtt_port = _require_int(mqtt_cfg.get("port"), "mqtt.port") if mqtt_use else 0
-    mqtt_client_id = _require_str(mqtt_cfg.get("client_id"), "mqtt.client_id") if mqtt_use else ""
-    mqtt_username = mqtt_cfg.get("username") if mqtt_use else None
-    mqtt_password = mqtt_cfg.get("password") if mqtt_use else None
+        self.client.subscribe(DATALINK_OUT_TOPIC)
 
-    nodemap = hcfg.get("nodemap")
-    if nodemap is None:
-        raise KeyError("hivelink cfg missing nodemap")
-    if not isinstance(nodemap, dict):
-        raise TypeError("nodemap must be an object")
-
-    datalink = DatalinkInterface(
-        use_meshtastic=meshtastic_use,
-        use_udp=udp_use,
-        use_multicast=udp_multicast,
-        wlan_device=None,
-        radio_port=meshtastic_port if meshtastic_use else None,
-        meshtastic_dataport=meshtastic_dataport,
-        meshtastic_channel=meshtastic_channel,
-        socket_host=udp_host if udp_use else "",
-        socket_port=udp_port if udp_use else 0,
-        my_name=my_name,
-        my_id=my_id,
-        nodemap=nodemap,
-        multicast_group=udp_mc_group if udp_multicast else "",
-        multicast_port=udp_mc_port if udp_multicast else 0,
-        mqtt_enable=mqtt_use,
-        mqtt_broker=mqtt_broker if mqtt_use else "",
-        mqtt_port=mqtt_port if mqtt_use else 0,
-        mqtt_client_id=mqtt_client_id if mqtt_use else "",
-        mqtt_username=mqtt_username if mqtt_use else None,
-        mqtt_password=mqtt_password if mqtt_use else None,
-        mqtt_base=mqtt_base if mqtt_use else "",
-        incumbent_window=600,
-    )
-
-    endpoint_cfg = bus_config.get("endpoint")
-    if not isinstance(endpoint_cfg, dict):
-        raise TypeError("bus_config.endpoint must be an object")
-    etype = endpoint_cfg.get("type")
-    if etype == "tcp":
-        host = endpoint_cfg.get("host")
-        port = endpoint_cfg.get("port")
-        if not isinstance(host, str) or not host:
-            raise ValueError("bus_config.endpoint.host is required for tcp")
-        if not isinstance(port, int) or port < 1 or port > 65535:
-            raise ValueError("bus_config.endpoint.port must be int 1-65535 for tcp")
-        client = await BusClientAsync.connect_tcp(host, port, client_id)
-    elif etype == "unix":
-        path = endpoint_cfg.get("path")
-        if not isinstance(path, str) or not path:
-            raise ValueError("bus_config.endpoint.path is required for unix")
-        client = await BusClientAsync.connect_unix(path, client_id)
-    else:
-        raise ValueError("bus_config.endpoint.type must be 'tcp' or 'unix'")
-
-    diag_ping_topic = f"Diag.{client_id}.PING"
-    diag_pong_topic = f"Diag.{client_id}.PONG"
-    diag_online_topic = f"Diag.{client_id}.ONLINE"
-    diag_stopped_topic = f"Diag.{client_id}.STOPPED"
-    await client.subscribe(HIVELINK_OUT_TOPIC)
-    await client.subscribe(diag_ping_topic)
-    await client.publish(diag_online_topic, build_envelope(client_id, diag_online_topic, {"event": "ONLINE"}))
-
-    async def handle_bus_message(message: Dict[str, Any], raw: str) -> None:
-        topic = message.get("topic")
-        if topic == diag_ping_topic:
-            payload = message.get("payload")
-            pong_payload = build_envelope(
-                client_id, diag_pong_topic, {"ping_time": payload.get("time") if isinstance(payload, dict) else None}
-            )
-            await client.publish(diag_pong_topic, pong_payload)
+    def _loop_main(self) -> None:
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.datalink = DatalinkInterface(**self.interface_params)
+        except BaseException as exc:
+            self.loop_error = exc
+            self.datalink_ready.set()
             return
-        if topic != HIVELINK_OUT_TOPIC:
-            return
-        payload = message.get("payload")
-        if not isinstance(payload, dict):
-            raise TypeError(f"datalink outbound bus message missing payload object raw={raw}")
-        envelope_topic = payload.get("topic")
-        if envelope_topic != HIVELINK_OUT_TOPIC:
-            raise ValueError(f"datalink outbound envelope topic mismatch envelope_topic={envelope_topic} raw={raw}")
-        data = payload.get("data")
-        if not isinstance(data, dict):
-            raise TypeError("datalink outbound payload missing data object")
-        destination = data.get("destination")
-        message_path = data.get("message_path")
-        payload_fields = data.get("payload")
-        transport = data.get("transport")
-        if not isinstance(message_path, str) or not message_path:
-            raise ValueError("message_path missing for datalink outbound")
-        message_parts = message_path.split(".")
-        if len(message_parts) != 3:
-            raise ValueError(f"message_path must be Category.Subcategory.Message, got {message_path}")
-        enum_member = getattr(getattr(getattr(Messages, message_parts[0]), message_parts[1]), message_parts[2])
-        payload_list = enum_member.payload(**payload_fields)
-        sent = datalink.send(
-            encode_message(enum_member, payload_list),
-            dest=destination if destination else None,
-            udp=transport == "udp",
-            meshtastic=transport == "meshtastic",
-            multicast=transport == "multicast",
-        )
-        if not sent:
-            raise RuntimeError(
-                f"datalink send failed destination={destination} message={message_path} transport={transport}"
-            )
 
-    bus_task = asyncio.create_task(client.receive_loop(handle_bus_message))
-    try:
-        datalink.start()
+        async def _poll_inbound():
+            while not self.loop_stop_event.is_set():
+                messages = self.datalink.receive()
+                for msg in messages:
+                    self.inbound_queue.put(msg)
+                await asyncio.sleep(self.rx_poll_interval)
+
+        def _start_link():
+            try:
+                self.datalink.start()
+            except BaseException as exc:
+                self.loop_error = exc
+                self.loop_stop_event.set()
+                self.loop.call_soon_threadsafe(self.loop.stop)
+
+        def _task_done(task: asyncio.Task) -> None:
+            exc = task.exception()
+            if exc:
+                self.loop_error = exc
+                self.loop_stop_event.set()
+                self.loop.call_soon_threadsafe(self.loop.stop)
+
+        self.loop.call_soon(_start_link)
+        inbound_task = self.loop.create_task(_poll_inbound())
+        inbound_task.add_done_callback(_task_done)
+        self.datalink_ready.set()
+        try:
+            self.loop.run_forever()
+        finally:
+            try:
+                if self.datalink:
+                    self.datalink.stop()
+            finally:
+                pending = asyncio.all_tasks()
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                self.loop.close()
+
+    def _flush_inbound(self) -> None:
         while True:
-            incoming = datalink.receive()
-            if not isinstance(incoming, Iterable):
-                raise TypeError("datalink.receive must return iterable")
-            for packet in incoming:
-                if not isinstance(packet, dict):
-                    raise TypeError("datalink packet must be a dict")
-                enum_member, decoded_payload = decode_message(packet["data"])
-                envelope = build_envelope(
-                    client_id,
-                    HIVELINK_IN_TOPIC,
-                    {
-                        "interface": packet["intf"],
-                        "source": packet["from"],
-                        "message": message_str_from_id(messageid(enum_member)),
-                        "payload": decoded_payload,
-                    },
-                )
-                await client.publish(HIVELINK_IN_TOPIC, envelope)
-            await asyncio.sleep(POLL_INTERVAL_S)
-    except asyncio.CancelledError:
-        raise
-    finally:
-        bus_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await bus_task
-        datalink.stop()
-        await client.publish(diag_stopped_topic, build_envelope(client_id, diag_stopped_topic, {"event": "STOPPED"}))
-        await client.close()
+            try:
+                msg = self.inbound_queue.get_nowait()
+            except queue.Empty:
+                return
+            raw_data = msg["data"]
+            src = msg["from"]
+            intf = msg["intf"]
+            tstamp = msg.get("time") or time.time()
+            enum_member, decoded_payload = decode_message(raw_data)
+            payload = {
+                "from": src,
+                "intf": intf,
+                "msgid": message_str_from_id(messageid(enum_member)),
+                "payload": _to_jsonable(decoded_payload),
+                "time": int(tstamp),
+            }
+            envelope = build_envelope(self.client_id, DATALINK_IN_TOPIC, payload)
+            self.client.publish(DATALINK_IN_TOPIC, envelope)
+            print(
+                f"[PLUGIN_RECV] id={self.client_id} src={src} intf={intf} msgid={payload['msgid']} time={payload['time']}",
+                flush=True,
+            )
+
+    def _send_outbound(self, payload: Dict[str, Any], raw_message: Dict[str, Any]) -> None:
+        data = payload["data"]
+        dest = data.get("dest")
+        msgid_str = data.get("msgid")
+        body = data.get("payload")
+        encoded_b64 = data.get("encoded_b64")
+        send_udp = bool(data.get("udp"))
+        send_mesh = bool(data.get("meshtastic"))
+        send_multicast = bool(data.get("multicast"))
+        datalink = self.datalink
+
+        if encoded_b64:
+            encoded_bytes = base64.b64decode(encoded_b64, validate=True)
+        else:
+            parts = msgid_str.split(".")
+            enum_member = getattr(getattr(getattr(Messages, parts[0]), parts[1]), parts[2])
+            payload_obj = enum_member.payload(**body)
+            encoded_bytes = encode_message(enum_member, payload_obj)
+
+        datalink.send(
+            encoded_bytes,
+            dest=dest,
+            udp=send_udp,
+            meshtastic=send_mesh,
+            multicast=send_multicast,
+        )
+
+    def run(self) -> None:
+        if self.loop_thread is None:
+            self.loop_stop_event.clear()
+            self.loop = asyncio.new_event_loop()
+            self.loop_thread = threading.Thread(target=self._loop_main, name="hivelink-loop", daemon=True)
+            self.loop_thread.start()
+            self.datalink_ready.wait(timeout=START_TIMEOUT)
+        try:
+            while True:
+                self._flush_inbound()
+                topic, payload, message = self.recv_message(self.bus_poll_interval)
+                if topic is None:
+                    continue
+                if topic == DATALINK_OUT_TOPIC:
+                    self._send_outbound(payload, message)
+                    continue
+        except KeyboardInterrupt:
+            pass
+        except Exception:
+            error_topic = f"DIAG.{self.client_id}.ERROR"
+            error_payload = build_envelope(
+                self.client_id, error_topic, {"event": "ERROR", "traceback": traceback.format_exc().strip()}
+            )
+            self.client.publish(error_topic, error_payload)
+            raise
+        finally:
+            self.stop()
+
+    def stop(self) -> None:
+        try:
+            self.loop_stop_event.set()
+            if self.loop and self.loop.is_running():
+                self.loop.call_soon_threadsafe(self.loop.stop)
+            if self.loop_thread:
+                self.loop_thread.join(timeout=START_TIMEOUT)
+                self.loop_thread = None
+        finally:
+            super().stop()
 
 
-def main() -> None:
-    raise RuntimeError("Run via host process that provides bus_config and cfg to run_plugin")
-
-
-if __name__ == "__main__":
-    main()
+def run_plugin(cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
+    HiveLinkPlugin(cfg, bus_config).run()

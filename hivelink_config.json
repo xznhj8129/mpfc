@@ -25,6 +25,7 @@
         "username": "",
         "password": ""
     },
+    "incumbent_window": 600,
     "nodemap": {
         "example1": {
             "meshid": 862205276, 
