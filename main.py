@@ -56,10 +56,25 @@ def start_from_config(config_path: Path) -> None:
     bus_config = {"schema_path": str(schema_path), "log_file": str(log_file), "endpoint": endpoint}
 
     log_fd = os.open(str(log_file), os.O_WRONLY | os.O_CREAT | os.O_APPEND)
-    os.dup2(log_fd, sys.stdout.fileno())
-    os.dup2(log_fd, sys.stderr.fileno())
-    sys.stdout = os.fdopen(sys.stdout.fileno(), "w", buffering=1)
-    sys.stderr = os.fdopen(sys.stderr.fileno(), "w", buffering=1)
+    log_handle = os.fdopen(log_fd, "a", buffering=1)
+    console_out = os.fdopen(os.dup(sys.__stdout__.fileno()), "w", buffering=1)
+    console_err = os.fdopen(os.dup(sys.__stderr__.fileno()), "w", buffering=1)
+
+    class Tee:
+        def __init__(self, streams: list) -> None:
+            self.streams = streams
+
+        def write(self, data: str) -> None:
+            for stream in self.streams:
+                stream.write(data)
+                stream.flush()
+
+        def flush(self) -> None:
+            for stream in self.streams:
+                stream.flush()
+
+    sys.stdout = Tee([console_out, log_handle])
+    sys.stderr = Tee([console_err, log_handle])
 
     core_config = config["core"]
     core_name = core_config["name"]

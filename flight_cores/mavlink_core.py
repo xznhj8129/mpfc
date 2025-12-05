@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 from pymavlink import mavutil
 
-from lib.common import build_envelope
+from lib.common import CONTROL_SHUTDOWN_TOPIC, build_envelope
 from lib.core_base import CoreBase
 
 MAVLINK_TOPIC = "MAVLINK"
@@ -166,10 +166,11 @@ class MavlinkCore(CoreBase):
                             self.stage = 5
                 elif self.stage == 5:
                     if not self.in_air and not self.armed:
-                        self.sequence_done = True
+                self.sequence_done = True
 
-                if self.sequence_done:
-                    break
+        if self.sequence_done:
+            self.client.publish(CONTROL_SHUTDOWN_TOPIC, build_envelope(self.client_id, CONTROL_SHUTDOWN_TOPIC, {}))
+            break
         except RuntimeError:
             crash_tb = traceback.format_exc().strip()
             print(f"[CORE_CRASH] id={self.client_id} error={crash_tb}", flush=True)
@@ -178,7 +179,6 @@ class MavlinkCore(CoreBase):
                 self.client_id, error_topic, {"event": "ERROR", "traceback": crash_tb}
             )
             self.client.publish(error_topic, error_payload)
-            os._exit(1)
         except KeyboardInterrupt:
             pass
         finally:

@@ -6,6 +6,7 @@ from typing import Any, Dict
 from lib.message_bus_client import BusClientSync
 
 ENCODING = "utf-8"
+CONTROL_SHUTDOWN_TOPIC = "Control.Shutdown"
 
 
 def load_json(path: Path) -> Dict[str, Any]:

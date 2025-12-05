@@ -28,6 +28,7 @@ MAX_LINE_BYTES = 1_048_576
 ENCODING = "utf-8"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 HANDSHAKE_OP = "HANDSHAKE"
+READER_JOIN_TIMEOUT_S = 1.0
 
 
 def _build_logger(name: str) -> logging.Logger:
@@ -137,6 +138,8 @@ class BusClientSync(_Common):
         self._send_line({"op": "sub", "topic": topic})
 
     def publish(self, topic: str, payload: Dict) -> None:
+        if self.stop_event.is_set():
+            return
         self._ensure_alive()
         self._send_line({"op": "pub", "topic": topic, "payload": payload})
 
@@ -154,19 +157,19 @@ class BusClientSync(_Common):
             return
         self.stop_event.set()
         try:
-            self.reader.close()
-        except (OSError, ValueError):
-            self.logger.warning("reader close failed", exc_info=True)
-        try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
-            self.logger.warning("socket shutdown failed", exc_info=True)
+            pass
         try:
             self.sock.close()
         except OSError:
-            self.logger.warning("socket close failed", exc_info=True)
+            pass
+        try:
+            self.reader.close()
+        except (OSError, ValueError):
+            pass
         if self.reader_thread.is_alive():
-            self.reader_thread.join()
+            self.reader_thread.join(timeout=READER_JOIN_TIMEOUT_S)
 
     def __enter__(self) -> "BusClientSync":
         return self
