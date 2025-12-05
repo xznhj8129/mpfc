@@ -1,0 +1,19 @@
+{
+  "_notes": {
+    "id": "required bus client id for this MAVLink bridge",
+    "conn_type": "required connection type accepted by pymavlink (udp/serial/tcp/etc)",
+    "conn_str": "required address string for mavutil.mavlink_connection (e.g. 'udpin:0.0.0.0:14550' or '/dev/ttyUSB0')",
+    "conn_bitrate": "required bitrate/baud for the link; serial uses it directly",
+    "is_interface": "optional; true when this link is the primary autopilot interface and should wait for heartbeat",
+    "is_datalink": "optional; true when this link forwards frames as a datalink"
+  },
+  "plugin": "pymavlink_interface",
+  "cfg": {
+    "id": "mav_datalink",
+    "is_interface": false,
+    "is_datalink": true,
+    "conn_type": "udp",
+    "conn_str": "udpin:0.0.0.0:14551",
+    "conn_bitrate": 115200
+  }
+}

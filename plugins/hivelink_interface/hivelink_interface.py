@@ -15,6 +15,7 @@ Usage example (main config fragment):
             }
         ]
     }
+Config path is resolved relative to this plugin folder when not absolute.
 Subscribes to `Datalink.OUT` on the bus, encodes and forwards via HiveLink transports; publishes decoded inbound frames as `Datalink.IN`.
 """
 
@@ -57,7 +58,12 @@ class HiveLinkPlugin(PluginBase):
 
         config_path = cfg.get("config_path")
         inline_cfg = cfg.get("link_config")
-        link_cfg = load_json(Path(config_path)) if config_path else inline_cfg
+        link_cfg = inline_cfg
+        if config_path:
+            cfg_path = Path(config_path)
+            if not cfg_path.is_absolute():
+                cfg_path = Path(__file__).resolve().parent / cfg_path
+            link_cfg = load_json(cfg_path)
 
         my_name = link_cfg["my_name"]
         my_mesh_id = int(link_cfg["my_id"])

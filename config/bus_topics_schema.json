@@ -1,6 +1,7 @@
 {
   "template": {
     "client": "Bus sender id",
+    "op": "pub/sub",
     "topic": "Exact bus topic string (routing key)",
     "time": "Unix epoch milliseconds when the payload is issued",
     "data": "Topic specific payload"
@@ -41,6 +42,37 @@
         "compid": "mavlink component id",
         "type": "mavlink message type from msg.get_type() ie MAV_GPS_GLOBAL_ORIGIN",
         "data": "JSON parsed payload"
+      }
+    },
+    "<interface_id>.MAVSDK.REQUEST": {
+      "direction": "any -> mavsdk_interface",
+      "summary": "Requests for MAVSDK actions",
+      "data": {
+        "request_id": "opaque request id echoed by responses",
+        "action": "action identifier (see plugins/mavsdk_interface/actions.py)",
+        "params": "action parameters"
+      }
+    },
+    "<interface_id>.MAVSDK.RESPONSE": {
+      "direction": "mavsdk_interface -> any",
+      "summary": "Responses for MAVSDK actions",
+      "data": {
+        "request_id": "request id from the matching MAVSDK.REQUEST",
+        "action": "action identifier",
+        "ok": "boolean status",
+        "data": "action-specific payload or error"
+      }
+    },
+    "<interface_id>.MAVSDK.STATE": {
+      "direction": "mavsdk_interface -> any",
+      "summary": "State snapshot stream from MAVSDK",
+      "data": {
+        "is_in_air": "bool in-air flag",
+        "is_armed": "bool armed flag",
+        "is_home_position_ok": "bool home position ready",
+        "is_global_position_ok": "bool global position ready",
+        "altitude_m": "relative altitude meters",
+        "position": "position payload with lat_deg, lon_deg, abs_alt_m, rel_alt_m"
       }
     },
     "<client_id>": {

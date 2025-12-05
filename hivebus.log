@@ -1,177 +1,64 @@
-2025-12-04 23:04:38,791 INFO LISTEN tcp 127.0.0.1:7777
-2025-12-04 23:04:38,793 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 53506) error=empty_stream
-2025-12-04 23:04:38,793 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 53506)
-2025-12-04 23:04:38,798 INFO IN mavsdk_core {"op":"HANDSHAKE","client":"mavsdk_core"}
-2025-12-04 23:04:38,798 INFO SUB mavsdk_core topic=Diag.mavsdk_core.PING
-[CORE_ONLINE] id=mavsdk_core
-2025-12-04 23:04:38,798 INFO SUB mavsdk_core topic=Control.Shutdown
-2025-12-04 23:04:38,798 INFO DROP mavsdk_core topic=Diag.mavsdk_core.ONLINE reason=no_subscribers
-[CORE_CONN] id=mavsdk_core connecting address=udp://:14550 timeout_s=30.0
-2025-12-04 23:04:38,800 INFO IN mav_datalink {"op":"HANDSHAKE","client":"mav_datalink"}
-2025-12-04 23:04:38,800 INFO SUB mav_datalink topic=Diag.mav_datalink.PING
-[PLUGIN_ONLINE] id=mav_datalink
-2025-12-04 23:04:38,800 INFO SUB mav_datalink topic=Control.Shutdown
-2025-12-04 23:04:38,801 INFO DROP mav_datalink topic=Diag.mav_datalink.ONLINE reason=no_subscribers
-2025-12-04 23:04:38,801 INFO SUB mav_datalink topic=MAVLINK
-[CORE_CONN] id=mavsdk_core connected=True
-[CORE_ALT] id=mavsdk_core altitude_m=0.004
-[CORE_MODE] id=mavsdk_core mode=LAND
-[CORE_HEALTH] id=mavsdk_core global_ok=True home_ok=True
-[CORE_CMD] id=mavsdk_core cmd=ARM
-[CORE_MODE] id=mavsdk_core mode=HOLD
-[CORE_ACTION] id=mavsdk_core op=ARM attempt=1 status=OK
-[CORE_ARM_STATE] id=mavsdk_core armed=True
-[CORE_CMD] id=mavsdk_core cmd=SET_TAKEOFF_ALT alt_m=10.0 hold_s=10.0
-[CORE_ACTION] id=mavsdk_core op=SET_TAKEOFF_ALTITUDE attempt=1 status=OK
-[CORE_CMD] id=mavsdk_core cmd=TAKEOFF
-[CORE_MODE] id=mavsdk_core mode=OFFBOARD
-[CORE_ACTION] id=mavsdk_core op=TAKEOFF attempt=1 status=OK
-[CORE_ALT] id=mavsdk_core altitude_m=0.027
-[CORE_ALT] id=mavsdk_core altitude_m=0.082
-[CORE_AIR] id=mavsdk_core in_air=True
-[CORE_ALT] id=mavsdk_core altitude_m=0.204
-[CORE_ALT] id=mavsdk_core altitude_m=0.489
-[CORE_ALT] id=mavsdk_core altitude_m=0.774
-[CORE_ALT] id=mavsdk_core altitude_m=1.106
-[CORE_ALT] id=mavsdk_core altitude_m=1.504
-[CORE_ALT] id=mavsdk_core altitude_m=1.966
-[CORE_ALT] id=mavsdk_core altitude_m=2.496
-[CORE_ALT] id=mavsdk_core altitude_m=3.085
-[CORE_ALT] id=mavsdk_core altitude_m=3.71
-[CORE_ALT] id=mavsdk_core altitude_m=4.349
-[CORE_ALT] id=mavsdk_core altitude_m=4.969
-[CORE_ALT] id=mavsdk_core altitude_m=5.556
-[CORE_ALT] id=mavsdk_core altitude_m=6.099
-[CORE_ALT] id=mavsdk_core altitude_m=6.605
-[CORE_ALT] id=mavsdk_core altitude_m=7.076
-[CORE_ALT] id=mavsdk_core altitude_m=7.506
-[CORE_ALT] id=mavsdk_core altitude_m=7.903
-[CORE_ALT] id=mavsdk_core altitude_m=8.266
-[CORE_ALT] id=mavsdk_core altitude_m=8.599
-[CORE_ALT] id=mavsdk_core altitude_m=8.896
-[CORE_ALT] id=mavsdk_core altitude_m=9.162
-[CORE_ALT] id=mavsdk_core altitude_m=9.395
-[CORE_ALT] id=mavsdk_core altitude_m=9.596
-[CORE_ALT] id=mavsdk_core altitude_m=9.759
-[CORE_ALT] id=mavsdk_core altitude_m=9.884
-[CORE_ALT] id=mavsdk_core altitude_m=9.969
-[CORE_ALT] id=mavsdk_core altitude_m=10.011
-[CORE_ALT] id=mavsdk_core altitude_m=10.017
-[CORE_ALT] id=mavsdk_core altitude_m=10.005
-[CORE_ALT] id=mavsdk_core altitude_m=9.99
-[CORE_ALT] id=mavsdk_core altitude_m=9.979
-[CORE_ALT] id=mavsdk_core altitude_m=9.974
-[CORE_ALT] id=mavsdk_core altitude_m=9.976
-[CORE_ALT] id=mavsdk_core altitude_m=9.977
-[CORE_ALT] id=mavsdk_core altitude_m=9.978
-[CORE_ALT] id=mavsdk_core altitude_m=9.98
-[CORE_ALT] id=mavsdk_core altitude_m=9.981
-[CORE_ALT] id=mavsdk_core altitude_m=9.983
-[CORE_ALT] id=mavsdk_core altitude_m=9.986
-[CORE_CMD] id=mavsdk_core cmd=LAND
-[CORE_ALT] id=mavsdk_core altitude_m=9.989
-[CORE_MODE] id=mavsdk_core mode=LAND
-[CORE_ACTION] id=mavsdk_core op=LAND attempt=1 status=OK
-[CORE_ALT] id=mavsdk_core altitude_m=9.987
-[CORE_ALT] id=mavsdk_core altitude_m=9.943
-[CORE_ALT] id=mavsdk_core altitude_m=9.848
-[CORE_ALT] id=mavsdk_core altitude_m=9.725
-[CORE_ALT] id=mavsdk_core altitude_m=9.591
-[CORE_ALT] id=mavsdk_core altitude_m=9.455
-[CORE_ALT] id=mavsdk_core altitude_m=9.319
-[CORE_ALT] id=mavsdk_core altitude_m=9.19
-[CORE_ALT] id=mavsdk_core altitude_m=9.063
-[CORE_ALT] id=mavsdk_core altitude_m=8.939
-[CORE_ALT] id=mavsdk_core altitude_m=8.815
-[CORE_ALT] id=mavsdk_core altitude_m=8.693
-[CORE_ALT] id=mavsdk_core altitude_m=8.57
-[CORE_ALT] id=mavsdk_core altitude_m=8.446
-[CORE_ALT] id=mavsdk_core altitude_m=8.322
-[CORE_ALT] id=mavsdk_core altitude_m=8.197
-[CORE_ALT] id=mavsdk_core altitude_m=8.073
-[CORE_ALT] id=mavsdk_core altitude_m=7.949
-[CORE_ALT] id=mavsdk_core altitude_m=7.824
-[CORE_ALT] id=mavsdk_core altitude_m=7.7
-[CORE_ALT] id=mavsdk_core altitude_m=7.575
-[CORE_ALT] id=mavsdk_core altitude_m=7.451
-[CORE_ALT] id=mavsdk_core altitude_m=7.325
-[CORE_ALT] id=mavsdk_core altitude_m=7.199
-[CORE_ALT] id=mavsdk_core altitude_m=7.074
-[CORE_ALT] id=mavsdk_core altitude_m=6.949
-[CORE_ALT] id=mavsdk_core altitude_m=6.825
-[CORE_ALT] id=mavsdk_core altitude_m=6.699
-[CORE_ALT] id=mavsdk_core altitude_m=6.575
-[CORE_ALT] id=mavsdk_core altitude_m=6.451
-[CORE_ALT] id=mavsdk_core altitude_m=6.326
-[CORE_ALT] id=mavsdk_core altitude_m=6.199
-[CORE_ALT] id=mavsdk_core altitude_m=6.074
-[CORE_ALT] id=mavsdk_core altitude_m=5.95
-[CORE_ALT] id=mavsdk_core altitude_m=5.825
-[CORE_ALT] id=mavsdk_core altitude_m=5.7
-[CORE_ALT] id=mavsdk_core altitude_m=5.576
-[CORE_ALT] id=mavsdk_core altitude_m=5.452
-[CORE_ALT] id=mavsdk_core altitude_m=5.327
-[CORE_ALT] id=mavsdk_core altitude_m=5.202
-[CORE_ALT] id=mavsdk_core altitude_m=5.076
-[CORE_ALT] id=mavsdk_core altitude_m=4.952
-[CORE_ALT] id=mavsdk_core altitude_m=4.827
-[CORE_ALT] id=mavsdk_core altitude_m=4.703
-[CORE_ALT] id=mavsdk_core altitude_m=4.578
-[CORE_ALT] id=mavsdk_core altitude_m=4.453
-[CORE_ALT] id=mavsdk_core altitude_m=4.329
-[CORE_ALT] id=mavsdk_core altitude_m=4.203
-[CORE_ALT] id=mavsdk_core altitude_m=4.077
-[CORE_ALT] id=mavsdk_core altitude_m=3.951
-[CORE_ALT] id=mavsdk_core altitude_m=3.826
-[CORE_ALT] id=mavsdk_core altitude_m=3.702
-[CORE_ALT] id=mavsdk_core altitude_m=3.576
-[CORE_ALT] id=mavsdk_core altitude_m=3.452
-[CORE_ALT] id=mavsdk_core altitude_m=3.328
-[CORE_ALT] id=mavsdk_core altitude_m=3.203
-[CORE_ALT] id=mavsdk_core altitude_m=3.077
-[CORE_ALT] id=mavsdk_core altitude_m=2.952
-[CORE_ALT] id=mavsdk_core altitude_m=2.827
-[CORE_ALT] id=mavsdk_core altitude_m=2.703
-[CORE_ALT] id=mavsdk_core altitude_m=2.578
-[CORE_ALT] id=mavsdk_core altitude_m=2.453
-[CORE_ALT] id=mavsdk_core altitude_m=2.329
-[CORE_ALT] id=mavsdk_core altitude_m=2.204
-[CORE_ALT] id=mavsdk_core altitude_m=2.078
-[CORE_ALT] id=mavsdk_core altitude_m=1.952
-[CORE_ALT] id=mavsdk_core altitude_m=1.827
-[CORE_ALT] id=mavsdk_core altitude_m=1.702
-[CORE_ALT] id=mavsdk_core altitude_m=1.577
-[CORE_ALT] id=mavsdk_core altitude_m=1.453
-[CORE_ALT] id=mavsdk_core altitude_m=1.327
-[CORE_ALT] id=mavsdk_core altitude_m=1.203
-[CORE_ALT] id=mavsdk_core altitude_m=1.077
-[CORE_ALT] id=mavsdk_core altitude_m=0.951
-[CORE_ALT] id=mavsdk_core altitude_m=0.826
-[CORE_ALT] id=mavsdk_core altitude_m=0.701
-[CORE_ALT] id=mavsdk_core altitude_m=0.577
-[CORE_ALT] id=mavsdk_core altitude_m=0.452
-[CORE_ALT] id=mavsdk_core altitude_m=0.328
-[CORE_ALT] id=mavsdk_core altitude_m=0.203
-[CORE_ALT] id=mavsdk_core altitude_m=0.078
-[CORE_ALT] id=mavsdk_core altitude_m=-0.037
-[CORE_ALT] id=mavsdk_core altitude_m=-0.01
-[CORE_ALT] id=mavsdk_core altitude_m=-0.005
-[CORE_ALT] id=mavsdk_core altitude_m=-0.008
-[CORE_ALT] id=mavsdk_core altitude_m=-0.007
-[CORE_ALT] id=mavsdk_core altitude_m=-0.006
-[CORE_ALT] id=mavsdk_core altitude_m=-0.005
-[CORE_ALT] id=mavsdk_core altitude_m=-0.004
-[CORE_AIR] id=mavsdk_core in_air=False
-[CORE_CMD] Finished
-2025-12-04 23:05:17,024 INFO PUB mavsdk_core topic=Control.Shutdown targets=('mav_datalink', 'mavsdk_core') data={}
-[PLUGIN_CTRL] id=mav_datalink shutdown=True
-2025-12-04 23:05:17,025 INFO DROP mav_datalink topic=Diag.mav_datalink.STOPPED reason=no_subscribers
-2025-12-04 23:05:17,025 ERROR reader stopped client=mav_datalink error=bus connection closed
-[PLUGIN_STOP] id=mav_datalink
-2025-12-04 23:05:17,026 INFO DISCONNECT client=mav_datalink
-2025-12-04 23:05:17,026 ERROR reader stopped client=mavsdk_core error=bus connection closed
-[COR_STOP] id=mavsdk_core
-2025-12-04 23:05:17,027 INFO PUB mavsdk_core topic=Control.Shutdown targets=('mavsdk_core',) data={}
-2025-12-04 23:05:17,027 INFO DROP mavsdk_core topic=Diag.mavsdk_core.STOPPED reason=no_subscribers
-2025-12-04 23:05:17,028 INFO DISCONNECT client=mavsdk_core
-[MAIN] detected exit: core-mavsdk_core(0), plugin-mav_datalink(0), terminating remaining
+2025-12-05 12:57:49,332 INFO LISTEN tcp 127.0.0.1:7777
+2025-12-05 12:57:49,334 ERROR HANDSHAKE_FAIL peer=('127.0.0.1', 44906) error=empty_stream
+2025-12-05 12:57:49,335 INFO DISCONNECT_UNIDENTIFIED peer=('127.0.0.1', 44906)
+2025-12-05 12:57:49,338 INFO IN testcore {"op":"HANDSHAKE","client":"testcore"}
+[CORE_ONLINE] id=testcore
+2025-12-05 12:57:49,339 INFO SUB testcore topic=Diag.testcore.PING
+[CORE] id=testcore topic=testclient1.hello payload={"client":"testcore","topic":"testclient1.hello","time":1764957469339,"data":{"message":"hello testclient1"}}
+2025-12-05 12:57:49,339 INFO SUB testcore topic=Control.Shutdown
+[CORE] id=testcore topic=testclient2.hello payload={"client":"testcore","topic":"testclient2.hello","time":1764957469339,"data":{"message":"hello testclient2"}}
+2025-12-05 12:57:49,339 INFO DROP testcore topic=Diag.testcore.ONLINE reason=no_subscribers
+2025-12-05 12:57:49,339 INFO SUB testcore topic=testcore.hello
+2025-12-05 12:57:49,340 INFO DROP testcore topic=testclient1.hello reason=no_subscribers
+2025-12-05 12:57:49,340 INFO DROP testcore topic=testclient2.hello reason=no_subscribers
+2025-12-05 12:57:49,341 INFO IN testclient1 {"op":"HANDSHAKE","client":"testclient1"}
+2025-12-05 12:57:49,341 INFO IN testclient2 {"op":"HANDSHAKE","client":"testclient2"}
+[PLUGIN_ONLINE] id=testclient1
+2025-12-05 12:57:49,341 INFO SUB testclient1 topic=Diag.testclient1.PING
+2025-12-05 12:57:49,341 INFO SUB testclient1 topic=Control.Shutdown
+2025-12-05 12:57:49,341 INFO DROP testclient1 topic=Diag.testclient1.ONLINE reason=no_subscribers
+2025-12-05 12:57:49,341 INFO SUB testclient1 topic=testclient1.hello
+[PLUGIN_ONLINE] id=testclient22025-12-05 12:57:49,341 INFO SUB testclient2 topic=Diag.testclient2.PING
+2025-12-05 12:57:49,342 INFO SUB testclient2 topic=Control.Shutdown
+
+2025-12-05 12:57:49,342 INFO DROP testclient2 topic=Diag.testclient2.ONLINE reason=no_subscribers
+2025-12-05 12:57:49,342 INFO SUB testclient2 topic=testclient2.hello
+[CORE] id=testcore topic=testclient1.hello payload={"client":"testcore","topic":"testclient1.hello","time":1764957470339,"data":{"message":"hello testclient1"}}
+[CORE] id=testcore topic=testclient2.hello payload={"client":"testcore","topic":"testclient2.hello","time":1764957470340,"data":{"message":"hello testclient2"}}
+2025-12-05 12:57:50,340 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-05 12:57:50,340 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+[testclient1] Replied: reply_topic=testcore.hello src=testcore data={'message': 'hello testclient1'}
+2025-12-05 12:57:50,340 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+[testclient2] Replied: reply_topic=testcore.hello src=testcore data={'message': 'hello testclient2'}
+2025-12-05 12:57:50,341 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+[CORE] id=testcore topic=testclient1.hello payload={"client":"testcore","topic":"testclient1.hello","time":1764957471340,"data":{"message":"hello testclient1"}}
+[CORE] id=testcore topic=testclient2.hello payload={"client":"testcore","topic":"testclient2.hello","time":1764957471340,"data":{"message":"hello testclient2"}}
+2025-12-05 12:57:51,340 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+2025-12-05 12:57:51,341 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-05 12:57:51,341 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+[testclient1] Replied: reply_topic=testcore.hello src=testcore data={'message': 'hello testclient1'}
+[testclient2] Replied: reply_topic=testcore.hello src=testcore data={'message': 'hello testclient2'}
+2025-12-05 12:57:51,343 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+[CORE] id=testcore topic=testclient1.hello payload={"client":"testcore","topic":"testclient1.hello","time":1764957472340,"data":{"message":"hello testclient1"}}
+[CORE] id=testcore topic=testclient2.hello payload={"client":"testcore","topic":"testclient2.hello","time":1764957472341,"data":{"message":"hello testclient2"}}
+2025-12-05 12:57:52,341 INFO PUB testcore topic=testclient1.hello targets=('testclient1',) data={"message":"hello testclient1"}
+[testclient1] Replied: reply_topic=testcore.hello src=testcore data={'message': 'hello testclient1'}
+2025-12-05 12:57:52,341 INFO PUB testclient1 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-05 12:57:52,341 INFO PUB testcore topic=testclient2.hello targets=('testclient2',) data={"message":"hello testclient2"}
+[testclient2] Replied: reply_topic=testcore.hello src=testcore data={'message': 'hello testclient2'}
+2025-12-05 12:57:52,342 INFO PUB testclient2 topic=testcore.hello targets=('testcore',) data={"message":"hello testcore"}
+2025-12-05 12:57:52,982 ERROR reader stopped client=testcore error=bus connection closed
+2025-12-05 12:57:52,982 INFO DROP testcore topic=Diag.testcore.STOPPED reason=no_subscribers
+[CORE_STOP] id=testcore2025-12-05 12:57:52,983 INFO DROP testclient2 topic=Diag.testclient2.STOPPED reason=no_subscribers
+2025-12-05 12:57:52,982 ERROR reader stopped client=testclient2 error=bus connection closed
+
+[MAIN] interrupt received, terminating
+[PLUGIN_STOP] id=testclient2
+2025-12-05 12:57:52,983 ERROR reader stopped client=testclient1 error=bus connection closed
+[PLUGIN_STOP] id=testclient1
+2025-12-05 12:57:52,984 INFO CANCEL client=testcore
+2025-12-05 12:57:52,984 INFO DISCONNECT client=testcore
+2025-12-05 12:57:52,984 INFO CANCEL client=testclient1
+2025-12-05 12:57:52,984 INFO DISCONNECT client=testclient1
+2025-12-05 12:57:52,984 INFO CANCEL client=testclient2
+2025-12-05 12:57:52,984 INFO DISCONNECT client=testclient2

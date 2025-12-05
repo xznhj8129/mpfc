@@ -53,7 +53,7 @@ class CoreBase:
             self.client.close()
         except Exception:
             pass
-        print(f"[COR_STOP] id={self.client_id}", flush=True)
+        print(f"[CORE_STOP] id={self.client_id}", flush=True)
 
     def finish(self, exit_code: int = 0) -> None:
         self.publish_shutdown()

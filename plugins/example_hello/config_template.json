@@ -1,0 +1,11 @@
+{
+  "_notes": {
+    "id": "required bus client id; becomes the prefix for hello topics",
+    "send_interval": "required seconds between hello messages and timeouts"
+  },
+  "plugin": "example_hello",
+  "cfg": {
+    "id": "example_hello_1",
+    "send_interval": 1.0
+  }
+}

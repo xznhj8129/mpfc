@@ -1,6 +1,9 @@
 """
 Example Hello World core
 Listens to plugins "hello" and sends "hi" to each
+Usage:
+    from flight_cores.test_core.test_core import run_core
+    run_core(cfg, bus_config)
 """
 
 import queue

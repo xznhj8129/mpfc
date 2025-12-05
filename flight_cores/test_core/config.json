@@ -8,7 +8,7 @@
         }
     },
     "bus_config": {
-        "schema_path": "bus_topics_schema.json",
+        "schema_path": "../../config/bus_topics_schema.json",
         "log_file": "hivebus.log",
         "endpoint": {
             "type": "tcp",

@@ -1,0 +1,11 @@
+{
+  "_notes": {
+    "id": "required bus client id for this MAVSDK interface",
+    "system_address": "required connection string like 'udp://:14550'"
+  },
+  "plugin": "mavsdk_interface",
+  "cfg": {
+    "id": "mavsdk",
+    "system_address": "udp://:14550"
+  }
+}

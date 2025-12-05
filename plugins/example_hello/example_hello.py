@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""
+Usage:
+    from plugins.example_hello.example_hello import run_plugin
+    run_plugin(cfg, bus_config)
+"""
+
 import json
 import time
 import traceback

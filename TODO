@@ -1,3 +1,2 @@
 * add logging levels for bus to config (INFO PUB/etc are spammy)
-* split bus startup from core
 * supervisor process for health and diagnosis

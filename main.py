@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
 Usage:
-    MAIN_CONFIG=./config/config_hello.json python main.py
-    python examples/run_config_hello.py
-MAIN_CONFIG must point to a config shaped like config/config_hello.json.
+    MAIN_CONFIG=./flight_cores/test_core/config.json python main.py
+MAIN_CONFIG must point to a config shaped like flight_cores/test_core/config.json.
 """
 
 import asyncio
@@ -31,7 +30,7 @@ def start_from_config(config_path: Path) -> None:
     config = load_json(config_path)
     # TODO: Verbosely print config file
     base_dir = config_path.parent
-    repo_root = base_dir.parent if base_dir.name == "config" else base_dir
+    repo_root = Path(__file__).resolve().parent
     raw_bus_config = config["bus_config"]
 
     schema_path = Path(raw_bus_config["schema_path"])
@@ -79,7 +78,7 @@ def start_from_config(config_path: Path) -> None:
     core_config = config["core"]
     core_name = core_config["name"]
     core_cfg = core_config["cfg"]
-    core_module = importlib.import_module(f"flight_cores.{core_name}")
+    core_module = importlib.import_module(f"flight_cores.{core_name}.{core_name}")
     core_runner = getattr(core_module, "run_core")
 
     plugins_raw = config["plugins"]
@@ -87,7 +86,7 @@ def start_from_config(config_path: Path) -> None:
     for entry in plugins_raw:
         plugin_name = entry["plugin"]
         plugin_cfg = entry["cfg"]
-        plugin_module = importlib.import_module(f"plugins.{plugin_name}")
+        plugin_module = importlib.import_module(f"plugins.{plugin_name}.{plugin_name}")
         plugin_runner = getattr(plugin_module, "run_plugin")
         plugin_entries.append({"cfg": plugin_cfg, "runner": plugin_runner})
 

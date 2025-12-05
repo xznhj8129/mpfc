@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Usage:
-    from plugins.mav_interface import run_plugin
-    # cfg and bus_config must be loaded from a HiveOS config file, e.g. config/config_mavlink.json
+    from plugins.pymavlink_interface.pymavlink_interface import run_plugin
+    # cfg and bus_config must be loaded from a HiveOS config file, e.g. flight_cores/mavlink_core/config_mavlink.json
     run_plugin(cfg, bus_config)
 """
 

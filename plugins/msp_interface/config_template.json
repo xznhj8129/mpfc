@@ -1,0 +1,19 @@
+{
+  "_notes": {
+    "id": "required bus client id for the MSP bridge",
+    "conn_type": "required link type for the MSPAPI2 transport (serial/tcp/etc)",
+    "conn_str": "required address string such as '/dev/ttyACM0' or 'tcp:127.0.0.1:9000'",
+    "conn_bitrate": "required bitrate for serial links",
+    "is_interface": "optional; true when this link is the primary flight controller interface",
+    "is_datalink": "optional; true when the link is used as a datalink hop"
+  },
+  "plugin": "msp_interface",
+  "cfg": {
+    "id": "FlightController",
+    "is_interface": true,
+    "is_datalink": false,
+    "conn_type": "serial",
+    "conn_str": "/dev/ttyACM0",
+    "conn_bitrate": 115200
+  }
+}

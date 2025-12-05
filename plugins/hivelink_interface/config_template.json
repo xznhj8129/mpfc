@@ -1,5 +1,12 @@
 {
-    "my_name": "drone1",
+  "_notes": {
+    "id": "required bus client id for the HiveLink bridge"
+  },
+  "plugin": "hivelink_interface",
+  "cfg": {
+    "id": "hivelink",
+    "rx_poll_interval": 0.1,
+    "bus_poll_interval": 0.1,
     "my_id": "0000001",
 
     "meshtastic": {
@@ -25,7 +32,6 @@
         "username": "",
         "password": ""
     },
-    "incumbent_window": 600,
     "nodemap": {
         "example1": {
             "meshid": 862205276, 
@@ -38,5 +44,5 @@
             "routes": {}
         }
     }
-
+  }
 }

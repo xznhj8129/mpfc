@@ -1,0 +1,30 @@
+{
+    "my_name": "uav1",
+    "core": {
+        "name": "test_takeoff_land",
+        "cfg": {
+            "id": "testcore",
+            "mavsdk_id": "mavsdk",
+            "takeoff_altitude_m": 10.0,
+            "post_takeoff_hold_s": 10.0
+        }
+    },
+    "bus_config": {
+        "schema_path": "../../config/bus_topics_schema.json",
+        "log_file": "hivebus.log",
+        "endpoint": {
+            "type": "tcp",
+            "host": "127.0.0.1",
+            "port": 7777
+        }
+    },
+    "plugins": [
+        {
+            "plugin": "mavsdk_interface",
+            "cfg": {
+                "id": "mavsdk",
+                "system_address": "udp://:14550"
+            }
+        }
+    ]
+}
