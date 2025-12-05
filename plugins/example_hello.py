@@ -31,7 +31,7 @@ class HelloPlugin(PluginBase):
                     envelope = build_envelope(self.client_id, reply_topic, {"message": f"hello {sender}"})
                     self.client.publish(reply_topic, envelope)
                     print(
-                        f"[PLUGIN_RECV] id={self.client_id} reply_topic={reply_topic} src={sender} data={payload.get('data')}",
+                        f"[{self.client_id}] Replied: reply_topic={reply_topic} src={sender} data={payload.get('data')}",
                         flush=True,
                     )
                     deadline = time.monotonic() + self.send_interval

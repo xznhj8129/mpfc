@@ -27,8 +27,8 @@ Flight cores:
 Cores control the master on/off switch. They can send a Control.Shutdown message that all clients will take as a sign to shut down cleanly. Cores encountering an unrecoverable error will also send Control.Shutdown.
 
 Base plugins:
-* msp_interface: Bus-connected MSP Flight Controller interface using MSPAPI2, tcp or serial
-* mav_interface: Bus-connected Mavlink interface
+* msp_interface: Bus-connected MSP Flight Controller interface using MSPAPI2, ip or serial
+* mav_interface: Bus-connected Mavlink interface that bridges Mavlink between the bus and an external interface (ip or serial), internally transacting parsed frames and encoded frames outwards
 * hivelink_interface: Bus-connected Hivelink interface
 
 Common characteristics:

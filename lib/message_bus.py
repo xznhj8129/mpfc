@@ -53,7 +53,17 @@ class MessageBus:
         payload = message.get("payload")
         data_display = payload
         if isinstance(payload, dict) and "data" in payload:
-            data_display = payload.get("data")
+            data_content = payload["data"]
+            if topic == "MAVLINK":
+                data_display = {
+                    "msgid": data_content["msgid"],
+                    "type": data_content["type"],
+                    "sysid": data_content["sysid"],
+                    "compid": data_content["compid"],
+                    "length": data_content["length"],
+                }
+            else:
+                data_display = data_content
         try:
             data_text = json.dumps(data_display, separators=(",", ":"))
         except (TypeError, ValueError):
@@ -151,10 +161,7 @@ class MessageBus:
 async def run_server(endpoint: Dict, log_file: str) -> None:
     logger = logging.getLogger("message_bus")
     logger.setLevel(logging.INFO)
-    log_handlers = [
-        logging.FileHandler(log_file, encoding=ENCODING),
-    ]
-    log_handlers.append(logging.StreamHandler(sys.stdout))
+    log_handlers = [logging.FileHandler(log_file, encoding=ENCODING)]
     formatter = logging.Formatter(LOG_FORMAT)
     for handler in log_handlers:
         handler.setFormatter(formatter)

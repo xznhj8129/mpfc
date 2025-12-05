@@ -29,7 +29,7 @@
         "id": "mav_uav",
         "is_interface": true,
         "conn_type": "udp",
-        "conn_str": "udp:127.0.0.1:14550",
+        "conn_str": "udpin:0.0.0.0:14550",
         "conn_bitrate": 115200
       }
     },
@@ -39,7 +39,7 @@
         "id": "mav_datalink",
         "is_datalink": true,
         "conn_type": "udp",
-        "conn_str": "udp:127.0.0.1:14551",
+        "conn_str": "udpin:0.0.0.0:14551",
         "conn_bitrate": 115200
       }
     }

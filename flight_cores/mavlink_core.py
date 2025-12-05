@@ -2,183 +2,273 @@
 """
 Usage:
     from flight_cores.mavlink_core import run_core
-    # cfg and bus_config must be loaded from a HiveOS config file, e.g. config/config_mavlink.json
     run_core(cfg, bus_config)
 """
 
-import asyncio
+import base64
+import time
 import traceback
+import os
 from typing import Any, Dict
 
-from mavsdk import System
+from pymavlink import mavutil
 
 from lib.common import build_envelope
 from lib.core_base import CoreBase
 
-ALT_TOPIC = "telemetry.altitude"
-MODE_TOPIC = "telemetry.flight_mode"
-AIR_TOPIC = "telemetry.in_air"
-STATUS_TOPIC = "status"
+MAVLINK_TOPIC = "MAVLINK"
+POLL_INTERVAL = 0.05
+GUIDED_CUSTOM_MODE = 4
+GCS_SYSID = 245
+GCS_COMPID = mavutil.mavlink.MAV_COMP_ID_MISSIONPLANNER
+TARGET_COMPID = mavutil.mavlink.MAV_COMP_ID_AUTOPILOT1
+ALT_IN_AIR = 0.5
+ALT_ON_GROUND = 0.2
 
 
 class MavlinkCore(CoreBase):
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
         super().__init__(cfg, bus_config)
-        self.system_address = cfg["system_address"]
+        self.target_sysid = int(cfg["sysid"])
         self.takeoff_altitude = float(cfg["takeoff_altitude_m"])
         self.hold_duration = float(cfg["post_takeoff_hold_s"])
-        self.sysid = int(cfg["sysid"])
         self.autopilot = cfg["mav_autopilot"]
         self.vehicle_type = cfg["mav_type"]
-        self.status_topic = f"{self.client_id}.{STATUS_TOPIC}"
-        self.alt_topic = f"{self.client_id}.{ALT_TOPIC}"
-        self.mode_topic = f"{self.client_id}.{MODE_TOPIC}"
-        self.air_topic = f"{self.client_id}.{AIR_TOPIC}"
+        self.bus_topic = MAVLINK_TOPIC
+        self.client.subscribe(self.bus_topic)
+        self.encoder = mavutil.mavlink.MAVLink(None, srcSystem=GCS_SYSID, srcComponent=GCS_COMPID)
+        self.encoder.use_mavlink2 = True
+        self.parser = mavutil.mavlink.MAVLink(None)
+        self.parser.use_mavlink2 = True
+        self.parser.robust_parsing = True
+        self.connected = False
+        self.global_position_ok = False
+        self.home_position_ok = False
+        self.armed = False
+        self.in_air = False
+        self.altitude_m = None
+        self.last_mode = None
+        self.takeoff_started_at = None
+        self.stage = 0
+        self.sequence_done = False
+        self.last_frame_time = None
+        self.last_frame_meta = None
+        self.set_mode_sent = False
+        self.arm_sent = False
+        self.takeoff_sent = False
+        self.land_sent = False
+        self.arm_ack = False
+        self.takeoff_ack = False
+        self.guided_mode = False
 
     def run(self) -> None:
         try:
-            asyncio.run(self._main())
+            while True:
+                topic, payload, message = self.recv_message(POLL_INTERVAL)
+                if topic == self.bus_topic:
+                    src_client = payload["client"] or message.get("src")
+                    if src_client != self.client_id:
+                        frame = base64.b64decode(payload["data"]["frame"])
+                        self._handle_frame(frame)
+
+                if self.stage == 0:
+                    if self.connected and self.global_position_ok:
+                        print(
+                            f"[CORE_HEALTH] id={self.client_id} global_ok={self.global_position_ok} home_ok={self.home_position_ok}",
+                            flush=True,
+                        )
+                        if not self.home_position_ok:
+                            print(f"[CORE_WARN] id={self.client_id} no_home_position=1", flush=True)
+                        self.stage = 1
+                elif self.stage == 1:
+                    if not self.set_mode_sent:
+                        base_mode = (
+                            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
+                            | mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED
+                        )
+                        msg = self.encoder.set_mode_encode(self.target_sysid, base_mode, GUIDED_CUSTOM_MODE)
+                        self._publish_frame(msg)
+                        print(
+                            f"[CORE_CMD] id={self.client_id} cmd=SET_MODE base_mode={base_mode} custom_mode={GUIDED_CUSTOM_MODE}",
+                            flush=True,
+                        )
+                        self.set_mode_sent = True
+                    if self.guided_mode:
+                        self.stage = 2
+                elif self.stage == 2:
+                    if self.armed or self.arm_ack:
+                        self.stage = 3
+                    else:
+                        if not self.arm_sent:
+                            msg = self.encoder.command_long_encode(
+                                self.target_sysid,
+                                TARGET_COMPID,
+                                mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+                                0,
+                                1,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                            )
+                            self._publish_frame(msg)
+                            self.arm_sent = True
+                            print(f"[CORE_CMD] id={self.client_id} cmd=ARM target_sysid={self.target_sysid}", flush=True)
+                elif self.stage == 3:
+                    if self.armed and not self.takeoff_sent:
+                        msg = self.encoder.command_long_encode(
+                            self.target_sysid,
+                            TARGET_COMPID,
+                            mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            self.takeoff_altitude,
+                        )
+                        self._publish_frame(msg)
+                        print(
+                            f"[CORE_CMD] id={self.client_id} cmd=TAKEOFF alt_m={self.takeoff_altitude} hold_s={self.hold_duration}",
+                            flush=True,
+                        )
+                        self.takeoff_sent = True
+                    if (self.takeoff_sent and self.takeoff_ack) or self.in_air:
+                        self.stage = 4
+                elif self.stage == 4:
+                    if self.in_air and self.takeoff_started_at is None:
+                        self.takeoff_started_at = time.monotonic()
+                    if self.in_air and self.takeoff_started_at is not None:
+                        if time.monotonic() - self.takeoff_started_at >= self.hold_duration:
+                            if not self.land_sent:
+                                msg = self.encoder.command_long_encode(
+                                    self.target_sysid,
+                                    TARGET_COMPID,
+                                    mavutil.mavlink.MAV_CMD_NAV_LAND,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                )
+                                self._publish_frame(msg)
+                                print(f"[CORE_CMD] id={self.client_id} cmd=LAND target_sysid={self.target_sysid}", flush=True)
+                                self.land_sent = True
+                            self.stage = 5
+                elif self.stage == 5:
+                    if not self.in_air and not self.armed:
+                        self.sequence_done = True
+
+                time.sleep(0.1)
+                if self.sequence_done:
+                    break
         except RuntimeError:
+            crash_tb = traceback.format_exc().strip()
+            print(f"[CORE_CRASH] id={self.client_id} error={crash_tb}", flush=True)
             error_topic = f"DIAG.{self.client_id}.ERROR"
             error_payload = build_envelope(
-                self.client_id, error_topic, {"event": "ERROR", "traceback": traceback.format_exc().strip()}
+                self.client_id, error_topic, {"event": "ERROR", "traceback": crash_tb}
             )
             self.client.publish(error_topic, error_payload)
-            raise
+            os._exit(1)
         except KeyboardInterrupt:
             pass
         finally:
             self.stop()
 
-    async def _main(self) -> None:
-        drone = System()
-        await drone.connect(system_address=self.system_address)
-        print(f"[CORE_CONNECT] id={self.client_id} sysid={self.sysid} addr={self.system_address}", flush=True)
-        async for state in drone.core.connection_state():
-            if state.is_connected:
-                self.client.publish(
-                    self.status_topic,
-                    build_envelope(
-                        self.client_id,
-                        self.status_topic,
-                        {
-                            "event": "CONNECTED",
-                            "system_id": self.sysid,
-                            "autopilot": self.autopilot,
-                            "vehicle": self.vehicle_type,
-                            "address": self.system_address,
-                        },
-                    ),
-                )
-                print(f"[CORE_READY] id={self.client_id} system_connected={state.is_connected}", flush=True)
-                break
-
-        altitude_task = asyncio.create_task(self._watch_altitude(drone))
-        mode_task = asyncio.create_task(self._watch_flight_mode(drone))
-        running_tasks = [altitude_task, mode_task]
-        termination_task = asyncio.create_task(self._observe_in_air(drone, running_tasks))
-
-        async for health in drone.telemetry.health():
-            if health.is_global_position_ok and health.is_home_position_ok:
-                self.client.publish(
-                    self.status_topic,
-                    build_envelope(
-                        self.client_id,
-                        self.status_topic,
-                        {"event": "HEALTH_OK", "global_position": health.is_global_position_ok, "home": health.is_home_position_ok},
-                    ),
-                )
-                print(
-                    f"[CORE_HEALTH] id={self.client_id} global_ok={health.is_global_position_ok} home_ok={health.is_home_position_ok}",
-                    flush=True,
-                )
-                break
-
-        print(f"[CORE_ARM] id={self.client_id}", flush=True)
-        self.client.publish(
-            self.status_topic,
-            build_envelope(self.client_id, self.status_topic, {"event": "ARMING", "address": self.system_address}),
-        )
-        await drone.action.arm()
-
-        print(f"[CORE_TAKEOFF] id={self.client_id} altitude_m={self.takeoff_altitude}", flush=True)
-        self.client.publish(
-            self.status_topic,
-            build_envelope(
-                self.client_id,
-                self.status_topic,
-                {"event": "TAKEOFF", "altitude_m": self.takeoff_altitude, "hold_s": self.hold_duration},
-            ),
-        )
-        await drone.action.set_takeoff_altitude(self.takeoff_altitude)
-        await drone.action.takeoff()
-
-        await asyncio.sleep(self.hold_duration)
-
-        print(f"[CORE_LAND] id={self.client_id}", flush=True)
-        self.client.publish(
-            self.status_topic,
-            build_envelope(self.client_id, self.status_topic, {"event": "LANDING", "address": self.system_address}),
-        )
-        await drone.action.land()
-        await termination_task
-
-    async def _watch_altitude(self, drone: System) -> None:
-        previous_altitude = None
-        try:
-            async for position in drone.telemetry.position():
-                altitude = round(position.relative_altitude_m, 3)
-                if altitude != previous_altitude:
-                    previous_altitude = altitude
-                    self.client.publish(
-                        self.alt_topic,
-                        build_envelope(self.client_id, self.alt_topic, {"relative_m": altitude}),
-                    )
-                    print(f"[CORE_ALT] id={self.client_id} altitude_m={altitude}", flush=True)
-        except asyncio.CancelledError:
+    def _handle_frame(self, frame: bytes) -> None:
+        msg = None
+        for byte in frame:
+            candidate = self.parser.parse_char(bytes([byte]))
+            if candidate is not None:
+                msg = candidate
+        if msg is None:
+            return
+        self.last_frame_time = time.monotonic()
+        self.last_frame_meta = (msg.get_type(), msg.get_srcSystem(), msg.get_srcComponent())
+        if msg.get_srcSystem() != self.target_sysid:
+            return
+        msg_type = msg.get_type()
+        if msg_type == "HEARTBEAT":
+            self.connected = True
+            current_mode = mavutil.mode_string_v10(msg)
+            self.guided_mode = current_mode == "GUIDED"
+            if current_mode != self.last_mode:
+                self.last_mode = current_mode
+                print(f"[CORE_MODE] id={self.client_id} mode={current_mode}", flush=True)
+            armed_now = (msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED) != 0
+            if armed_now != self.armed:
+                self.armed = armed_now
+                print(f"[CORE_ARM_STATE] id={self.client_id} armed={self.armed}", flush=True)
+            return
+        if msg_type == "GLOBAL_POSITION_INT":
+            altitude = round(msg.relative_alt / 1000.0, 3)
+            if altitude != self.altitude_m:
+                self.altitude_m = altitude
+                print(f"[CORE_ALT] id={self.client_id} altitude_m={altitude}", flush=True)
+            if altitude > ALT_IN_AIR and not self.in_air:
+                self.in_air = True
+                print(f"[CORE_AIR] id={self.client_id} in_air=True", flush=True)
+                if self.takeoff_started_at is None:
+                    self.takeoff_started_at = time.monotonic()
+            if altitude <= ALT_ON_GROUND and self.in_air:
+                self.in_air = False
+                print(f"[CORE_AIR] id={self.client_id} in_air=False", flush=True)
+            if msg.lat != 0 or msg.lon != 0:
+                self.global_position_ok = True
+            return
+        if msg_type == "EXTENDED_SYS_STATE":
+            landed_state = msg.landed_state
+            in_air_now = landed_state in (
+                mavutil.mavlink.MAV_LANDED_STATE_IN_AIR,
+                mavutil.mavlink.MAV_LANDED_STATE_TAKEOFF,
+                mavutil.mavlink.MAV_LANDED_STATE_FLYING,
+            )
+            if in_air_now != self.in_air:
+                self.in_air = in_air_now
+                print(f"[CORE_AIR] id={self.client_id} in_air={self.in_air}", flush=True)
+                if self.in_air and self.takeoff_started_at is None:
+                    self.takeoff_started_at = time.monotonic()
+            return
+        if msg_type == "COMMAND_ACK":
+            command = msg.command
+            result = msg.result
+            result_name = mavutil.mavlink.enums.get("MAV_RESULT", {}).get(result)
+            result_text = result_name.name if result_name else str(result)
+            if command == mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM:
+                print(f"[CORE_ACK] id={self.client_id} cmd=ARM result={result_text}", flush=True)
+                if result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
+                    self.arm_ack = True
+            elif command == mavutil.mavlink.MAV_CMD_NAV_TAKEOFF:
+                print(f"[CORE_ACK] id={self.client_id} cmd=TAKEOFF result={result_text}", flush=True)
+                if result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
+                    self.takeoff_ack = True
+                else:
+                    self.sequence_done = True
             return
 
-    async def _watch_flight_mode(self, drone: System) -> None:
-        previous_mode = None
-        try:
-            async for flight_mode in drone.telemetry.flight_mode():
-                if flight_mode != previous_mode:
-                    previous_mode = flight_mode
-                    self.client.publish(
-                        self.mode_topic,
-                        build_envelope(
-                            self.client_id, self.mode_topic, {"flight_mode": str(flight_mode), "sysid": self.sysid}
-                        ),
-                    )
-                    print(f"[CORE_MODE] id={self.client_id} mode={flight_mode}", flush=True)
-        except asyncio.CancelledError:
-            return
-
-    async def _observe_in_air(self, drone: System, running_tasks) -> None:
-        was_in_air = False
-        try:
-            async for is_in_air in drone.telemetry.in_air():
-                if is_in_air:
-                    was_in_air = True
-                    self.client.publish(
-                        self.air_topic, build_envelope(self.client_id, self.air_topic, {"in_air": True})
-                    )
-                    print(f"[CORE_AIR] id={self.client_id} in_air={is_in_air}", flush=True)
-                if was_in_air and not is_in_air:
-                    self.client.publish(
-                        self.air_topic, build_envelope(self.client_id, self.air_topic, {"in_air": False})
-                    )
-                    print(f"[CORE_AIR] id={self.client_id} in_air={is_in_air}", flush=True)
-                    for task in running_tasks:
-                        task.cancel()
-                        try:
-                            await task
-                        except asyncio.CancelledError:
-                            pass
-                    await asyncio.get_event_loop().shutdown_asyncgens()
-                    return
-        except asyncio.CancelledError:
-            return
+    def _publish_frame(self, msg: Any) -> None:
+        buf = msg.pack(self.encoder)
+        envelope = build_envelope(
+            self.client_id,
+            self.bus_topic,
+            {
+                "frame": base64.b64encode(buf).decode("ascii"),
+                "length": len(buf),
+                "msgid": msg.get_msgId(),
+                "type": msg.get_type(),
+                "sysid": self.encoder.srcSystem,
+                "compid": self.encoder.srcComponent,
+            },
+        )
+        self.client.publish(self.bus_topic, envelope)
 
 
 def run_core(cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:

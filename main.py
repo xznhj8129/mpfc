@@ -12,6 +12,7 @@ import multiprocessing as mp
 import os
 import socket
 import time
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -53,6 +54,12 @@ def start_from_config(config_path: Path) -> None:
     else:
         endpoint = endpoint_cfg
     bus_config = {"schema_path": str(schema_path), "log_file": str(log_file), "endpoint": endpoint}
+
+    log_fd = os.open(str(log_file), os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+    os.dup2(log_fd, sys.stdout.fileno())
+    os.dup2(log_fd, sys.stderr.fileno())
+    sys.stdout = os.fdopen(sys.stdout.fileno(), "w", buffering=1)
+    sys.stderr = os.fdopen(sys.stderr.fileno(), "w", buffering=1)
 
     core_config = config["core"]
     core_name = core_config["name"]
@@ -113,6 +120,8 @@ def start_from_config(config_path: Path) -> None:
         while True:
             dead = [proc for proc in all_procs if not proc.is_alive()]
             if dead:
+                names = ", ".join(f"{p.name}({p.exitcode})" for p in dead)
+                print(f"[MAIN] detected exit: {names}, terminating remaining", flush=True)
                 break
             time.sleep(0.2)
     except KeyboardInterrupt:
