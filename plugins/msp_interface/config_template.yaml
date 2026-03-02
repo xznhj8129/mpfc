@@ -1,0 +1,90 @@
+plugin: msp_interface
+cfg:
+  # required bus client id for the MSP bridge
+  id: mspapi
+  # required topic namespace shared with the core (for example: MSP)
+  topic_ns: UAV
+  # optional; true when this link is the primary flight controller interface
+  is_interface: true
+  # optional; true when this link is used as a datalink hop
+  is_datalink: false
+  # required link type for the MSPAPI2 transport (serial/tcp/etc)
+  conn_type: serial
+  # required address string such as /dev/ttyACM0 or tcp:127.0.0.1:9000
+  conn_str: /dev/ttyACM0
+  # required bitrate for serial links
+  conn_bitrate: 115200
+  # required state poll interval seconds
+  state_poll_interval_s: 0.5
+  # required altitude threshold meters for in-air detection
+  in_air_alt_threshold: 0.5
+  # required minimum satellites for home/global ok
+  home_min_satellites: 6
+  # required PWM microseconds for takeoff throttle
+  takeoff_throttle: 1700
+  # required PWM microseconds for hover throttle after takeoff
+  hover_throttle: 1500
+  # required PWM microseconds for landing descent
+  landing_throttle: 1300
+  # required timeout seconds for takeoff action
+  takeoff_timeout_s: 45.0
+  # required timeout seconds for landing action
+  landing_timeout_s: 45.0
+  # required override send interval seconds
+  override_send_interval: 0.04
+  # required default override enabled flag
+  override_enabled: true
+  # required mapping for roll/pitch/yaw/throt to MSP channel names
+  override_channels:
+    roll: roll
+    pitch: pitch
+    yaw: yaw
+    throt: throttle
+  # required initial override PWM dict for roll/pitch/yaw/throt
+  override_initial_us:
+    roll: 1500
+    pitch: 1500
+    yaw: 1500
+    throt: 1000
+  # required default waypoint metadata used by GO_TO conversion
+  go_to_waypoint:
+    WaypointIndex: 255
+    Action: 1
+    Param1: 0
+    Param2: 0
+    Param3: 0
+    Flag: 0
+  # required publish intervals in seconds keyed by state field name
+  state_intervals:
+    IsInAir: 0.5
+    IsArmed: 0.5
+    IsHomePositionOk: 0.5
+    IsGlobalPositionOk: 0.5
+    AltitudeM: 0.5
+    Position: 0.5
+    FixType: 0.5
+    NumSat: 0.5
+    NavState: 0.5
+    AttitudeRad: 0.2
+    AngVelRadS: 0.2
+    RcChannels: 0.2
+    ActiveModes: 0.5
+    ActiveModeNames: 0.5
+    OverrideActive: 0.2
+    Failsafe: 0.2
+    Imu: 0.2
+    GpsInfo: 0.5
+    RawGps: 0.5
+    Battery: 0.5
+    Analog: 0.5
+    SensorConfig: 1.0
+    ModeRanges: 1.0
+    RxConfig: 1.0
+    ChannelMap: 1.0
+    FcConnected: 1.0
+    CpuLoad: 0.5
+    CycleTime: 0.5
+    FcInfo: 1.0
+    WaypointInfo: 1.0
+    GpsStatistics: 1.0
+    FlightMode: 0.2

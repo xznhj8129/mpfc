@@ -1,0 +1,36 @@
+plugin: mavsdk_interface
+cfg:
+  # required bus client id for this MAVSDK interface
+  id: mavsdk
+  # required topic namespace shared with the core (for example: MAVSDK)
+  topic_ns: MAVSDK
+  is_interface: true
+  # required transport type; MAVSDK driver currently expects udp
+  conn_type: udp
+  # required connection string like udp://:14550
+  conn_str: udp://:14550
+  mav_dialect: PX4
+  mav_type: MAV_TYPE_QUADROTOR
+  mav_sysid: 1
+  # required; enable mavsdk_server debug logging
+  mavsdk_log_debug: false
+  # required publish intervals in seconds keyed by state field name
+  state_intervals:
+    IsInAir: 0.1
+    IsArmed: 0.1
+    IsHomePositionOk: 0.5
+    IsGlobalPositionOk: 0.5
+    AltitudeM: 0.1
+    Position: 0.2
+    AttitudeRad: 0.1
+    AngVelRadS: 0.1
+    FixType: 0.5
+    NumSat: 0.5
+    GpsInfo: 0.5
+    RawGps: 0.5
+    Battery: 0.5
+    Imu: 0.1
+    FcInfo: 1.0
+    FlightMode: 0.2
+    SensorConfig: 1.0
+    ActiveModeNames: 0.2

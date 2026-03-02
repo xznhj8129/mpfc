@@ -1,0 +1,8 @@
+__pycache__/
+*.log
+*.tlog*
+testing/
+.env
+.notes/
+.claude/
+yolov8n.pt

@@ -1,0 +1,48 @@
+plugin: atak_interface
+cfg:
+  # required bus client id for this ATAK interface
+  id: atak
+  # required topic namespace shared with core/plugin clients (for example: ATAK)
+  topic_ns: ATAK
+  is_interface: true
+  # required publish intervals in seconds keyed by ATAK.State field name
+  state_intervals:
+    TcpClientConnected: 0.1
+    LastEvent: 0.1
+    LastResult: 0.1
+    LastError: 0.1
+    RxCount: 0.1
+    TxCount: 0.1
+    RxParseErrors: 0.1
+  loop_interval_s: 0.1
+  bus_poll_interval_s: 0.01
+  recv_buffer_bytes: 65535
+  multicast_ttl: 2
+  # required UDP bind endpoint for inbound CoT
+  listen:
+    host: 0.0.0.0
+    port: 4242
+  # multicast group to join on listen socket, null to disable
+  multicast_group: 239.2.3.1
+  # default outbound CoT targets
+  cot_output_targets:
+  - host: 239.2.3.1
+    port: 4242
+  # optional TCP CoT server; set enabled=true to accept TCP CoT clients
+  tcp_listen:
+    enabled: true
+    host: 0.0.0.0
+    port: 8088
+  # optional TCP CoT client; set enabled=true to connect and ingest stream
+  tcp_connect:
+    enabled: true
+    host: 127.0.0.1
+    port: 8087
+    reconnect_secs: 3.0
+  # required CoT generation defaults; self_callsign initializes frogcot ATAKClient identity
+  translator:
+    stale_seconds: 60
+    default_ce: 50.0
+    default_le: 50.0
+    self_callsign: HIVEOS
+    self_cottype: a-f-U

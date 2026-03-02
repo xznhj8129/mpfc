@@ -1,0 +1,9 @@
+mavsdk
+pymavlink
+hivelink
+frogproto
+paho-mqtt
+numpy
+filterpy
+simple-pid
+PyYAML

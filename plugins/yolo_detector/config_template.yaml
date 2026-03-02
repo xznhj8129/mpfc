@@ -1,0 +1,34 @@
+plugin: yolo_detector
+cfg:
+  # bus client id
+  id: yolo
+  # topic namespace
+  topic_ns: CV
+  # video source — file path, camera index (0), or RTSP/HTTP URL
+  source: "0"
+  # YOLO model weights path
+  weights: yolov8n.pt
+  # confidence threshold
+  confidence: 0.25
+  # inference image size
+  imgsz: 640
+  # device — "auto" (GPU if available, else CPU), "cpu", or GPU index (0)
+  device: auto
+  # enable ByteTrack object tracking (requires supervision package)
+  enable_tracking: false
+  # re-open source after it ends (useful for video files)
+  loop_source: false
+  # main loop target interval in seconds
+  loop_interval_s: 0.033
+  # delay before re-opening a failed/ended source
+  reconnect_delay_s: 2.0
+  # publish intervals in seconds keyed by state field name
+  state_intervals:
+    # individual detections (class + position) publish rate
+    detections: 0.1
+    # detection count summary
+    detection_count: 0.2
+    # model loaded/ready flag
+    model_ready: 1.0
+    # inference throughput
+    inference_fps: 1.0

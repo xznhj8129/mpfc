@@ -1,0 +1,56 @@
+my_name: uav1
+core:
+  name: atak_example
+  cfg:
+    id: atak_core
+    poll_interval_s: 0.2
+    interface:
+      id: atak
+      topic_ns: ATAK
+bus_config:
+  schema_path: ../../config/bus_topics_schema.json
+  log_file: hivebus.log
+  endpoint:
+    type: mqtt
+    host: 127.0.0.1
+    port: 1883
+plugins:
+- plugin: atak_interface
+  cfg:
+    id: atak
+    topic_ns: ATAK
+    is_interface: true
+    state_intervals:
+      TcpClientConnected: 0.1
+      LastEvent: 0.1
+      LastResult: 0.1
+      LastError: 0.1
+      RxCount: 0.1
+      TxCount: 0.1
+      RxParseErrors: 0.1
+    loop_interval_s: 0.1
+    bus_poll_interval_s: 0.01
+    recv_buffer_bytes: 65535
+    multicast_ttl: 2
+    listen:
+      host: 0.0.0.0
+      port: 4242
+    multicast_group: 239.2.3.1
+    cot_output_targets:
+    - host: 239.2.3.1
+      port: 4242
+    tcp_listen:
+      enabled: true
+      host: 0.0.0.0
+      port: 8088
+    tcp_connect:
+      enabled: true
+      host: 127.0.0.1
+      port: 8087
+      reconnect_secs: 3.0
+    translator:
+      stale_seconds: 60
+      default_ce: 50.0
+      default_le: 50.0
+      self_callsign: HIVEOS
+      self_cottype: a-f-U

@@ -1,0 +1,189 @@
+{
+  "Protocol": "ATAK",
+  "Version": 1,
+  "Description": "ATAK/CoT messaging contract for HiveOS interfaces.",
+  "Messages": {
+    "State": {
+      "Link": {
+        "TcpClientConnected": {
+          "Key": "ATAK.State.Link.TcpClientConnected",
+          "Description": "Outbound TCP CoT client connection state.",
+          "Fields": [{"Name": "TcpClientConnected", "Type": "bool", "Required": true}]
+        }
+      },
+      "Rx": {
+        "LastEvent": {
+          "Key": "ATAK.State.Rx.LastEvent",
+          "Description": "Last received CoT event summary.",
+          "Fields": [
+            {"Name": "Uid", "Type": "string", "Required": true},
+            {"Name": "Type", "Type": "string", "Required": true},
+            {"Name": "How", "Type": "string", "Required": true},
+            {"Name": "Callsign", "Type": "string", "Required": false},
+            {"Name": "Time", "Type": "string", "Required": true},
+            {"Name": "Start", "Type": "string", "Required": true},
+            {"Name": "Stale", "Type": "string", "Required": true},
+            {"Name": "PositionLatDeg", "Type": "float", "Required": true},
+            {"Name": "PositionLonDeg", "Type": "float", "Required": true},
+            {"Name": "PositionHaeM", "Type": "float", "Required": true},
+            {"Name": "PositionCe", "Type": "float", "Required": true},
+            {"Name": "PositionLe", "Type": "float", "Required": true},
+            {"Name": "DetailXml", "Type": "string", "Required": false},
+            {"Name": "SourceHost", "Type": "string", "Required": true},
+            {"Name": "SourcePort", "Type": "int", "Required": true}
+          ]
+        }
+      },
+      "Tx": {
+        "LastResult": {
+          "Key": "ATAK.State.Tx.LastResult",
+          "Description": "Last transmission result summary.",
+          "Fields": [
+            {"Name": "TargetCount", "Type": "int", "Required": true},
+            {"Name": "Bytes", "Type": "int", "Required": true}
+          ]
+        }
+      },
+      "System": {
+        "LastError": {
+          "Key": "ATAK.State.System.LastError",
+          "Description": "Last parser or transport error string.",
+          "Fields": [{"Name": "LastError", "Type": "string", "Required": true}]
+        },
+        "RxCount": {
+          "Key": "ATAK.State.System.RxCount",
+          "Description": "Inbound event count.",
+          "Fields": [{"Name": "RxCount", "Type": "int", "Required": true}]
+        },
+        "TxCount": {
+          "Key": "ATAK.State.System.TxCount",
+          "Description": "Outbound send count.",
+          "Fields": [{"Name": "TxCount", "Type": "int", "Required": true}]
+        },
+        "RxParseErrors": {
+          "Key": "ATAK.State.System.RxParseErrors",
+          "Description": "Inbound parse error count.",
+          "Fields": [{"Name": "RxParseErrors", "Type": "int", "Required": true}]
+        }
+      }
+    },
+    "Action": {
+      "Cot": {
+        "SendEvent": {
+          "Key": "ATAK.Action.Cot.SendEvent",
+          "Description": "Transmit a generic CoT event JSON payload.",
+          "Fields": [
+            {"Name": "Uid", "Type": "string", "Required": true},
+            {"Name": "Type", "Type": "string", "Required": true},
+            {"Name": "How", "Type": "string", "Required": true},
+            {"Name": "Time", "Type": "string", "Required": false},
+            {"Name": "Start", "Type": "string", "Required": false},
+            {"Name": "Stale", "Type": "string", "Required": false},
+            {"Name": "PositionLatDeg", "Type": "float", "Required": true},
+            {"Name": "PositionLonDeg", "Type": "float", "Required": true},
+            {"Name": "PositionHaeM", "Type": "float", "Required": true},
+            {"Name": "PositionCe", "Type": "float", "Required": true},
+            {"Name": "PositionLe", "Type": "float", "Required": true},
+            {"Name": "Callsign", "Type": "string", "Required": false},
+            {"Name": "DetailXml", "Type": "string", "Required": false},
+            {"Name": "Targets", "Type": "array", "Required": false}
+          ]
+        }
+      },
+      "Marker": {
+        "SendMarker": {
+          "Key": "ATAK.Action.Marker.SendMarker",
+          "Description": "Transmit marker CoT event.",
+          "Fields": [
+            {"Name": "Callsign", "Type": "string", "Required": true},
+            {"Name": "Uid", "Type": "string", "Required": true},
+            {"Name": "CotType", "Type": "string", "Required": true},
+            {"Name": "PositionLatDeg", "Type": "float", "Required": true},
+            {"Name": "PositionLonDeg", "Type": "float", "Required": true},
+            {"Name": "PositionAltM", "Type": "float", "Required": true},
+            {"Name": "PositionCe", "Type": "float", "Required": true},
+            {"Name": "PositionLe", "Type": "float", "Required": true},
+            {"Name": "StaleSeconds", "Type": "int", "Required": false},
+            {"Name": "Targets", "Type": "array", "Required": false}
+          ]
+        }
+      },
+      "GeoChat": {
+        "SendGeoChat": {
+          "Key": "ATAK.Action.GeoChat.SendGeoChat",
+          "Description": "Transmit ATAK geochat message.",
+          "Fields": [
+            {"Name": "Message", "Type": "string", "Required": true},
+            {"Name": "ToTeam", "Type": "string", "Required": true},
+            {"Name": "PositionLatDeg", "Type": "float", "Required": true},
+            {"Name": "PositionLonDeg", "Type": "float", "Required": true},
+            {"Name": "PositionAltM", "Type": "float", "Required": true},
+            {"Name": "PositionCe", "Type": "float", "Required": true},
+            {"Name": "PositionLe", "Type": "float", "Required": true},
+            {"Name": "Targets", "Type": "array", "Required": false}
+          ]
+        }
+      }
+    },
+    "Event": {
+      "Cot": {
+        "ReceivedEvent": {
+          "Key": "ATAK.Event.Cot.ReceivedEvent",
+          "Description": "A CoT event was received and parsed.",
+          "Fields": [
+            {"Name": "Uid", "Type": "string", "Required": true},
+            {"Name": "Type", "Type": "string", "Required": true},
+            {"Name": "How", "Type": "string", "Required": true},
+            {"Name": "Callsign", "Type": "string", "Required": false},
+            {"Name": "Time", "Type": "string", "Required": true},
+            {"Name": "Start", "Type": "string", "Required": true},
+            {"Name": "Stale", "Type": "string", "Required": true},
+            {"Name": "PositionLatDeg", "Type": "float", "Required": true},
+            {"Name": "PositionLonDeg", "Type": "float", "Required": true},
+            {"Name": "PositionHaeM", "Type": "float", "Required": true},
+            {"Name": "PositionCe", "Type": "float", "Required": true},
+            {"Name": "PositionLe", "Type": "float", "Required": true},
+            {"Name": "DetailXml", "Type": "string", "Required": false},
+            {"Name": "SourceHost", "Type": "string", "Required": true},
+            {"Name": "SourcePort", "Type": "int", "Required": true}
+          ]
+        }
+      },
+      "Marker": {
+        "ReceivedMarker": {
+          "Key": "ATAK.Event.Marker.ReceivedMarker",
+          "Description": "A marker-like CoT event was received.",
+          "Fields": [
+            {"Name": "Uid", "Type": "string", "Required": true},
+            {"Name": "Callsign", "Type": "string", "Required": false},
+            {"Name": "CotType", "Type": "string", "Required": true},
+            {"Name": "PositionLatDeg", "Type": "float", "Required": true},
+            {"Name": "PositionLonDeg", "Type": "float", "Required": true},
+            {"Name": "PositionHaeM", "Type": "float", "Required": true},
+            {"Name": "PositionCe", "Type": "float", "Required": true},
+            {"Name": "PositionLe", "Type": "float", "Required": true}
+          ]
+        }
+      },
+      "GeoChat": {
+        "ReceivedGeoChat": {
+          "Key": "ATAK.Event.GeoChat.ReceivedGeoChat",
+          "Description": "A geochat CoT event was received.",
+          "Fields": [
+            {"Name": "Uid", "Type": "string", "Required": true},
+            {"Name": "FromCallsign", "Type": "string", "Required": false},
+            {"Name": "ToTeam", "Type": "string", "Required": false},
+            {"Name": "Message", "Type": "string", "Required": true}
+          ]
+        }
+      },
+      "System": {
+        "ParseError": {
+          "Key": "ATAK.Event.System.ParseError",
+          "Description": "Inbound CoT parse failure.",
+          "Fields": [{"Name": "Error", "Type": "string", "Required": true}]
+        }
+      }
+    }
+  }
+}

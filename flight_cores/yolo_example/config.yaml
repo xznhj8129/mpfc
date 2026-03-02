@@ -1,0 +1,33 @@
+my_name: yolo_demo
+core:
+  name: yolo_example
+  cfg:
+    id: yolo_core
+    poll_interval_s: 0.1
+    interface:
+      id: yolo
+      topic_ns: CV
+bus_config:
+  schema_path: ../../config/bus_topics_schema.json
+  log_file: hivebus.log
+  endpoint:
+    type: mqtt
+    host: 127.0.0.1
+    port: 1883
+plugins:
+- plugin: yolo_detector
+  cfg:
+    id: yolo
+    topic_ns: CV
+    source: "0" # video source — camera index, file path, or RTSP URL
+    weights: yolov8n.pt # YOLO weights — ultralytics will auto-download standard models
+    confidence: 0.25
+    imgsz: 640
+    device: auto
+    enable_tracking: false
+    loop_source: false
+    state_intervals:
+      detections: 0.1
+      detection_count: 0.2
+      model_ready: 1.0
+      inference_fps: 1.0

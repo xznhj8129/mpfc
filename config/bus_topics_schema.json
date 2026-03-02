@@ -1,0 +1,53 @@
+{
+  "template": {
+    "client": "Bus sender id",
+    "topic": "Full topic string for this payload",
+    "time": "Unix epoch milliseconds when the payload is issued",
+    "data": "Topic specific payload"
+  },
+  "topics": {
+    "CONTROL/<command>": {
+      "direction": "core <-> any",
+      "summary": "General inter-client configuration/parameter get topic",
+      "data": {}
+    },
+    "GET/<client_id>": {
+      "direction": "any <-> any",
+      "summary": "General inter-client configuration/parameter get topic",
+      "data": {}
+    },
+    "SET/<client_id>": {
+      "direction": "any <-> any",
+      "summary": "General inter-client configuration/parameter setting topic",
+      "data": {
+        "name": "value key (examples: rc_override, override_enabled, cv_cmd, guidance_enabled)",
+        "value": "value to set"
+      }
+    },
+    "<client_id>/<topic_ns>/REQUEST": {
+      "direction": "any -> interface",
+      "summary": "Requests for interface actions (actual runtime topic)",
+      "data": "JSON client defined"
+    },
+    "<client_id>/<topic_ns>/RESPONSE": {
+      "direction": "interface -> any",
+      "summary": "Responses for interface actions (actual runtime topic)",
+      "data": "JSON client defined"
+    },
+    "<client_id>/<topic_ns>/STATE/<field>": {
+      "direction": "interface/plugin -> any",
+      "summary": "Per-field state stream (actual runtime topic)",
+      "data": "Schema-shaped payload. Single-field states use named field objects (e.g. {\"IsArmed\": true}); multi-field states publish all named fields directly."
+    },
+    "<client_id>/<topic_ns>/EVENT/<field>": {
+      "direction": "interface/plugin -> any",
+      "summary": "Event stream for occurrence notifications (actual runtime topic)",
+      "data": "Schema-shaped event payload published immediately and not retained as latest state."
+    },
+    "DIAG/<client_id>/<topic_ns>": {
+      "direction": "broadcast",
+      "summary": "Diagnostics and health events, ie startup, crash, shutdown, errors",
+      "data": "JSON client defined"
+    }
+  }
+}

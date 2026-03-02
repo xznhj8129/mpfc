@@ -1,0 +1,88 @@
+my_name: uav1
+core:
+  name: example_msp
+  cfg:
+    id: example_msp_core
+    poll_interval_s: 0.1
+    print_interval_s: 1.0
+    state_timeout_s: 20.0
+    interface:
+      id: mspapi
+      topic_ns: UAV
+bus_config:
+  schema_path: ../../config/bus_topics_schema.json
+  log_file: hivebus.log
+  endpoint:
+    type: mqtt
+    host: 127.0.0.1
+    port: 1883
+plugins:
+- plugin: msp_interface
+  cfg:
+    id: mspapi
+    topic_ns: UAV
+    is_interface: true
+    is_datalink: false
+    conn_type: serial
+    conn_str: /dev/ttyACM0
+    conn_bitrate: 115200
+    state_poll_interval_s: 0.5
+    in_air_alt_threshold: 0.5
+    home_min_satellites: 6
+    takeoff_throttle: 1700
+    hover_throttle: 1500
+    landing_throttle: 1300
+    takeoff_timeout_s: 45.0
+    landing_timeout_s: 45.0
+    override_send_interval: 0.04
+    override_enabled: true
+    override_channels:
+      roll: roll
+      pitch: pitch
+      yaw: yaw
+      throt: throttle
+    override_initial_us:
+      roll: 1500
+      pitch: 1500
+      yaw: 1500
+      throt: 1000
+    go_to_waypoint:
+      WaypointIndex: 255
+      Action: 1
+      Param1: 0
+      Param2: 0
+      Param3: 0
+      Flag: 0
+    state_intervals:
+      IsInAir: 0.5
+      IsArmed: 0.5
+      IsHomePositionOk: 0.5
+      IsGlobalPositionOk: 0.5
+      AltitudeM: 0.5
+      Position: 0.5
+      FixType: 0.5
+      NumSat: 0.5
+      NavState: 0.5
+      GpsInfo: 0.5
+      RawGps: 0.5
+      AttitudeRad: 0.2
+      AngVelRadS: 0.2
+      Imu: 0.2
+      RcChannels: 0.2
+      RxConfig: 1.0
+      ChannelMap: 1.0
+      ModeRanges: 1.0
+      ActiveModes: 0.5
+      ActiveModeNames: 0.5
+      OverrideActive: 0.2
+      Failsafe: 0.2
+      Battery: 0.5
+      Analog: 0.5
+      SensorConfig: 1.0
+      FcConnected: 1.0
+      CpuLoad: 0.5
+      CycleTime: 0.5
+      FcInfo: 1.0
+      WaypointInfo: 1.0
+      GpsStatistics: 1.0
+      FlightMode: 0.2
