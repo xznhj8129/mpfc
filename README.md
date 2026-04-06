@@ -88,6 +88,42 @@ START_PX4_SITL=1 MY_NAME=uav1 MAV_PORT=14550 ./run_mav_example.sh
 PX4_GZ_WORLD=baylands START_PX4_SITL=1 QGC_MAVLINK_PORT=14551 ./run_mav_example.sh
 ```
 
+### Container Runtime
+
+Build a multi-arch image with Docker Buildx:
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64,linux/arm/v7 \
+  -t hiveos:latest .
+```
+
+For Raspberry Pi Zero 2 W and Raspberry Pi 4B, prefer a 64-bit OS and the `linux/arm64` image. Both boards are 64-bit capable. The `linux/arm/v7` build stays available for 32-bit Pi OS, but the Dockerfile intentionally skips MAVSDK and YOLO there because upstream `grpcio` / Torch support is not dependable on 32-bit ARM.
+
+Run the container with host networking so MQTT, MAVLink UDP, ATAK multicast, and HiveLink UDP behave like a native Linux service:
+
+```bash
+docker run --rm -it \
+  --network host \
+  -v /dev/bus/usb:/dev/bus/usb \
+  --device /dev/ttyUSB0 \
+  --device /dev/ttyACM0 \
+  --device /dev/serial0 \
+  --device /dev/gpiomem \
+  --device /dev/gpiochip0 \
+  --device /dev/gpiochip1 \
+  -e MAIN_CONFIG=/opt/hiveos/flight_cores/test_core/config.yaml \
+  -v "$PWD:/opt/hiveos" \
+  hiveos:latest
+```
+
+Notes:
+
+- `--network host` is the recommended Linux mode for MAVLink UDP, ATAK multicast, Meshtastic sidecars, and local GCS tools.
+- Add or remove `--device` flags to match your hardware. For cameras also pass `/dev/video0` or the specific V4L device.
+- If you use `config/mavlink-router/main.conf`, point `plugins/mavsdk_interface/config_template.yaml` or your runtime config at `udp://:14540`, because the bundled router forwards the FC stream to `127.0.0.1:14540`.
+- The image starts Mosquitto, `mavlink-routerd`, and `main.py` together by default. Set `HIVEOS_START_MOSQUITTO=0` or `HIVEOS_START_MAVLINK_ROUTER=0` only when you want to use host-managed services instead.
+
 ### MSP (iNav)
 
 ```bash

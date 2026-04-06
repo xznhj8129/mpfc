@@ -1,0 +1,17 @@
+[Unit]
+Description=HiveOS Supervisor
+Wants=network-online.target mosquitto.service mavlink-router.service
+After=network-online.target mosquitto.service mavlink-router.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hiveos
+EnvironmentFile=-/etc/default/hiveos
+ExecStart=/usr/bin/env python3 /opt/hiveos/main.py
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

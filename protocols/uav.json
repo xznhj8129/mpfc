@@ -8,101 +8,253 @@
         "IsInAir": {
           "Key": "UAV.State.Flight.IsInAir",
           "Description": "Vehicle in-air state.",
-          "Fields": [{"Name": "IsInAir", "Type": "bool", "Required": true}]
+          "Fields": [
+            {
+              "Name": "IsInAir",
+              "Type": "bool",
+              "Required": true
+            }
+          ]
         },
         "IsArmed": {
           "Key": "UAV.State.Flight.IsArmed",
           "Description": "Vehicle armed state.",
-          "Fields": [{"Name": "IsArmed", "Type": "bool", "Required": true}]
+          "Fields": [
+            {
+              "Name": "IsArmed",
+              "Type": "bool",
+              "Required": true
+            }
+          ]
         },
         "OverrideActive": {
           "Key": "UAV.State.Flight.OverrideActive",
           "Description": "Manual/RC override currently active at FC.",
-          "Fields": [{"Name": "OverrideActive", "Type": "bool", "Required": true}]
+          "Fields": [
+            {
+              "Name": "OverrideActive",
+              "Type": "bool",
+              "Required": true
+            }
+          ]
         },
         "Failsafe": {
           "Key": "UAV.State.Flight.Failsafe",
           "Description": "Failsafe state.",
-          "Fields": [{"Name": "Failsafe", "Type": "bool", "Required": true}]
+          "Fields": [
+            {
+              "Name": "Failsafe",
+              "Type": "bool",
+              "Required": true
+            }
+          ]
         },
         "ActiveModes": {
           "Key": "UAV.State.Flight.ActiveModes",
           "Description": "Raw active mode identifiers.",
-          "Fields": [{"Name": "ActiveModes", "Type": "array", "Required": true}]
+          "Fields": [
+            {
+              "Name": "ActiveModes",
+              "Type": "array",
+              "Required": true
+            }
+          ]
         },
         "ActiveModeNames": {
           "Key": "UAV.State.Flight.ActiveModeNames",
           "Description": "Human-readable active mode names.",
-          "Fields": [{"Name": "ActiveModeNames", "Type": "array", "Required": true}]
+          "Fields": [
+            {
+              "Name": "ActiveModeNames",
+              "Type": "array",
+              "Required": true
+            }
+          ]
         }
       },
       "Navigation": {
         "IsHomePositionOk": {
           "Key": "UAV.State.Navigation.IsHomePositionOk",
           "Description": "Home position validity.",
-          "Fields": [{"Name": "IsHomePositionOk", "Type": "bool", "Required": true}]
+          "Fields": [
+            {
+              "Name": "IsHomePositionOk",
+              "Type": "bool",
+              "Required": true
+            }
+          ]
         },
         "IsGlobalPositionOk": {
           "Key": "UAV.State.Navigation.IsGlobalPositionOk",
           "Description": "Global position validity.",
-          "Fields": [{"Name": "IsGlobalPositionOk", "Type": "bool", "Required": true}]
+          "Fields": [
+            {
+              "Name": "IsGlobalPositionOk",
+              "Type": "bool",
+              "Required": true
+            }
+          ]
         },
         "AltitudeM": {
           "Key": "UAV.State.Navigation.AltitudeM",
           "Description": "Altitude in meters.",
-          "Fields": [{"Name": "AltitudeM", "Type": "float", "Required": true}]
+          "Fields": [
+            {
+              "Name": "AltitudeM",
+              "Type": "float",
+              "Required": true
+            }
+          ]
         },
         "Position": {
           "Key": "UAV.State.Navigation.Position",
           "Description": "Current geographic position.",
           "Fields": [
-            {"Name": "LatDeg", "Type": "float", "Required": true},
-            {"Name": "LonDeg", "Type": "float", "Required": true},
-            {"Name": "AbsAltM", "Type": "float", "Required": true},
-            {"Name": "RelAltM", "Type": "float", "Required": true}
+            {
+              "Name": "LatDeg",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "LonDeg",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "AbsAltM",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "RelAltM",
+              "Type": "float",
+              "Required": true
+            }
           ]
         },
         "FixType": {
           "Key": "UAV.State.Navigation.FixType",
           "Description": "GNSS fix quality code.",
-          "Fields": [{"Name": "FixType", "Type": "int", "Required": true}]
+          "Fields": [
+            {
+              "Name": "FixType",
+              "Type": "int",
+              "Required": true
+            }
+          ]
         },
         "NumSat": {
           "Key": "UAV.State.Navigation.NumSat",
           "Description": "GNSS satellites used.",
-          "Fields": [{"Name": "NumSat", "Type": "int", "Required": true}]
+          "Fields": [
+            {
+              "Name": "NumSat",
+              "Type": "int",
+              "Required": true
+            }
+          ]
         },
         "NavState": {
           "Key": "UAV.State.Navigation.NavState",
           "Description": "Navigation state code.",
-          "Fields": [{"Name": "NavState", "Type": "int", "Required": true}]
+          "Fields": [
+            {
+              "Name": "NavState",
+              "Type": "int",
+              "Required": true
+            }
+          ]
         },
         "GpsInfo": {
           "Key": "UAV.State.Navigation.GpsInfo",
           "Description": "Extended GNSS status.",
           "Fields": [
-            {"Name": "FixType", "Type": "int", "Required": true},
-            {"Name": "NumSat", "Type": "int", "Required": true},
-            {"Name": "lastMessageDt", "Type": "float", "Required": false},
-            {"Name": "errors", "Type": "float", "Required": false},
-            {"Name": "timeouts", "Type": "float", "Required": false},
-            {"Name": "hdop", "Type": "float", "Required": false},
-            {"Name": "eph", "Type": "float", "Required": false},
-            {"Name": "epv", "Type": "float", "Required": false}
+            {
+              "Name": "FixType",
+              "Type": "int",
+              "Required": true
+            },
+            {
+              "Name": "NumSat",
+              "Type": "int",
+              "Required": true
+            },
+            {
+              "Name": "lastMessageDt",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "errors",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "timeouts",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "hdop",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "eph",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "epv",
+              "Type": "float",
+              "Required": false
+            }
           ]
         },
         "RawGps": {
           "Key": "UAV.State.Navigation.RawGps",
           "Description": "Raw GNSS position/fix sample.",
           "Fields": [
-            {"Name": "LatDeg", "Type": "float", "Required": true},
-            {"Name": "LonDeg", "Type": "float", "Required": true},
-            {"Name": "AbsAltM", "Type": "float", "Required": true},
-            {"Name": "GroundSpeedMS", "Type": "float", "Required": false},
-            {"Name": "GroundCourseDeg", "Type": "float", "Required": false},
-            {"Name": "Hdop", "Type": "float", "Required": false},
-            {"Name": "Vdop", "Type": "float", "Required": false},
-            {"Name": "YawDeg", "Type": "float", "Required": false}
+            {
+              "Name": "LatDeg",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "LonDeg",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "AbsAltM",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "GroundSpeedMS",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "GroundCourseDeg",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "Hdop",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "Vdop",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "YawDeg",
+              "Type": "float",
+              "Required": false
+            }
           ]
         }
       },
@@ -111,18 +263,42 @@
           "Key": "UAV.State.Attitude.AttitudeRad",
           "Description": "Euler attitude in radians.",
           "Fields": [
-            {"Name": "Roll", "Type": "float", "Required": true},
-            {"Name": "Pitch", "Type": "float", "Required": true},
-            {"Name": "Yaw", "Type": "float", "Required": true}
+            {
+              "Name": "Roll",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "Pitch",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "Yaw",
+              "Type": "float",
+              "Required": true
+            }
           ]
         },
         "AngVelRadS": {
           "Key": "UAV.State.Attitude.AngVelRadS",
           "Description": "Angular velocity in rad/s.",
           "Fields": [
-            {"Name": "X", "Type": "float", "Required": true},
-            {"Name": "Y", "Type": "float", "Required": true},
-            {"Name": "Z", "Type": "float", "Required": true}
+            {
+              "Name": "X",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "Y",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "Z",
+              "Type": "float",
+              "Required": true
+            }
           ]
         }
       },
@@ -131,31 +307,107 @@
           "Key": "UAV.State.Sensor.Imu",
           "Description": "IMU sample containing accel/gyro/mag vectors.",
           "Fields": [
-            {"Name": "AccelX", "Type": "float", "Required": true},
-            {"Name": "AccelY", "Type": "float", "Required": true},
-            {"Name": "AccelZ", "Type": "float", "Required": true},
-            {"Name": "GyroRadSX", "Type": "float", "Required": true},
-            {"Name": "GyroRadSY", "Type": "float", "Required": true},
-            {"Name": "GyroRadSZ", "Type": "float", "Required": true},
-            {"Name": "MagX", "Type": "float", "Required": true},
-            {"Name": "MagY", "Type": "float", "Required": true},
-            {"Name": "MagZ", "Type": "float", "Required": true},
-            {"Name": "TemperatureDegC", "Type": "float", "Required": false},
-            {"Name": "TimestampUs", "Type": "int", "Required": false},
-            {"Name": "Frame", "Type": "string", "Required": false}
+            {
+              "Name": "AccelX",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "AccelY",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "AccelZ",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "GyroRadSX",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "GyroRadSY",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "GyroRadSZ",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "MagX",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "MagY",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "MagZ",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "TemperatureDegC",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "TimestampUs",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "Frame",
+              "Type": "string",
+              "Required": false
+            }
           ]
         },
         "SensorConfig": {
           "Key": "UAV.State.Sensor.SensorConfig",
           "Description": "FC sensor presence/configuration and readiness.",
           "Fields": [
-            {"Name": "GyroOk", "Type": "bool", "Required": false},
-            {"Name": "AccelOk", "Type": "bool", "Required": false},
-            {"Name": "MagOk", "Type": "bool", "Required": false},
-            {"Name": "LocalPositionOk", "Type": "bool", "Required": false},
-            {"Name": "GlobalPositionOk", "Type": "bool", "Required": false},
-            {"Name": "HomePositionOk", "Type": "bool", "Required": false},
-            {"Name": "Armable", "Type": "bool", "Required": false}
+            {
+              "Name": "GyroOk",
+              "Type": "bool",
+              "Required": false
+            },
+            {
+              "Name": "AccelOk",
+              "Type": "bool",
+              "Required": false
+            },
+            {
+              "Name": "MagOk",
+              "Type": "bool",
+              "Required": false
+            },
+            {
+              "Name": "LocalPositionOk",
+              "Type": "bool",
+              "Required": false
+            },
+            {
+              "Name": "GlobalPositionOk",
+              "Type": "bool",
+              "Required": false
+            },
+            {
+              "Name": "HomePositionOk",
+              "Type": "bool",
+              "Required": false
+            },
+            {
+              "Name": "Armable",
+              "Type": "bool",
+              "Required": false
+            }
           ]
         }
       },
@@ -164,31 +416,107 @@
           "Key": "UAV.State.Power.Battery",
           "Description": "Battery status and estimates.",
           "Fields": [
-            {"Name": "VoltageV", "Type": "float", "Required": false},
-            {"Name": "CurrentA", "Type": "float", "Required": false},
-            {"Name": "PowerW", "Type": "float", "Required": false},
-            {"Name": "ConsumedMah", "Type": "float", "Required": false},
-            {"Name": "ConsumedMWh", "Type": "float", "Required": false},
-            {"Name": "ConsumedAh", "Type": "float", "Required": false},
-            {"Name": "RemainingPct", "Type": "float", "Required": false},
-            {"Name": "RemainingCapacity", "Type": "float", "Required": false},
-            {"Name": "TemperatureDegC", "Type": "float", "Required": false},
-            {"Name": "BatteryId", "Type": "int", "Required": false},
-            {"Name": "Rssi", "Type": "float", "Required": false}
+            {
+              "Name": "VoltageV",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "CurrentA",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "PowerW",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "ConsumedMah",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "ConsumedMWh",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "ConsumedAh",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "RemainingPct",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "RemainingCapacity",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "TemperatureDegC",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "BatteryId",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "Rssi",
+              "Type": "float",
+              "Required": false
+            }
           ]
         },
         "Analog": {
           "Key": "UAV.State.Power.Analog",
           "Description": "Analog telemetry values.",
           "Fields": [
-            {"Name": "vbat", "Type": "float", "Required": false},
-            {"Name": "amperage", "Type": "float", "Required": false},
-            {"Name": "powerDraw", "Type": "float", "Required": false},
-            {"Name": "mAhDrawn", "Type": "float", "Required": false},
-            {"Name": "mWhDrawn", "Type": "float", "Required": false},
-            {"Name": "percentageRemaining", "Type": "float", "Required": false},
-            {"Name": "remainingCapacity", "Type": "float", "Required": false},
-            {"Name": "rssi", "Type": "float", "Required": false}
+            {
+              "Name": "vbat",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "amperage",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "powerDraw",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "mAhDrawn",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "mWhDrawn",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "percentageRemaining",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "remainingCapacity",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "rssi",
+              "Type": "float",
+              "Required": false
+            }
           ]
         }
       },
@@ -196,92 +524,250 @@
         "RcChannels": {
           "Key": "UAV.State.Control.RcChannels",
           "Description": "Normalized or PWM RC channel snapshot.",
-          "Fields": [{"Name": "RcChannels", "Type": "array", "Required": true}]
+          "Fields": [
+            {
+              "Name": "RcChannels",
+              "Type": "array",
+              "Required": true
+            }
+          ]
         },
         "RxConfig": {
           "Key": "UAV.State.Control.RxConfig",
           "Description": "Receiver configuration.",
           "Fields": [
-            {"Name": "rxMinUsec", "Type": "int", "Required": false},
-            {"Name": "rxMaxUsec", "Type": "int", "Required": false},
-            {"Name": "rxCenterUsec", "Type": "int", "Required": false}
+            {
+              "Name": "rxMinUsec",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "rxMaxUsec",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "rxCenterUsec",
+              "Type": "int",
+              "Required": false
+            }
           ]
         },
         "ChannelMap": {
           "Key": "UAV.State.Control.ChannelMap",
           "Description": "Channel mapping metadata.",
-          "Fields": [{"Name": "ChannelMap", "Type": "array", "Required": true}]
+          "Fields": [
+            {
+              "Name": "ChannelMap",
+              "Type": "array",
+              "Required": true
+            }
+          ]
         },
         "ModeRanges": {
           "Key": "UAV.State.Control.ModeRanges",
           "Description": "Mode range/switch configuration.",
-          "Fields": [{"Name": "ModeRanges", "Type": "array", "Required": true}]
+          "Fields": [
+            {
+              "Name": "ModeRanges",
+              "Type": "array",
+              "Required": true
+            }
+          ]
         }
       },
       "System": {
         "FcConnected": {
           "Key": "UAV.State.System.FcConnected",
           "Description": "Flight-controller connectivity state.",
-          "Fields": [{"Name": "FcConnected", "Type": "bool", "Required": true}]
+          "Fields": [
+            {
+              "Name": "FcConnected",
+              "Type": "bool",
+              "Required": true
+            }
+          ]
         },
         "CpuLoad": {
           "Key": "UAV.State.System.CpuLoad",
           "Description": "FC CPU load indicator.",
-          "Fields": [{"Name": "CpuLoad", "Type": "int", "Required": true}]
+          "Fields": [
+            {
+              "Name": "CpuLoad",
+              "Type": "int",
+              "Required": true
+            }
+          ]
         },
         "CycleTime": {
           "Key": "UAV.State.System.CycleTime",
           "Description": "FC main loop cycle time.",
-          "Fields": [{"Name": "CycleTime", "Type": "int", "Required": true}]
+          "Fields": [
+            {
+              "Name": "CycleTime",
+              "Type": "int",
+              "Required": true
+            }
+          ]
         },
         "FcInfo": {
           "Key": "UAV.State.System.FcInfo",
           "Description": "FC identity/version/build metadata.",
           "Fields": [
-            {"Name": "ApiVersion", "Type": "string", "Required": false},
-            {"Name": "FcVariant", "Type": "string", "Required": false},
-            {"Name": "BoardInfo", "Type": "string", "Required": false},
-            {"Name": "HardwareUid", "Type": "string", "Required": false},
-            {"Name": "LegacyUid", "Type": "string", "Required": false},
-            {"Name": "VendorId", "Type": "int", "Required": false},
-            {"Name": "VendorName", "Type": "string", "Required": false},
-            {"Name": "ProductId", "Type": "int", "Required": false},
-            {"Name": "ProductName", "Type": "string", "Required": false},
-            {"Name": "FlightSwMajor", "Type": "int", "Required": false},
-            {"Name": "FlightSwMinor", "Type": "int", "Required": false},
-            {"Name": "FlightSwPatch", "Type": "int", "Required": false},
-            {"Name": "FlightSwGitHash", "Type": "string", "Required": false},
-            {"Name": "OsSwMajor", "Type": "int", "Required": false},
-            {"Name": "OsSwMinor", "Type": "int", "Required": false},
-            {"Name": "OsSwPatch", "Type": "int", "Required": false},
-            {"Name": "OsSwGitHash", "Type": "string", "Required": false}
+            {
+              "Name": "ApiVersion",
+              "Type": "string",
+              "Required": false
+            },
+            {
+              "Name": "FcVariant",
+              "Type": "string",
+              "Required": false
+            },
+            {
+              "Name": "BoardInfo",
+              "Type": "string",
+              "Required": false
+            },
+            {
+              "Name": "HardwareUid",
+              "Type": "string",
+              "Required": false
+            },
+            {
+              "Name": "LegacyUid",
+              "Type": "string",
+              "Required": false
+            },
+            {
+              "Name": "VendorId",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "VendorName",
+              "Type": "string",
+              "Required": false
+            },
+            {
+              "Name": "ProductId",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "ProductName",
+              "Type": "string",
+              "Required": false
+            },
+            {
+              "Name": "FlightSwMajor",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "FlightSwMinor",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "FlightSwPatch",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "FlightSwGitHash",
+              "Type": "string",
+              "Required": false
+            },
+            {
+              "Name": "OsSwMajor",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "OsSwMinor",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "OsSwPatch",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "OsSwGitHash",
+              "Type": "string",
+              "Required": false
+            }
           ]
         },
         "WaypointInfo": {
           "Key": "UAV.State.System.WaypointInfo",
           "Description": "Waypoint mission metadata.",
           "Fields": [
-            {"Name": "WaypointCount", "Type": "int", "Required": false},
-            {"Name": "CurrentWaypointIndex", "Type": "int", "Required": false},
-            {"Name": "MissionValid", "Type": "bool", "Required": false}
+            {
+              "Name": "WaypointCount",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "CurrentWaypointIndex",
+              "Type": "int",
+              "Required": false
+            },
+            {
+              "Name": "MissionValid",
+              "Type": "bool",
+              "Required": false
+            }
           ]
         },
         "GpsStatistics": {
           "Key": "UAV.State.System.GpsStatistics",
           "Description": "Aggregated GNSS statistics.",
           "Fields": [
-            {"Name": "lastMessageDt", "Type": "float", "Required": false},
-            {"Name": "errors", "Type": "float", "Required": false},
-            {"Name": "timeouts", "Type": "float", "Required": false},
-            {"Name": "hdop", "Type": "float", "Required": false},
-            {"Name": "eph", "Type": "float", "Required": false},
-            {"Name": "epv", "Type": "float", "Required": false}
+            {
+              "Name": "lastMessageDt",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "errors",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "timeouts",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "hdop",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "eph",
+              "Type": "float",
+              "Required": false
+            },
+            {
+              "Name": "epv",
+              "Type": "float",
+              "Required": false
+            }
           ]
         },
         "FlightMode": {
           "Key": "UAV.State.System.FlightMode",
           "Description": "Primary FC mode label.",
-          "Fields": [{"Name": "FlightMode", "Type": "string", "Required": true}]
+          "Fields": [
+            {
+              "Name": "FlightMode",
+              "Type": "string",
+              "Required": true
+            }
+          ]
         }
       }
     },
@@ -300,7 +786,13 @@
         "SetTakeoffAltitude": {
           "Key": "UAV.Action.Flight.SetTakeoffAltitude",
           "Description": "Set autonomous takeoff target altitude.",
-          "Fields": [{"Name": "AltitudeM", "Type": "float", "Required": true}]
+          "Fields": [
+            {
+              "Name": "AltitudeM",
+              "Type": "float",
+              "Required": true
+            }
+          ]
         },
         "Takeoff": {
           "Key": "UAV.Action.Flight.Takeoff",
@@ -321,8 +813,16 @@
           "Key": "UAV.Action.Flight.SetMode",
           "Description": "Enable/disable named flight mode.",
           "Fields": [
-            {"Name": "Mode", "Type": "string", "Required": true},
-            {"Name": "Enabled", "Type": "bool", "Required": true}
+            {
+              "Name": "Mode",
+              "Type": "string",
+              "Required": true
+            },
+            {
+              "Name": "Enabled",
+              "Type": "bool",
+              "Required": true
+            }
           ]
         }
       },
@@ -331,31 +831,89 @@
           "Key": "UAV.Action.Navigation.GoTo",
           "Description": "Go to geographic waypoint.",
           "Fields": [
-            {"Name": "Latitude", "Type": "float", "Required": true},
-            {"Name": "Longitude", "Type": "float", "Required": true},
-            {"Name": "AltitudeM", "Type": "float", "Required": true},
-            {"Name": "YawDeg", "Type": "float", "Required": true}
+            {
+              "Name": "Latitude",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "Longitude",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "AltitudeM",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "YawDeg",
+              "Type": "float",
+              "Required": true
+            }
           ]
         },
         "SetWaypoint": {
           "Key": "UAV.Action.Navigation.SetWaypoint",
           "Description": "Write waypoint entry to FC mission table.",
           "Fields": [
-            {"Name": "WaypointIndex", "Type": "int", "Required": true},
-            {"Name": "Action", "Type": "int", "Required": true},
-            {"Name": "Latitude", "Type": "float", "Required": true},
-            {"Name": "Longitude", "Type": "float", "Required": true},
-            {"Name": "AltitudeM", "Type": "float", "Required": true},
-            {"Name": "Param1", "Type": "int", "Required": true},
-            {"Name": "Param2", "Type": "int", "Required": true},
-            {"Name": "Param3", "Type": "int", "Required": true},
-            {"Name": "Flag", "Type": "int", "Required": true}
+            {
+              "Name": "WaypointIndex",
+              "Type": "int",
+              "Required": true
+            },
+            {
+              "Name": "Action",
+              "Type": "int",
+              "Required": true
+            },
+            {
+              "Name": "Latitude",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "Longitude",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "AltitudeM",
+              "Type": "float",
+              "Required": true
+            },
+            {
+              "Name": "Param1",
+              "Type": "int",
+              "Required": true
+            },
+            {
+              "Name": "Param2",
+              "Type": "int",
+              "Required": true
+            },
+            {
+              "Name": "Param3",
+              "Type": "int",
+              "Required": true
+            },
+            {
+              "Name": "Flag",
+              "Type": "int",
+              "Required": true
+            }
           ]
         },
         "SelectMission": {
           "Key": "UAV.Action.Navigation.SelectMission",
           "Description": "Set mission sequence index.",
-          "Fields": [{"Name": "Sequence", "Type": "int", "Required": true}]
+          "Fields": [
+            {
+              "Name": "Sequence",
+              "Type": "int",
+              "Required": true
+            }
+          ]
         }
       }
     },
@@ -374,7 +932,13 @@
         "TakeoffDetected": {
           "Key": "UAV.Event.Flight.TakeoffDetected",
           "Description": "Vehicle detected as airborne.",
-          "Fields": [{"Name": "AltitudeM", "Type": "float", "Required": true}]
+          "Fields": [
+            {
+              "Name": "AltitudeM",
+              "Type": "float",
+              "Required": true
+            }
+          ]
         },
         "Landed": {
           "Key": "UAV.Event.Flight.Landed",
@@ -384,14 +948,26 @@
         "FailsafeChanged": {
           "Key": "UAV.Event.Flight.FailsafeChanged",
           "Description": "Failsafe state transition.",
-          "Fields": [{"Name": "Failsafe", "Type": "bool", "Required": true}]
+          "Fields": [
+            {
+              "Name": "Failsafe",
+              "Type": "bool",
+              "Required": true
+            }
+          ]
         }
       },
       "Mission": {
         "Aborted": {
           "Key": "UAV.Event.Mission.Aborted",
           "Description": "Mission abort event.",
-          "Fields": [{"Name": "Reason", "Type": "string", "Required": true}]
+          "Fields": [
+            {
+              "Name": "Reason",
+              "Type": "string",
+              "Required": true
+            }
+          ]
         },
         "Completed": {
           "Key": "UAV.Event.Mission.Completed",

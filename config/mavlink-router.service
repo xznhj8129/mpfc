@@ -1,0 +1,16 @@
+[Unit]
+Description=HiveOS MAVLink Router
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/mavlink-router
+ExecStart=/usr/bin/env mavlink-routerd -c /etc/mavlink-router/main.conf
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

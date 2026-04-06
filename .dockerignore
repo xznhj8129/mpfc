@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+.claude
+.notes
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+logs
+LICENSE
+

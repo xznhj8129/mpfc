@@ -1,0 +1,21 @@
+[Unit]
+Description=HiveOS Docker Runtime
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+Requires=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hiveos
+ExecStart=/opt/hiveos/scripts/hiveos_docker_ctl.sh start
+ExecStop=/opt/hiveos/scripts/hiveos_docker_ctl.sh stop
+Restart=always
+RestartSec=2
+TimeoutStartSec=0
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
