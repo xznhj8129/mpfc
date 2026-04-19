@@ -76,6 +76,7 @@ class MavsdkInterface(PluginBase):
         self.shutdown_requested = False
         self.last_abs_alt_m: float | None = None
         self.last_rel_alt_m: float | None = None
+        self.sensor_config: Dict[str, Any] = {}
 
     def _override_is_fresh(self) -> bool:  # Check whether the last control override is fresh enough to apply.
         if not self.control_override:
@@ -194,8 +195,8 @@ class MavsdkInterface(PluginBase):
             # [is_gyrometer_calibration_ok: True, is_accelerometer_calibration_ok: True, is_magnetometer_calibration_ok: True, is_local_position_ok: True, is_global_position_ok: True, is_home_position_ok: True, is_armable: True]
             self._update_state(UAV.State.Navigation.IsHomePositionOk, bool(health.is_home_position_ok))
             self._update_state(UAV.State.Navigation.IsGlobalPositionOk, bool(health.is_global_position_ok))
-            self._update_state(
-                UAV.State.Sensor.SensorConfig,
+            sensor_config = dict(self.sensor_config)
+            sensor_config.update(
                 {
                     "GyroOk": bool(health.is_gyrometer_calibration_ok),
                     "AccelOk": bool(health.is_accelerometer_calibration_ok),
@@ -204,8 +205,29 @@ class MavsdkInterface(PluginBase):
                     "GlobalPositionOk": bool(health.is_global_position_ok),
                     "HomePositionOk": bool(health.is_home_position_ok),
                     "Armable": bool(health.is_armable),
-                },
+                }
             )
+            self.sensor_config = sensor_config
+            self._update_state(
+                UAV.State.Sensor.SensorConfig,
+                sensor_config,
+            )
+            if self.stop_event.is_set():
+                return
+
+    async def _watch_status_text(self) -> None:  # Watch FC status text for ArduPilot EKF readiness.
+        async for status_text in self.drone.telemetry.status_text():
+            text = status_text.text
+            if " is using GPS" not in text:
+                if self.stop_event.is_set():
+                    return
+                continue
+            sensor_config = dict(self.sensor_config)
+            if not sensor_config.get("EkfUsingGps"):
+                print(f"[PLUGIN] {self.client_id} ardupilot_status_text text={text}", flush=True)
+            sensor_config["EkfUsingGps"] = True
+            self.sensor_config = sensor_config
+            self._update_state(UAV.State.Sensor.SensorConfig, sensor_config)
             if self.stop_event.is_set():
                 return
 
@@ -414,6 +436,7 @@ class MavsdkInterface(PluginBase):
             asyncio.create_task(self._watch_in_air()),
             asyncio.create_task(self._watch_armed()),
             asyncio.create_task(self._watch_health()),
+            asyncio.create_task(self._watch_status_text()),
             asyncio.create_task(self._watch_position()),
             asyncio.create_task(self._watch_attitude()),
             asyncio.create_task(self._watch_angular_velocity()),

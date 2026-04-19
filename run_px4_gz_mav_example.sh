@@ -11,7 +11,7 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 # Hive run settings.
-MAV_MAIN_CONFIG="${MAV_MAIN_CONFIG:-flight_cores/test_takeoff_land/config.yaml}"
+MAV_MAIN_CONFIG="${MAV_MAIN_CONFIG:-flight_cores/test_takeoff_land/config_px4.yaml}"
 MY_NAME="${MY_NAME:-uav1}"
 MAV_PORT="${MAV_PORT:-14550}"
 

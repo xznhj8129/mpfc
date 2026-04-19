@@ -1,0 +1,11 @@
+plugin: uav_controller
+cfg:
+  id: uav_controller
+  topic_ns: UAV
+  is_controller: true
+  poll_interval_s: 0.1
+  response_timeout_s: 20.0
+  arm_ready_hold_s: 0.0
+  ardupilot_arm_ready_hold_s: 5.0
+  takeoff_ready_hold_s: 0.0
+  ardupilot_takeoff_ready_hold_s: 0.0

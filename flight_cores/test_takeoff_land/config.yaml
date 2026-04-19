@@ -1,8 +1,12 @@
 my_name: uav1
+vehicle:
+  autopilot: FCAutopilotType.Ardupilot
+  uav_type: UAVType.Copter
+  telem_type: TelemType.Mavlink2
 core:
   name: test_takeoff_land
   cfg:
-    id: px4_core
+    id: mav_core
     mav_port: 14550
     takeoff_altitude_m: 10.0
     takeoff_altitude_ok_fraction: 0.8
@@ -28,6 +32,8 @@ core:
     - IsInAir
     - AltitudeM
     - Position
+    - SensorConfig
+    - ActiveModeNames
     state_logging:
       keys:
       - IsInAir
@@ -43,6 +49,12 @@ bus_config:
     host: 127.0.0.1
     port: 1883
 plugins:
+- plugin: uav_controller
+  cfg:
+    id: uav_controller
+    topic_ns: UAV
+    poll_interval_s: 0.1
+    response_timeout_s: 20.0
 - plugin: mavsdk_interface
   cfg:
     id: mavsdk

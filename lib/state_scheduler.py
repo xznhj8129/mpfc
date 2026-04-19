@@ -18,8 +18,8 @@ class StateScheduler:
         self.intervals: Dict[str, float] = {}
         self.last_sent: Dict[str, float] = {}
         for key, entry in topics.items():
-            topic = entry.get("topic")
-            interval_s = float(entry.get("interval_s"))
+            topic = entry["topic"]
+            interval_s = float(entry["interval_s"])
             if not topic:
                 raise RuntimeError(f"missing topic for state key {key}")
             if interval_s <= 0:

@@ -19,9 +19,12 @@ from typing import Any, Dict, List
 
 from lib.common import CONTROL_SHUTDOWN_TOPIC, build_envelope, connect_bus_client, load_config
 from lib.mqtt_bus_client import MqttPublishError
+from protocols.namespace_loader import load_protocol_namespace
 
 CONFIG_ENV = "MAIN_CONFIG"
 PLACEHOLDER_RE = re.compile(r"<([A-Za-z0-9_]+)>")
+ENUM_TOKEN_RE = re.compile(r"[^A-Za-z0-9]+")
+UAV = load_protocol_namespace("uav")
 
 
 def parse_runtime_overrides(argv: list[str]) -> Dict[str, str]:  # Parse `--key=value` CLI overrides.
@@ -124,6 +127,110 @@ def apply_plugin_config_templates(config: Dict[str, Any], repo_root: Path) -> No
     config["plugins"] = merged_plugins
 
 
+def normalize_enum_token(value: str) -> str:  # Normalize enum-like config token for loose matching.
+    return ENUM_TOKEN_RE.sub("", value).upper()
+
+
+def resolve_enum_value(raw_value: Any, enum_name: str, enum_values: Any) -> str:  # Resolve YAML enum-like string to canonical schema member.
+    if type(raw_value) is not str:
+        raise RuntimeError(f"invalid enum value type enum={enum_name} type={type(raw_value).__name__}")
+    token = raw_value.strip()
+    if "." in token:
+        prefix, member = token.split(".", 1)
+        if normalize_enum_token(prefix) != normalize_enum_token(enum_name):
+            raise RuntimeError(f"invalid enum prefix enum={enum_name} value={raw_value}")
+        token = member
+    normalized = normalize_enum_token(token)
+    members = vars(enum_values)
+    for member in members:
+        if normalize_enum_token(member) == normalized:
+            return member
+    raise RuntimeError(f"unknown enum value enum={enum_name} value={raw_value}")
+
+
+def resolve_enum_list(raw_values: Any, enum_name: str, enum_values: Any) -> list[str]:  # Resolve list of enum-like strings.
+    if type(raw_values) is not list:
+        raise RuntimeError(f"invalid enum list type enum={enum_name} type={type(raw_values).__name__}")
+    return [resolve_enum_value(raw_value, enum_name, enum_values) for raw_value in raw_values]
+
+
+def resolve_vehicle_config(config: Dict[str, Any]) -> Dict[str, str] | None:  # Resolve and validate runtime vehicle selection config.
+    vehicle = config.get("vehicle")
+    if vehicle is None:
+        return None
+    if type(vehicle) is not dict:
+        raise RuntimeError(f"invalid vehicle config type {type(vehicle).__name__}")
+    vehicle["autopilot"] = resolve_enum_value(vehicle["autopilot"], "FCAutopilotType", UAV.Enums.FCAutopilotType)
+    vehicle["uav_type"] = resolve_enum_value(vehicle["uav_type"], "UAVType", UAV.Enums.UAVType)
+    vehicle["telem_type"] = resolve_enum_value(vehicle["telem_type"], "TelemType", UAV.Enums.TelemType)
+    return vehicle
+
+
+def resolve_plugin_supports(config: Dict[str, Any]) -> None:  # Resolve plugin backend selector metadata against UAV enums.
+    for plugin_entry in config["plugins"]:
+        plugin_cfg = plugin_entry["cfg"]
+        supports = plugin_cfg.get("supports")
+        if supports is None:
+            continue
+        if type(supports) is not dict:
+            raise RuntimeError(f"invalid supports config type plugin={plugin_entry['plugin']} type={type(supports).__name__}")
+        supports["autopilot"] = resolve_enum_list(supports["autopilot"], "FCAutopilotType", UAV.Enums.FCAutopilotType)
+        supports["telem_type"] = resolve_enum_list(supports["telem_type"], "TelemType", UAV.Enums.TelemType)
+
+
+def plugin_supports_vehicle(plugin_cfg: Dict[str, Any], vehicle: Dict[str, str]) -> bool:  # Check whether plugin selector metadata matches vehicle config.
+    supports = plugin_cfg.get("supports")
+    if type(supports) is not dict:
+        return False
+    return vehicle["autopilot"] in supports["autopilot"] and vehicle["telem_type"] in supports["telem_type"]
+
+
+def configure_runtime_plugins(config: Dict[str, Any], vehicle: Dict[str, str] | None) -> None:  # Bind core to controller/backend plugins after template merge and enum resolution.
+    plugins_raw = config["plugins"]
+    core_cfg = config["core"]["cfg"]
+    if vehicle is not None:
+        core_cfg["vehicle"] = dict(vehicle)
+    controller_plugins = [entry for entry in plugins_raw if entry.get("cfg", {}).get("is_controller")]
+    if len(controller_plugins) > 1:
+        raise RuntimeError(f"multiple controller plugins configured count={len(controller_plugins)}")
+    if controller_plugins:
+        if vehicle is None:
+            raise RuntimeError("vehicle config required when is_controller=true")
+        controller_cfg = controller_plugins[0]["cfg"]
+        matching_backends = [
+            entry
+            for entry in plugins_raw
+            if entry.get("cfg", {}).get("is_interface")
+            and entry["cfg"].get("topic_ns") == controller_cfg["topic_ns"]
+            and plugin_supports_vehicle(entry["cfg"], vehicle)
+        ]
+        if len(matching_backends) != 1:
+            backend_names = [entry["plugin"] for entry in matching_backends]
+            raise RuntimeError(
+                f"expected exactly one backend interface match autopilot={vehicle['autopilot']} "
+                f"telem_type={vehicle['telem_type']} matches={backend_names}"
+            )
+        backend_cfg = matching_backends[0]["cfg"]
+        controller_cfg["backend"] = {"id": backend_cfg["id"], "topic_ns": backend_cfg["topic_ns"]}
+        controller_cfg["backend_state_keys"] = list(backend_cfg["state_intervals"].keys())
+        controller_cfg["backend_event_keys"] = list(backend_cfg.get("event_keys", []))
+        controller_cfg["vehicle"] = dict(vehicle)
+        expected_interface = {"id": controller_cfg["id"], "topic_ns": controller_cfg["topic_ns"]}
+        if "interface" in core_cfg and core_cfg["interface"] != expected_interface:
+            raise RuntimeError(f"core interface must target controller expected={expected_interface} actual={core_cfg['interface']}")
+        core_cfg["interface"] = expected_interface
+        return
+    if "interface" in core_cfg:
+        return
+    interface_plugins = [entry for entry in plugins_raw if entry.get("cfg", {}).get("is_interface")]
+    if len(interface_plugins) == 1:
+        intf_cfg = interface_plugins[0]["cfg"]
+        core_cfg["interface"] = {"id": intf_cfg["id"], "topic_ns": intf_cfg["topic_ns"]}
+        return
+    if len(interface_plugins) > 1:
+        raise RuntimeError("multiple interface plugins require explicit core.cfg.interface or one controller plugin")
+
+
 def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
     repo_root = Path(__file__).resolve().parent
     config = load_config(config_path)
@@ -132,6 +239,9 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
     placeholder_values: Dict[str, str] = {}
     collect_named_scalars(config, placeholder_values)
     config = resolve_placeholders(config, placeholder_values)
+    vehicle = resolve_vehicle_config(config)
+    resolve_plugin_supports(config)
+    configure_runtime_plugins(config, vehicle)
     config_dump = json.dumps(config, indent=2, sort_keys=True)
     base_dir = config_path.parent
     raw_bus_config = config["bus_config"]
@@ -185,10 +295,6 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
     core_config = config["core"]
     core_name = core_config["name"]
     core_cfg = core_config["cfg"]
-    interface_plugins = [entry for entry in plugins_raw if entry.get("cfg", {}).get("is_interface")]
-    if interface_plugins and "interface" not in core_cfg:
-        intf_cfg = interface_plugins[0]["cfg"]
-        core_cfg["interface"] = {"id": intf_cfg["id"], "topic_ns": intf_cfg["topic_ns"]}
     core_module = importlib.import_module(f"flight_cores.{core_name}.{core_name}")
     core_runner = getattr(core_module, "run_core")
 
@@ -221,12 +327,9 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
     try:
         while True:
             try:
-                message, _ = bus_client.receive(timeout=0.2)
-                topic = message.get("topic")
-                payload = message.get("data") or {}
+                topic, _message = bus_client.receive(timeout=0.2)
             except queue.Empty:
                 topic = None
-                payload = None
             if topic == CONTROL_SHUTDOWN_TOPIC:
                 shutdown_requested = True
             elif topic and topic.endswith("/ERROR"):

@@ -6,6 +6,12 @@ cfg:
   topic_ns: UAV
   # optional; true when this link is the primary flight controller interface
   is_interface: true
+  supports:
+    autopilot:
+    - FCAutopilotType.INAV
+    - FCAutopilotType.Betaflight
+    telem_type:
+    - TelemType.MSPV2
   # optional; true when this link is used as a datalink hop
   is_datalink: false
   # required link type for the MSPAPI2 transport (serial/tcp/etc)

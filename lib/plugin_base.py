@@ -12,7 +12,6 @@ from lib.common import RuntimeBase, build_envelope
 
 class PluginBase(RuntimeBase):
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:  # Initialize plugin base and bus.
-        self.state_queue: "queue.Queue[Dict[str, Any]]" = queue.Queue()
         self.response_queue: "queue.Queue[Dict[str, Any]]" = queue.Queue()
         super().__init__(cfg, bus_config)
 

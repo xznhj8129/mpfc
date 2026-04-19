@@ -48,12 +48,12 @@ HiveOS is simple on purpose: one mission core, plugins for protocol stuff, an MQ
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  main.py (supervisor)                                    │
-│  ┌────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │ Flight Core │  │  Plugin #1   │  │  Plugin #2   │ ... │
-│  │ (mission)   │  │ (MAVLink)    │  │ (CoT/ATAK)   │     │
-│  └──────┬─────┘  └──────┬───────┘  └──────┬───────┘     │
-│         │               │                 │              │
-│  ───────┴───────────────┴─────────────────┴──────────    │
+│  ┌────────────┐  ┌────────────────┐  ┌──────────────┐   │
+│  │ Flight Core │  │ uav_controller │  │ Interface     │   │
+│  │ (mission)   │  │ (flight policy)│  │ plugin/backend│   │
+│  └──────┬─────┘  └────────┬───────┘  └──────┬───────┘   │
+│         │                 │                  │            │
+│  ───────┴─────────────────┴──────────────────┴────────    │
 │              MQTT Bus  (hiveos/<instance>/...)            │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -62,9 +62,11 @@ HiveOS is simple on purpose: one mission core, plugins for protocol stuff, an MQ
 
 1. Load YAML config from `MAIN_CONFIG` env var
 2. Apply CLI overrides (`--key=value`) and merge plugin config templates
-3. Resolve `<placeholder>` tokens in config values
-4. Spawn one core process + N plugin processes
-5. Supervise via `DIAG/#` diagnostics — shutdown on crash or error
+3. Resolve `<placeholder>` tokens and top-level `vehicle` enum values
+4. Select the active flight backend from `vehicle.autopilot` + `vehicle.telem_type`
+5. Bind the core to `uav_controller` and inject the selected backend into it
+6. Spawn one core process + N plugin processes
+7. Supervise via `DIAG/#` diagnostics — shutdown on crash or error
 
 ---
 
@@ -96,10 +98,16 @@ MAIN_CONFIG=flight_cores/test_core/config.yaml python main.py
 
 ```bash
 # Launch PX4 SITL + autonomous takeoff/land mission
-START_PX4_SITL=1 MY_NAME=uav1 MAV_PORT=14550 ./run_mav_example.sh
+START_PX4_SITL=1 MY_NAME=uav1 MAV_PORT=14550 ./run_px4_gz_mav_example.sh
 
 # With Gazebo world and QGroundControl output
-PX4_GZ_WORLD=baylands START_PX4_SITL=1 QGC_MAVLINK_PORT=14551 ./run_mav_example.sh
+PX4_GZ_WORLD=baylands START_PX4_SITL=1 QGC_MAVLINK_PORT=14551 ./run_px4_gz_mav_example.sh
+```
+
+### ArduPilot SITL (MAVLink / MAVSDK)
+
+```bash
+START_ARDUPILOT_SITL=1 MY_NAME=uav1 MAV_PORT=14550 ./run_ardupilot_sitl_mav_example.sh
 ```
 
 ### Container Runtime
@@ -171,10 +179,14 @@ Main config is a YAML file pointed to by the `MAIN_CONFIG` environment variable.
 
 ```yaml
 my_name: uav1
+vehicle:
+  autopilot: FCAutopilotType.PX4
+  uav_type: UAVType.Copter
+  telem_type: TelemType.Mavlink2
 core:
   name: test_takeoff_land
   cfg:
-    id: px4_core
+    id: mav_core
     poll_interval_s: 0.5
     takeoff_altitude_m: 10.0
 bus_config:
@@ -185,6 +197,10 @@ bus_config:
     host: 127.0.0.1
     port: 1883
 plugins:
+  - plugin: uav_controller
+    cfg:
+      id: uav_controller
+      topic_ns: UAV
   - plugin: mavsdk_interface
     cfg:
       id: mavsdk
@@ -197,6 +213,7 @@ plugins:
 1. **Plugin defaults** — each plugin provides `config_template.yaml`; your `cfg` entries are overrides, not full replacements (recursive merge)
 2. **CLI overrides** — `--key=value` applies to keys in `core.cfg` and `my_name`; type-cast from existing value type; unknown keys fail immediately
 3. **Placeholder substitution** — `<token>` strings are replaced from scalar config values (e.g. `<mav_port>` from `--mav_port=14552`)
+4. **Vehicle selection** — `vehicle.autopilot` and `vehicle.telem_type` select the active flight backend; the core always talks to `uav_controller`
 
 ---
 
@@ -220,8 +237,9 @@ Plugins live in `plugins/` and inherit from `PluginBase`. They translate between
 
 | Plugin | Description |
 |--------|-------------|
-| `mavsdk_interface` | MAVLink bridge to PX4 autopilots via MAVSDK. Full flight stack: arm, takeoff, RTL, land, goto. Async telemetry with configurable per-field publish rates. |
-| `msp_interface` | MSP bridge to iNav flight controllers. Serial/TCP connection, RC override, waypoint management, comprehensive telemetry. |
+| `uav_controller` | UAV-agnostic flight layer. Accepts mission-level `UAV.Action.*`, republishes normalized `UAV.State.*`, and owns FC-specific command sequencing. |
+| `mavsdk_interface` | MAVLink/MAVSDK backend bridge for PX4 and ArduPilot. Handles transport, telemetry, and direct FC API calls. |
+| `msp_interface` | MSP backend bridge for INAV and Betaflight. Handles transport, telemetry, and direct FC API calls. |
 | `atak_interface` | ATAK/CoT tactical datalink. Dual UDP/TCP support (multicast + unicast), CoT event serialization via `frogcot`. |
 | `hivelink_interface` | Multi-transport datalink (UDP, Meshtastic/LoRa, MQTT) using the HiveLink protocol. |
 | `yolo_detector` | YOLO object detection pipeline. Runs ultralytics inference on a video source (camera, file, RTSP) and publishes each detection individually with class, confidence, and bounding box. Optional ByteTrack tracking. |
@@ -258,7 +276,7 @@ Topics are prefixed with `hiveos/<instance_name>/` and follow these patterns:
 
 ## Protocol System
 
-Protocol vocabularies are defined in `protocols/*.json` and loaded dynamically via `namespace_loader.py`:
+Protocol vocabularies are defined in `protocols/*.yaml` and loaded dynamically via `namespace_loader.py`:
 
 ```python
 from protocols.namespace_loader import load_protocol_namespace
@@ -274,10 +292,10 @@ altitude = self.state.get(UAV.State.AltitudeM)
 
 | Protocol | Schema | Vocabulary |
 |----------|--------|------------|
-| **UAV** | `protocols/uav.json` | Flight state (position, attitude, battery, GPS), actions (arm, takeoff, land, RTL, goto), sensor data |
-| **ATAK** | `protocols/atak.json` | CoT event state (Rx/Tx), actions (send event, send marker), system counters |
+| **UAV** | `protocols/uav.yaml` | Flight state (position, attitude, battery, GPS), actions (arm, takeoff, land, RTL, goto), sensor data |
+| **ATAK** | `protocols/atak.yaml` | CoT event state (Rx/Tx), actions (send event, send marker), system counters |
 
-Protocol additions start in the JSON schema, then get implemented in plugins. Cores and plugins reference `UAV.Action.*`, `UAV.State.*`, etc. — never raw strings.
+Protocol additions start in the yaml schema, then get implemented in plugins. Cores and plugins reference `UAV.Action.*`, `UAV.State.*`, etc. — never raw strings.
 
 ---
 
@@ -329,10 +347,10 @@ hiveos/
 ├── config/
 │   └── bus_topics_schema.json  # Topic pattern definitions
 ├── protocols/
-│   ├── registry.json           # Protocol registry
+│   ├── registry.yaml           # Protocol registry
 │   ├── namespace_loader.py     # Dynamic protocol binding
-│   ├── uav.json                # UAV command/state vocabulary
-│   └── atak.json               # ATAK/CoT vocabulary
+│   ├── uav.yaml                # UAV command/state vocabulary
+│   └── atak.yaml               # ATAK/CoT vocabulary
 ├── lib/
 │   ├── common.py               # Config, topics, bus, waits
 │   ├── core_base.py            # CoreBase class
@@ -348,13 +366,15 @@ hiveos/
 │   ├── atak_example/           # ATAK monitor example
 │   └── yolo_example/           # YOLO detection example
 ├── plugins/
+│   ├── uav_controller/        # UAV-agnostic flight layer
 │   ├── mavsdk_interface/       # PX4/MAVLink bridge
 │   ├── msp_interface/          # iNav/MSP bridge
 │   ├── atak_interface/         # ATAK/CoT bridge
 │   ├── hivelink_interface/     # Multi-transport datalink
 │   ├── yolo_detector/          # YOLO object detection
 │   └── example_hello/          # Echo test plugin
-├── run_mav_example.sh          # PX4 SITL launcher
+├── run_px4_gz_mav_example.sh   # PX4 SITL launcher
+├── run_ardupilot_sitl_mav_example.sh # ArduPilot SITL launcher
 ├── run_example_msp.sh          # MSP example launcher
 ├── run_example.sh              # Basic example launcher
 └── requirements.txt

@@ -7,3 +7,4 @@ testing/
 .claude/
 yolov8n.pt
 .codex
+logs/

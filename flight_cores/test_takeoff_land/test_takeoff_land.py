@@ -84,6 +84,21 @@ class TakeoffLandCore(CoreBase):
             if not resp.get("ok"):
                 raise MissionAbort(f"set_takeoff_altitude failed resp={resp}")
 
+            self.wait_until(
+                lambda: self.state.get(UAV.State.Sensor.SensorConfig) is not None
+                and bool(self.state.get(UAV.State.Sensor.SensorConfig).get("ArmReady")),
+                float(self.state_timeout_s),
+                MissionAbort(
+                    f"arm readiness wait timed out sensor_config={self.state.get(UAV.State.Sensor.SensorConfig)} "
+                    f"modes={self.state.get(UAV.State.Flight.ActiveModeNames)}"
+                ),
+            )
+            print(
+                f"[CORE] {self.client_id} arm_ready sensor_config={self.state.get(UAV.State.Sensor.SensorConfig)} "
+                f"modes={self.state.get(UAV.State.Flight.ActiveModeNames)}",
+                flush=True,
+            )
+
             arm_req = self._send_action(UAV.Action.Flight.Arm, {})
             print(f"[CORE] {self.client_id} cmd ARM req={arm_req}", flush=True)
             resp = self._wait_response(arm_req, float(self.response_timeout_s))
@@ -97,6 +112,22 @@ class TakeoffLandCore(CoreBase):
                 lambda value: bool(value),
             )
             print(f"[CORE] {self.client_id} armed", flush=True)
+
+            self.wait_until(
+                lambda: bool(self.state.get(UAV.State.Flight.IsArmed))
+                and self.state.get(UAV.State.Sensor.SensorConfig) is not None
+                and bool(self.state.get(UAV.State.Sensor.SensorConfig).get("TakeoffReady")),
+                float(self.state_timeout_s),
+                MissionAbort(
+                    f"takeoff readiness wait timed out sensor_config={self.state.get(UAV.State.Sensor.SensorConfig)} "
+                    f"modes={self.state.get(UAV.State.Flight.ActiveModeNames)}"
+                ),
+            )
+            print(
+                f"[CORE] {self.client_id} takeoff_ready sensor_config={self.state.get(UAV.State.Sensor.SensorConfig)} "
+                f"modes={self.state.get(UAV.State.Flight.ActiveModeNames)}",
+                flush=True,
+            )
 
             takeoff_req = self._send_action(UAV.Action.Flight.Takeoff, {})
             print(f"[CORE] {self.client_id} cmd TAKEOFF req={takeoff_req}", flush=True)
@@ -147,10 +178,9 @@ class TakeoffLandCore(CoreBase):
             if not resp.get("ok"):
                 raise MissionAbort(f"go_to failed resp={resp}")
 
-            target_distance_m: float | None = None
-
-            def _target_arrived() -> bool:
-                nonlocal target_distance_m
+            target_distance_m = None
+            goto_deadline = time.monotonic() + float(self.goto_timeout_s)
+            while True:
                 position_state = self.state.get(UAV.State.Navigation.Position)
                 if position_state is not None:
                     current_pos = GPSposition(
@@ -159,14 +189,11 @@ class TakeoffLandCore(CoreBase):
                         float(position_state["RelAltM"]),
                     )
                     target_distance_m = gps_distance_m(current_pos, goto_target)
-                    return target_distance_m <= float(self.goto_arrival_radius_m)
-                return False
-
-            self.wait_until(
-                _target_arrived,
-                float(self.goto_timeout_s),
-                MissionAbort("go-to arrival wait timed out"),
-            )
+                    if target_distance_m <= float(self.goto_arrival_radius_m):
+                        break
+                if time.monotonic() > goto_deadline:
+                    raise MissionAbort("go-to arrival wait timed out")
+                self._pump_once(goto_deadline)
             print(
                 f"[CORE] {self.client_id} arrived target_dist_m={target_distance_m} "
                 f"threshold_m={self.goto_arrival_radius_m}",
@@ -209,10 +236,9 @@ class TakeoffLandCore(CoreBase):
             if not resp.get("ok"):
                 raise MissionAbort(f"rtl failed resp={resp}")
 
-            home_distance_m: float | None = None
-
-            def _home_reached() -> bool:
-                nonlocal home_distance_m
+            home_distance_m = None
+            rtl_deadline = time.monotonic() + float(self.rtl_timeout_s)
+            while True:
                 position_state = self.state.get(UAV.State.Navigation.Position)
                 if position_state is not None:
                     current_pos = GPSposition(
@@ -221,14 +247,11 @@ class TakeoffLandCore(CoreBase):
                         float(position_state["RelAltM"]),
                     )
                     home_distance_m = gps_distance_m(current_pos, home_pos)
-                    return home_distance_m <= float(self.home_arrival_radius_m)
-                return False
-
-            self.wait_until(
-                _home_reached,
-                float(self.rtl_timeout_s),
-                MissionAbort("rtl home wait timed out"),
-            )
+                    if home_distance_m <= float(self.home_arrival_radius_m):
+                        break
+                if time.monotonic() > rtl_deadline:
+                    raise MissionAbort("rtl home wait timed out")
+                self._pump_once(rtl_deadline)
             print(
                 f"[CORE] {self.client_id} home reached dist_m={home_distance_m} "
                 f"threshold_m={self.home_arrival_radius_m}",
@@ -258,7 +281,7 @@ class TakeoffLandCore(CoreBase):
             self.publish_shutdown()
 
         except MissionAbort as exc:
-            if bool(self.state.get(UAV.State.Flight.IsInAir)): # Failsafe
+            if bool(self.state.get(UAV.State.Flight.IsInAir)):  # Airborne abort handling is not implemented yet.
                 pass
             abort_topic = f"DIAG/{self.client_id}/ABORT"
             abort_data = {"event": "ABORT", "reason": str(exc)}
@@ -276,7 +299,11 @@ class TakeoffLandCore(CoreBase):
             self.client.publish(error_topic, error_payload)
             raise
         except KeyboardInterrupt:
-            pass
+            abort_topic = f"DIAG/{self.client_id}/ABORT"
+            abort_data = {"event": "ABORT", "reason": "KeyboardInterrupt"}
+            self.client.publish(abort_topic, build_envelope(self.client_id, abort_topic, abort_data))
+            print(f"[CORE] {self.client_id} keyboard_interrupt in_air={self.state.get(UAV.State.Flight.IsInAir)}", flush=True)
+            raise
         finally:
             self.stop()
 

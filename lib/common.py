@@ -203,7 +203,7 @@ class BusRouter:
 
 class RuntimeBase:
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:  # Initialize shared runtime endpoint state.
-        self.client_id = cfg.get("id")
+        self.client_id = cfg["id"]
         self.client = connect_bus_client(bus_config, self.client_id)
         self.cfg = cfg
         self.bus_config = bus_config
@@ -260,18 +260,16 @@ class RuntimeBase:
         if timeout < 0:
             timeout = 0.0
         try:
-            message, _ = self.client.receive(timeout=timeout)
+            topic, message = self.client.receive(timeout=timeout)
         except queue.Empty:
             return None, None
-        topic = message.get("topic")
-        payload = message.get("payload") or message
         if topic == self.diag_ping_topic:
-            pong_payload = build_envelope(self.client_id, self.diag_pong_topic, {"ping_time": payload.get("time")})
+            pong_payload = build_envelope(self.client_id, self.diag_pong_topic, {"ping_time": message["time"]})
             self.client.publish(self.diag_pong_topic, pong_payload)
             return None, None
         if topic == CONTROL_SHUTDOWN_TOPIC:
             self._on_control_shutdown()
-        return topic, payload
+        return topic, message
 
     def recv_until(self, deadline: float) -> tuple[Any, Any]:  # Receive with absolute deadline.
         timeout = max(0.0, deadline - time.monotonic())

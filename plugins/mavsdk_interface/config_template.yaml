@@ -2,9 +2,15 @@ plugin: mavsdk_interface
 cfg:
   # required bus client id for this MAVSDK interface
   id: mavsdk
-  # required topic namespace shared with the core (for example: MAVSDK)
-  topic_ns: MAVSDK
+  # required topic namespace shared with the UAV controller/core
+  topic_ns: UAV
   is_interface: true
+  supports:
+    autopilot:
+    - FCAutopilotType.PX4
+    - FCAutopilotType.Ardupilot
+    telem_type:
+    - TelemType.Mavlink2
   # required transport type; MAVSDK driver currently expects udp
   conn_type: udp
   # required connection string like udp://:14550

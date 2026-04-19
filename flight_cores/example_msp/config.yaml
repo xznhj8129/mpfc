@@ -1,4 +1,8 @@
 my_name: uav1
+vehicle:
+  autopilot: FCAutopilotType.INAV
+  uav_type: UAVType.Copter
+  telem_type: TelemType.MSPV2
 core:
   name: example_msp
   cfg:
@@ -6,31 +10,6 @@ core:
     poll_interval_s: 0.1
     print_interval_s: 1.0
     state_timeout_s: 20.0
-    in_air_alt_threshold: 0.5
-    home_min_satellites: 6
-    takeoff_throttle: 1700
-    hover_throttle: 1500
-    landing_throttle: 1300
-    takeoff_timeout_s: 45.0
-    landing_timeout_s: 45.0
-    override_send_interval: 0.04
-    control_override_timeout_s: 0.3
-    override_channels:
-      roll: roll
-      pitch: pitch
-      yaw: yaw
-      throt: throttle
-    go_to_waypoint:
-      WaypointIndex: 255
-      Action: 1
-      Param1: 0
-      Param2: 0
-      Param3: 0
-      Flag: 0
-
-    interface:
-      id: mspapi
-      topic_ns: UAV
       
 bus_config:
   schema_path: ../../config/bus_topics_schema.json
@@ -40,6 +19,16 @@ bus_config:
     host: 127.0.0.1
     port: 1883
 plugins:
+- plugin: uav_controller
+  cfg:
+    id: uav_controller
+    topic_ns: UAV
+    poll_interval_s: 0.1
+    response_timeout_s: 20.0
+    ardupilot:
+      armable_timeout_s: 60.0
+      takeoff_readiness_timeout_s: 60.0
+      post_arm_takeoff_wait_s: 5.0
 - plugin: msp_interface
   cfg:
     id: mspapi

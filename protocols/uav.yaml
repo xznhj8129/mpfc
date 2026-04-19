@@ -7,9 +7,19 @@ desc: "Universal UAV command, state, and event contract for flight interfaces."
 enums:
   FCAutopilotType:
     - PX4
-    - ARDUPILOT
+    - Ardupilot
     - INAV
-    - BETAFLIGHT
+    - Betaflight
+
+  UAVType:
+    - Copter
+    - Plane
+    - VTOLPlane
+    - Tailsitter
+
+  TelemType:
+    - Mavlink2
+    - MSPV2
 
 structs:
   UAV:
@@ -213,6 +223,13 @@ structs:
           GlobalPositionOk: optional bool
           HomePositionOk: optional bool
           Armable: optional bool
+          ArmReady: optional bool
+          TakeoffReady: optional bool
+          EkfUsingGps: optional bool
+          CanArmOrRun: optional bool
+          ModeName: optional string
+          ModeProblems: optional list[string]
+          HealthProblems: optional list[string]
 
 
   StatePower:
