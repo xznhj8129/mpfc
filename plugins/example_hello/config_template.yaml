@@ -2,5 +2,9 @@ plugin: example_hello
 cfg:
   # required bus client id; becomes the prefix for hello topics
   id: example_hello_1
-  # required seconds between hello messages and timeouts
+  # required topic namespace used for request/response/state/event topics
+  topic_ns: hello
+  # required seconds between bus polls
+  poll_interval_s: 0.1
+  # required seconds between hello message deadlines
   send_interval: 1.0

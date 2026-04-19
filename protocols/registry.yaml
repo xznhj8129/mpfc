@@ -1,0 +1,16 @@
+RegistryName: HiveProtocolRegistry
+Version: 1
+Protocols:
+  UAV:
+    Version: 1
+    SchemaPath: uav.yaml
+
+  ATAK:
+    Version: 1
+    SchemaPath: atak.yaml
+
+  HELLO:
+    Version: 1
+    SchemaPath: hello.yaml
+
+  

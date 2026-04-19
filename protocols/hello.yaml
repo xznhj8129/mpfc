@@ -1,0 +1,63 @@
+version: 1
+
+name: HELLO
+desc: "Hello-world request, response, state, and event contract for YAML protocol testing."
+
+enums:
+  PingPong:
+    - PING
+    - PONG
+
+structs:
+  HELLO:
+    variants:
+      - State
+      - Action
+      - Event
+
+  State:
+    parent: HELLO
+    variants:
+      - StateHello
+
+  Action:
+    parent: HELLO
+    variants:
+      - ActionHello
+
+  Event:
+    parent: HELLO
+    variants:
+      - EventHello
+
+  StateHello:
+    parent: State
+    variants:
+      LastReply:
+        desc: Last hello reply emitted by the plugin.
+        key: HELLO.State.Hello.LastReply
+        fields:
+          Sender: string
+          Kind: string
+          Message: string
+
+  ActionHello:
+    parent: Action
+    variants:
+      Ping:
+        desc: Send a hello ping request.
+        key: HELLO.Action.Hello.Ping
+        fields:
+          Kind: string
+          Message: string
+
+  EventHello:
+    parent: Event
+    variants:
+      Pong:
+        desc: Hello pong event emitted after a ping request.
+        key: HELLO.Event.Hello.Pong
+        fields:
+          Sender: string
+          Kind: string
+          Message: string

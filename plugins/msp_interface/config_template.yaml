@@ -10,10 +10,18 @@ cfg:
   is_datalink: false
   # required link type for the MSPAPI2 transport (serial/tcp/etc)
   conn_type: serial
-  # required address string such as /dev/ttyACM0 or tcp:127.0.0.1:9000
+  # required address string such as /dev/ttyACM0 or 127.0.0.1:5760
   conn_str: /dev/ttyACM0
   # required bitrate for serial links
   conn_bitrate: 115200
+  # required transport read timeout seconds
+  conn_read_timeout_s: 0.05
+  # required transport write timeout seconds
+  conn_write_timeout_s: 0.2
+  # required MSP request retries before failure; keep 1 to avoid socket flap loops
+  conn_max_retries: 1
+  # required seconds before retry reconnect after transport error
+  conn_reconnect_delay_s: 0.5
   # required state poll interval seconds
   state_poll_interval_s: 0.5
   # required altitude threshold meters for in-air detection
@@ -32,20 +40,14 @@ cfg:
   landing_timeout_s: 45.0
   # required override send interval seconds
   override_send_interval: 0.04
-  # required default override enabled flag
-  override_enabled: true
+  # required seconds before a sparse control override expires automatically
+  control_override_timeout_s: 0.3
   # required mapping for roll/pitch/yaw/throt to MSP channel names
   override_channels:
     roll: roll
     pitch: pitch
     yaw: yaw
     throt: throttle
-  # required initial override PWM dict for roll/pitch/yaw/throt
-  override_initial_us:
-    roll: 1500
-    pitch: 1500
-    yaw: 1500
-    throt: 1000
   # required default waypoint metadata used by GO_TO conversion
   go_to_waypoint:
     WaypointIndex: 255
@@ -67,7 +69,9 @@ cfg:
     NavState: 0.5
     AttitudeRad: 0.2
     AngVelRadS: 0.2
-    RcChannels: 0.2
+    RcTelemetry: 0.2
+    ControlOverride: 0.2
+    ControlOutput: 0.2
     ActiveModes: 0.5
     ActiveModeNames: 0.5
     OverrideActive: 0.2

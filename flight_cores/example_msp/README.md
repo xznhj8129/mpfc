@@ -10,7 +10,7 @@ It subscribes to standardized UAV status fields from `msp_interface` and prints 
 - analog and battery state (`Analog`, `Battery`)
 - GPS and navigation (`GpsInfo`, `RawGps`, `GpsStatistics`, `WaypointInfo`, `NavState`)
 - attitude and IMU (`AttitudeRad`, `AngVelRadS`, `Imu`)
-- RC and active modes (`RcChannels`, `ActiveModeNames`, `FlightMode`)
+- RC and control state (`RcTelemetry`, `ControlOverride`, `ControlOutput`, `ActiveModeNames`, `FlightMode`)
 
 Run:
 

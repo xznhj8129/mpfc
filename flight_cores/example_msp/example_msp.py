@@ -40,7 +40,9 @@ class ExampleMspCore(CoreBase):
             UAV.State.Navigation.AltitudeM,
             UAV.State.Navigation.Position,
             UAV.State.Navigation.NavState,
-            UAV.State.Control.RcChannels,
+            UAV.State.Control.RcTelemetry,
+            UAV.State.Control.ControlOverride,
+            UAV.State.Control.ControlOutput,
             UAV.State.Flight.ActiveModeNames,
             UAV.State.System.FlightMode,
             UAV.State.System.CpuLoad,
@@ -70,7 +72,9 @@ class ExampleMspCore(CoreBase):
         print(f"AltitudeM: {snapshot.get(UAV.State.Navigation.AltitudeM)}", flush=True)
         print(f"Position: {snapshot.get(UAV.State.Navigation.Position)}", flush=True)
         print(f"NavState: {snapshot.get(UAV.State.Navigation.NavState)}", flush=True)
-        print(f"RcChannels: {snapshot.get(UAV.State.Control.RcChannels)}", flush=True)
+        print(f"RcTelemetry: {snapshot.get(UAV.State.Control.RcTelemetry)}", flush=True)
+        print(f"ControlOverride: {snapshot.get(UAV.State.Control.ControlOverride)}", flush=True)
+        print(f"ControlOutput: {snapshot.get(UAV.State.Control.ControlOutput)}", flush=True)
         print(f"ActiveModeNames: {snapshot.get(UAV.State.Flight.ActiveModeNames)}", flush=True)
         print(f"FlightMode: {snapshot.get(UAV.State.System.FlightMode)}", flush=True)
         print(f"CpuLoad: {snapshot.get(UAV.State.System.CpuLoad)}", flush=True)

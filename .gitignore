@@ -6,3 +6,4 @@ testing/
 .notes/
 .claude/
 yolov8n.pt
+.codex

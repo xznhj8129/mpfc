@@ -6,9 +6,32 @@ core:
     poll_interval_s: 0.1
     print_interval_s: 1.0
     state_timeout_s: 20.0
+    in_air_alt_threshold: 0.5
+    home_min_satellites: 6
+    takeoff_throttle: 1700
+    hover_throttle: 1500
+    landing_throttle: 1300
+    takeoff_timeout_s: 45.0
+    landing_timeout_s: 45.0
+    override_send_interval: 0.04
+    control_override_timeout_s: 0.3
+    override_channels:
+      roll: roll
+      pitch: pitch
+      yaw: yaw
+      throt: throttle
+    go_to_waypoint:
+      WaypointIndex: 255
+      Action: 1
+      Param1: 0
+      Param2: 0
+      Param3: 0
+      Flag: 0
+
     interface:
       id: mspapi
       topic_ns: UAV
+      
 bus_config:
   schema_path: ../../config/bus_topics_schema.json
   log_file: hivebus.log
@@ -22,37 +45,13 @@ plugins:
     id: mspapi
     topic_ns: UAV
     is_interface: true
-    is_datalink: false
-    conn_type: serial
-    conn_str: /dev/ttyACM0
+    conn_type: tcp
+    conn_str: localhost:5760
     conn_bitrate: 115200
-    state_poll_interval_s: 0.5
-    in_air_alt_threshold: 0.5
-    home_min_satellites: 6
-    takeoff_throttle: 1700
-    hover_throttle: 1500
-    landing_throttle: 1300
-    takeoff_timeout_s: 45.0
-    landing_timeout_s: 45.0
-    override_send_interval: 0.04
-    override_enabled: true
-    override_channels:
-      roll: roll
-      pitch: pitch
-      yaw: yaw
-      throt: throttle
-    override_initial_us:
-      roll: 1500
-      pitch: 1500
-      yaw: 1500
-      throt: 1000
-    go_to_waypoint:
-      WaypointIndex: 255
-      Action: 1
-      Param1: 0
-      Param2: 0
-      Param3: 0
-      Flag: 0
+    conn_read_timeout_s: 0.05
+    conn_write_timeout_s: 0.2
+    conn_max_retries: 1
+    conn_reconnect_delay_s: 0.5
     state_intervals:
       IsInAir: 0.5
       IsArmed: 0.5
@@ -68,7 +67,9 @@ plugins:
       AttitudeRad: 0.2
       AngVelRadS: 0.2
       Imu: 0.2
-      RcChannels: 0.2
+      RcTelemetry: 0.2
+      ControlOverride: 0.2
+      ControlOutput: 0.2
       RxConfig: 1.0
       ChannelMap: 1.0
       ModeRanges: 1.0

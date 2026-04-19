@@ -1,3 +1,5 @@
+/media/anon/WD2TB/DataVault/TechProjects/Software/GitRepos/hiveos/README.md
+
 # HiveOS
 
 ## WIP
@@ -63,6 +65,18 @@ HiveOS is simple on purpose: one mission core, plugins for protocol stuff, an MQ
 3. Resolve `<placeholder>` tokens in config values
 4. Spawn one core process + N plugin processes
 5. Supervise via `DIAG/#` diagnostics — shutdown on crash or error
+
+---
+
+## Conventions
+**Right-Hand**
+**Axis Positive:**
+**Local 2D: RD**
+**Local 3D: FRD**
+**World 3D: NED**
+**Angles: YPR (Radians)**
+**Control: AETR**
+**Altitudes are always positive up**
 
 ---
 

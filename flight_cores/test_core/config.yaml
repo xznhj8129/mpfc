@@ -3,8 +3,16 @@ core:
   name: test_core
   cfg:
     id: testcore
+    poll_interval_s: 0.1
+    response_timeout_s: 2.0
+    request_retries: 3
     send_interval: 1.0
     count: 10
+    targets:
+      - id: testclient1
+        topic_ns: hello
+      - id: testclient2
+        topic_ns: hello
 bus_config:
   schema_path: ../../config/bus_topics_schema.json
   log_file: hivebus.log
@@ -16,8 +24,12 @@ plugins:
 - plugin: example_hello
   cfg:
     id: testclient1
+    topic_ns: hello
+    poll_interval_s: 0.1
     send_interval: 1.0
 - plugin: example_hello
   cfg:
     id: testclient2
+    topic_ns: hello
+    poll_interval_s: 0.1
     send_interval: 1.0

@@ -1,506 +1,525 @@
-# Universal UAV command, state, and event contract for flight interfaces.
+# 
 version: 1
 
+name: UAV
+desc: "Universal UAV command, state, and event contract for flight interfaces."
+
 enums:
+  FCAutopilotType:
+    - PX4
+    - ARDUPILOT
+    - INAV
+    - BETAFLIGHT
 
 structs:
-  Message:
+  UAV:
     variants:
-      STATE: StateMessage
-      ACTION: ActionMessage
-      EVENT: EventMessage
+      - State
+      - Action
+      - Event
 
-  StateMessage:
-    parent: Message
+  State:
+    parent: UAV
     variants:
-      FLIGHT: StateFlightMessage
-      NAVIGATION: StateNavigationMessage
-      ATTITUDE: StateAttitudeMessage
-      SENSOR: StateSensorMessage
-      POWER: StatePowerMessage
-      CONTROL: StateControlMessage
-      SYSTEM: StateSystemMessage
+      - StateFlight
+      - StateNav
+      - StateAttitude
+      - StateSensor
+      - StatePower
+      - StateControl
+      - StateSystem
 
-  ActionMessage:
-    parent: Message
+  Action:
+    parent: UAV
     variants:
-      FLIGHT: ActionFlightMessage
-      NAVIGATION: ActionNavigationMessage
+      - ActionFlight
+      - ActionNav
+      - ActionControl
 
-  EventMessage:
-    parent: Message
+  Event:
+    parent: UAV
     variants:
-      FLIGHT: EventFlightMessage
-      MISSION: EventMissionMessage
+      - EventFlight
+      - EventMission
 
 
-  StateFlightMessage:
-    parent: StateMessage
+  StateFlight:
+    parent: State
     variants:
-      IS_IN_AIR: StateFlightIsInAir
-      IS_ARMED: StateFlightIsArmed
-      OVERRIDE_ACTIVE: StateFlightOverrideActive
-      FAILSAFE: StateFlightFailsafe
-      ACTIVE_MODES: StateFlightActiveModes
-      ACTIVE_MODE_NAMES: StateFlightActiveModeNames
+    
+      IsInAir:
+        desc: Vehicle in-air state.  
+        key: UAV.State.Flight.IsInAir
+        fields:
+          IsInAir: bool
 
-  StateFlightIsInAir:
-    parent: StateFlightMessage
-    fields:
-      # Vehicle in-air state.
-      IsInAir: bool
+      IsArmed:
+        desc: Vehicle armed state.
+        key: UAV.State.Flight.IsArmed
+        fields:
+          IsArmed: bool
 
-  StateFlightIsArmed:
-    parent: StateFlightMessage
-    fields:
-      # Vehicle armed state.
-      IsArmed: bool
+      OverrideActive:
+        desc: Manual/RC override currently active at FC.
+        key: UAV.State.Flight.OverrideActive
+        fields:
+          OverrideActive: bool
 
-  StateFlightOverrideActive:
-    parent: StateFlightMessage
-    fields:
-      # Manual/RC override currently active at FC.
-      OverrideActive: bool
+      Failsafe:
+        desc: Failsafe state.
+        key: UAV.State.Flight.Failsafe
+        fields:
+          Failsafe: bool
 
-  StateFlightFailsafe:
-    parent: StateFlightMessage
-    fields:
-      # Failsafe state.
-      Failsafe: bool
+      ActiveModes:
+        desc: Raw active mode identifiers.
+        key: UAV.State.Flight.ActiveModes
+        fields:
+          ActiveModes: list[any]
 
-  StateFlightActiveModes:
-    parent: StateFlightMessage
-    fields:
-      # Raw active mode identifiers.
-      ActiveModes: list[any]
-
-  StateFlightActiveModeNames:
-    parent: StateFlightMessage
-    fields:
-      # Human-readable active mode names.
-      ActiveModeNames: list[string]
+      ActiveModeNames:
+        desc: Human-readable active mode names.
+        key: UAV.State.Flight.ActiveModeNames
+        fields:
+          ActiveModeNames: list[string]
 
 
-  StateNavigationMessage:
-    parent: StateMessage
+  StateNav:
+    parent: State
     variants:
-      IS_HOME_POSITION_OK: StateNavigationIsHomePositionOk
-      IS_GLOBAL_POSITION_OK: StateNavigationIsGlobalPositionOk
-      ALTITUDE_M: StateNavigationAltitudeM
-      POSITION: StateNavigationPosition
-      FIX_TYPE: StateNavigationFixType
-      NUM_SAT: StateNavigationNumSat
-      NAV_STATE: StateNavigationNavState
-      GPS_INFO: StateNavigationGpsInfo
-      RAW_GPS: StateNavigationRawGps
 
-  StateNavigationIsHomePositionOk:
-    parent: StateNavigationMessage
-    fields:
-      # Home position validity.
-      IsHomePositionOk: bool
+      IsHomePositionOk:
+        desc: Home position validity.
+        key: UAV.State.Navigation.IsHomePositionOk
+        fields:
+          IsHomePositionOk: bool
 
-  StateNavigationIsGlobalPositionOk:
-    parent: StateNavigationMessage
-    fields:
-      # Global position validity.
-      IsGlobalPositionOk: bool
+      IsGlobalPositionOk:
+        desc: Global position validity.
+        key: UAV.State.Navigation.IsGlobalPositionOk
+        fields:
+          IsGlobalPositionOk: bool
 
-  StateNavigationAltitudeM:
-    parent: StateNavigationMessage
-    fields:
-      # Altitude in meters.
-      AltitudeM: float
+      AltitudeM:
+        desc: Altitude in meters.
+        key: UAV.State.Navigation.AltitudeM
+        fields:
+          AltitudeM: float
 
-  StateNavigationPosition:
-    parent: StateNavigationMessage
-    fields:
-      # Current geographic position.
-      LatDeg: float
-      LonDeg: float
-      AbsAltM: float
-      RelAltM: float
+      Position:
+        desc: Current geographic position.
+        key: UAV.State.Navigation.Position
+        fields:
+          LatDeg: float
+          LonDeg: float
+          AbsAltM: float
+          RelAltM: float
 
-  StateNavigationFixType:
-    parent: StateNavigationMessage
-    fields:
-      # GNSS fix quality code.
-      FixType: int
+      FixType:
+        desc: GNSS fix quality code.
+        key: UAV.State.Navigation.FixType
+        fields:
+          FixType: int
 
-  StateNavigationNumSat:
-    parent: StateNavigationMessage
-    fields:
-      # GNSS satellites used.
-      NumSat: int
+      NumSat:
+        desc: GNSS satellites used.
+        key: UAV.State.Navigation.NumSat
+        fields:
+          NumSat: int
 
-  StateNavigationNavState:
-    parent: StateNavigationMessage
-    fields:
-      # Navigation state code.
-      NavState: int
+      NavState:
+        desc: Nav state code.
+        key: UAV.State.Navigation.NavState
+        fields:
+          NavState: int
 
-  StateNavigationGpsInfo:
-    parent: StateNavigationMessage
-    fields:
-      # Extended GNSS status.
-      FixType: int
-      NumSat: int
-      lastMessageDt: optional float
-      errors: optional float
-      timeouts: optional float
-      hdop: optional float
-      eph: optional float
-      epv: optional float
+      GpsInfo:
+        desc: Extended GNSS status.
+        key: UAV.State.Navigation.GpsInfo
+        fields:
+          FixType: int
+          NumSat: int
+          lastMessageDt: optional float
+          errors: optional float
+          timeouts: optional float
+          hdop: optional float
+          eph: optional float
+          epv: optional float
 
-  StateNavigationRawGps:
-    parent: StateNavigationMessage
-    fields:
-      # Raw GNSS position/fix sample.
-      LatDeg: float
-      LonDeg: float
-      AbsAltM: float
-      GroundSpeedMS: optional float
-      GroundCourseDeg: optional float
-      Hdop: optional float
-      Vdop: optional float
-      YawDeg: optional float
+      RawGps:
+        desc: Raw GNSS position/fix sample.
+        key: UAV.State.Navigation.RawGps
+        fields:
+          LatDeg: float
+          LonDeg: float
+          AbsAltM: float
+          GroundSpeedMS: optional float
+          GroundCourseDeg: optional float
+          Hdop: optional float
+          Vdop: optional float
+          YawDeg: optional float
 
 
-  StateAttitudeMessage:
-    parent: StateMessage
+  StateAttitude:
+    parent: State
     variants:
-      ATTITUDE_RAD: StateAttitudeAttitudeRad
-      ANG_VEL_RAD_S: StateAttitudeAngVelRadS
 
-  StateAttitudeAttitudeRad:
-    parent: StateAttitudeMessage
+      AttitudeRad:
+        desc: Euler attitude in radians.
+        key: UAV.State.Attitude.AttitudeRad
+        fields:
+          Roll: float
+          Pitch: float
+          Yaw: float
+
+      AngVelRadS:
+        desc: Angular velocity in rad/s.
+        key: "UAV.State.Attitude.AngVelRadS"
+        fields:
+          X: float
+          Y: float
+          Z: float
+
+
+  StateSensor:
+    parent: State
+    variants:
+
+      Imu:
+        desc: IMU sample containing accel/gyro/mag vectors.
+        key: UAV.State.Sensor.Imu
+        fields:
+          AccelX: float
+          AccelY: float
+          AccelZ: float
+          GyroRadSX: float
+          GyroRadSY: float
+          GyroRadSZ: float
+          MagX: float
+          MagY: float
+          MagZ: float
+          TemperatureDegC: optional float
+          TimestampUs: optional int
+          Frame: optional string
+
+      SensorConfig:
+        desc: FC sensor presence/configuration and readiness.
+        key: UAV.State.Sensor.SensorConfig
+        fields:
+          GyroOk: optional bool
+          AccelOk: optional bool
+          MagOk: optional bool
+          LocalPositionOk: optional bool
+          GlobalPositionOk: optional bool
+          HomePositionOk: optional bool
+          Armable: optional bool
+
+
+  StatePower:
+    parent: State
+    variants:
+
+      Battery:
+        desc: Battery status and estimates.
+        key: UAV.State.Power.Battery
+        fields:
+          VoltageV: optional float
+          CurrentA: optional float
+          PowerW: optional float
+          ConsumedMah: optional float
+          ConsumedMWh: optional float
+          ConsumedAh: optional float
+          RemainingPct: optional float
+          RemainingCapacity: optional float
+          TemperatureDegC: optional float
+          BatteryId: optional int
+          Rssi: optional float
+
+      Analog:
+        desc: Analog telemetry values.
+        key: UAV.State.Power.Analog
+        fields:
+          vbat: optional float
+          amperage: optional float
+          powerDraw: optional float
+          mAhDrawn: optional float
+          mWhDrawn: optional float
+          percentageRemaining: optional float
+          remainingCapacity: optional float
+          rssi: optional float
+
+
+  StateControl:
+    parent: State
+    variants:
+      RC_TELEMETRY: RcTelemetry
+      CONTROL_INPUT: ControlInput
+      CONTROL_OVERRIDE: ControlOverride
+      CONTROL_OUTPUT: ControlOutput
+      RX_CONFIG: RxConfig
+      CHANNEL_MAP: ChannelMap
+      MODE_RANGES: ModeRanges
+
+  RcTelemetry:
+    desc: FC-reported RC telemetry, normalized to [-1, 1].
+    key: UAV.State.Control.RcTelemetry
     fields:
-      # Euler attitude in radians.
       Roll: float
       Pitch: float
       Yaw: float
+      Throttle: float
+      Aux: optional list[float]
 
-  StateAttitudeAngVelRadS:
-    parent: StateAttitudeMessage
+  ControlInput:
+    desc: Normalized control input produced by a source on the bus.
+    key: UAV.State.Control.ControlInput
     fields:
-      # Angular velocity in rad/s.
-      X: float
-      Y: float
-      Z: float
+      Roll: float
+      Pitch: float
+      Yaw: float
+      Throttle: float
+      Aux: optional list[float]
 
-
-  StateSensorMessage:
-    parent: StateMessage
-    variants:
-      IMU: StateSensorImu
-      SENSOR_CONFIG: StateSensorSensorConfig
-
-  StateSensorImu:
-    parent: StateSensorMessage
+  ControlOverride:
+    desc: Sparse normalized control override mask.
+    key: UAV.State.Control.ControlOverride
     fields:
-      # IMU sample containing accel/gyro/mag vectors.
-      AccelX: float
-      AccelY: float
-      AccelZ: float
-      GyroRadSX: float
-      GyroRadSY: float
-      GyroRadSZ: float
-      MagX: float
-      MagY: float
-      MagZ: float
-      TemperatureDegC: optional float
-      TimestampUs: optional int
-      Frame: optional string
+      Roll: optional float
+      Pitch: optional float
+      Yaw: optional float
+      Throttle: optional float
+      Aux: optional list[optional float]
 
-  StateSensorSensorConfig:
-    parent: StateSensorMessage
+  ControlOutput:
+    desc: Final normalized control output selected for the interface.
+    key: UAV.State.Control.ControlOutput
     fields:
-      # FC sensor presence/configuration and readiness.
-      GyroOk: optional bool
-      AccelOk: optional bool
-      MagOk: optional bool
-      LocalPositionOk: optional bool
-      GlobalPositionOk: optional bool
-      HomePositionOk: optional bool
-      Armable: optional bool
+      Roll: float
+      Pitch: float
+      Yaw: float
+      Throttle: float
+      Aux: optional list[float]
 
-
-  StatePowerMessage:
-    parent: StateMessage
-    variants:
-      BATTERY: StatePowerBattery
-      ANALOG: StatePowerAnalog
-
-  StatePowerBattery:
-    parent: StatePowerMessage
+  RxConfig:
+    desc: Receiver configuration.
+    key: UAV.State.Control.RxConfig
     fields:
-      # Battery status and estimates.
-      VoltageV: optional float
-      CurrentA: optional float
-      PowerW: optional float
-      ConsumedMah: optional float
-      ConsumedMWh: optional float
-      ConsumedAh: optional float
-      RemainingPct: optional float
-      RemainingCapacity: optional float
-      TemperatureDegC: optional float
-      BatteryId: optional int
-      Rssi: optional float
-
-  StatePowerAnalog:
-    parent: StatePowerMessage
-    fields:
-      # Analog telemetry values.
-      vbat: optional float
-      amperage: optional float
-      powerDraw: optional float
-      mAhDrawn: optional float
-      mWhDrawn: optional float
-      percentageRemaining: optional float
-      remainingCapacity: optional float
-      rssi: optional float
-
-
-  StateControlMessage:
-    parent: StateMessage
-    variants:
-      RC_CHANNELS: StateControlRcChannels
-      RX_CONFIG: StateControlRxConfig
-      CHANNEL_MAP: StateControlChannelMap
-      MODE_RANGES: StateControlModeRanges
-
-  StateControlRcChannels:
-    parent: StateControlMessage
-    fields:
-      # Normalized or PWM RC channel snapshot.
-      RcChannels: list[float]
-
-  StateControlRxConfig:
-    parent: StateControlMessage
-    fields:
-      # Receiver configuration.
       rxMinUsec: optional int
       rxMaxUsec: optional int
       rxCenterUsec: optional int
 
-  StateControlChannelMap:
-    parent: StateControlMessage
+  ChannelMap:
+    desc: Channel mapping metadata.
+    key: UAV.State.Control.ChannelMap
     fields:
-      # Channel mapping metadata.
       ChannelMap: list[any]
 
-  StateControlModeRanges:
-    parent: StateControlMessage
+  ModeRanges:
+    desc: Mode range/switch configuration.
+    key: UAV.State.Control.ModeRanges
     fields:
-      # Mode range/switch configuration.
       ModeRanges: list[any]
 
 
-  StateSystemMessage:
-    parent: StateMessage
+  StateSystem:
+    parent: State
     variants:
-      FC_CONNECTED: StateSystemFcConnected
-      CPU_LOAD: StateSystemCpuLoad
-      CYCLE_TIME: StateSystemCycleTime
-      FC_INFO: StateSystemFcInfo
-      WAYPOINT_INFO: StateSystemWaypointInfo
-      GPS_STATISTICS: StateSystemGpsStatistics
-      FLIGHT_MODE: StateSystemFlightMode
 
-  StateSystemFcConnected:
-    parent: StateSystemMessage
-    fields:
-      # Flight-controller connectivity state.
-      FcConnected: bool
+      FcConnected:
+        desc: Flight-controller connectivity state.
+        key: UAV.State.System.FcConnected
+        fields:
+          FcConnected: bool
 
-  StateSystemCpuLoad:
-    parent: StateSystemMessage
-    fields:
-      # FC CPU load indicator.
-      CpuLoad: int
+      CpuLoad:
+        desc: FC CPU load indicator.
+        key: UAV.State.System.CpuLoad
+        fields:
+          CpuLoad: int
 
-  StateSystemCycleTime:
-    parent: StateSystemMessage
-    fields:
-      # FC main loop cycle time.
-      CycleTime: int
+      CycleTime:
+        desc: FC main loop cycle time.
+        key: UAV.State.System.CycleTime
+        fields:
+          CycleTime: int
 
-  StateSystemFcInfo:
-    parent: StateSystemMessage
-    fields:
-      # FC identity/version/build metadata.
-      ApiVersion: optional string
-      FcVariant: optional string
-      BoardInfo: optional string
-      HardwareUid: optional string
-      LegacyUid: optional string
-      VendorId: optional int
-      VendorName: optional string
-      ProductId: optional int
-      ProductName: optional string
-      FlightSwMajor: optional int
-      FlightSwMinor: optional int
-      FlightSwPatch: optional int
-      FlightSwGitHash: optional string
-      OsSwMajor: optional int
-      OsSwMinor: optional int
-      OsSwPatch: optional int
-      OsSwGitHash: optional string
+      FcInfo:
+        desc: FC identity/version/build metadata.
+        key: UAV.State.System.FcInfo
+        fields:
+          ApiVersion: optional string
+          FcVariant: optional string
+          BoardInfo: optional string
+          HardwareUid: optional \nstring
+          LegacyUid: optional string
+          VendorId: optional int
+          VendorName: optional string
+          ProductId: optional int
+          ProductName: optional string
+          FlightSwMajor: optional int
+          FlightSwMinor: optional int
+          FlightSwPatch: optional int
+          FlightSwGitHash: optional string
+          OsSwMajor: optional int
+          OsSwMinor: optional int
+          OsSwPatch: optional int
+          OsSwGitHash: optional string
 
-  StateSystemWaypointInfo:
-    parent: StateSystemMessage
-    fields:
-      # Waypoint mission metadata.
-      WaypointCount: optional int
-      CurrentWaypointIndex: optional int
-      MissionValid: optional bool
+      WaypointInfo:
+        desc: Waypoint mission metadata.
+        key: UAV.State.System.WaypointInfo
+        fields:
+          WaypointCount: optional int
+          CurrentWaypointIndex: optional int
+          MissionValid: optional bool
 
-  StateSystemGpsStatistics:
-    parent: StateSystemMessage
-    fields:
-      # Aggregated GNSS statistics.
-      lastMessageDt: optional float
-      errors: optional float
-      timeouts: optional float
-      hdop: optional float
-      eph: optional float
-      epv: optional float
+      GpsStatistics:
+        desc: Aggregated GNSS statistics.
+        key: UAV.State.System.GpsStatistics
+        fields:
+          lastMessageDt: optional float
+          errors: optional float
+          timeouts: optional float
+          hdop: optional float
+          eph: optional float
+          epv: optional float
 
-  StateSystemFlightMode:
-    parent: StateSystemMessage
-    fields:
-      # Primary FC mode label.
-      FlightMode: string
+      FlightMode:
+        desc: Primary FC mode label.
+        key: UAV.State.System.FlightMode
+        fields:
+          FlightMode: string
 
 
-  ActionFlightMessage:
-    parent: ActionMessage
+  ActionFlight:
+    parent: Action
     variants:
-      ARM: ActionFlightArm
-      DISARM: ActionFlightDisarm
-      SET_TAKEOFF_ALTITUDE: ActionFlightSetTakeoffAltitude
-      TAKEOFF: ActionFlightTakeoff
-      LAND: ActionFlightLand
-      RTL: ActionFlightRtl
-      SET_MODE: ActionFlightSetMode
 
-  ActionFlightArm:
-    parent: ActionFlightMessage
-    # Arm the vehicle.
+      Arm: 
+        desc: Arm the vehicle.
+        key: UAV.Action.Flight.Arm
 
-  ActionFlightDisarm:
-    parent: ActionFlightMessage
-    # Disarm the vehicle.
+      Disarm:
+        desc: Disarm the vehicle.
+        key: UAV.Action.Flight.Disarm
 
-  ActionFlightSetTakeoffAltitude:
-    parent: ActionFlightMessage
-    fields:
-      # Set autonomous takeoff target altitude.
-      AltitudeM: float
+      SetTakeoffAltitude:
+        desc: Set autonomous takeoff target altitude.
+        key: UAV.Action.Flight.SetTakeoffAltitude
+        fields:
+          AltitudeM: float
 
-  ActionFlightTakeoff:
-    parent: ActionFlightMessage
-    # Trigger autonomous takeoff.
+      Takeoff:
+        parent: 
+        desc: Trigger autonomous takeoff.
+        key: UAV.Action.Flight.Takeoff
 
-  ActionFlightLand:
-    parent: ActionFlightMessage
-    # Trigger landing.
+      Land:
+        parent: 
+        desc: Trigger landing.
+        key: UAV.Action.Flight.Land
 
-  ActionFlightRtl:
-    parent: ActionFlightMessage
-    # Return-to-launch command.
+      Rtl:
+        parent: 
+        desc: Return-to-launch command.
+        key: UAV.Action.Flight.Rtl
 
-  ActionFlightSetMode:
-    parent: ActionFlightMessage
-    fields:
-      # Enable/disable named flight mode.
-      Mode: string
-      Enabled: bool
+      SetMode:
+        parent: 
+        desc: Enable/disable named flight mode.
+        key: UAV.Action.Flight.SetMode
+        fields:
+          Mode: string
+          Enabled: bool
 
 
-  ActionNavigationMessage:
-    parent: ActionMessage
+  ActionNav:
+    parent: Action
     variants:
-      GO_TO: ActionNavigationGoTo
-      SET_WAYPOINT: ActionNavigationSetWaypoint
-      SELECT_MISSION: ActionNavigationSelectMission
 
-  ActionNavigationGoTo:
-    parent: ActionNavigationMessage
-    fields:
-      # Go to geographic waypoint.
-      Latitude: float
-      Longitude: float
-      AltitudeM: float
-      YawDeg: float
+      GoTo:
+        desc: Go to geographic waypoint.
+        key: UAV.Action.Navigation.GoTo
+        fields:
+          Latitude: float
+          Longitude: float
+          AltitudeM: float
+          YawDeg: float
 
-  ActionNavigationSetWaypoint:
-    parent: ActionNavigationMessage
-    fields:
-      # Write waypoint entry to FC mission table.
-      WaypointIndex: int
-      Action: int
-      Latitude: float
-      Longitude: float
-      AltitudeM: float
-      Param1: int
-      Param2: int
-      Param3: int
-      Flag: int
+      SetWaypoint:
+        desc: Write waypoint entry to FC mission table.
+        key: UAV.Action.Navigation.SetWaypoint
+        fields:
+          WaypointIndex: int
+          Action: int
+          Latitude: float
+          Longitude: float
+          AltitudeM: float
+          Param1: int
+          Param2: int
+          Param3: int
+          Flag: int
 
-  ActionNavigationSelectMission:
-    parent: ActionNavigationMessage
-    fields:
-      # Set mission sequence index.
-      Sequence: int
+      SelectMission:
+        desc: Set mission sequence index.
+        key: UAV.Action.Navigation.SelectMission
+        fields:
+          Sequence: int
 
-
-  EventFlightMessage:
-    parent: EventMessage
+  ActionControl:
+    parent: Action
     variants:
-      ARMED: EventFlightArmed
-      DISARMED: EventFlightDisarmed
-      TAKEOFF_DETECTED: EventFlightTakeoffDetected
-      LANDED: EventFlightLanded
-      FAILSAFE_CHANGED: EventFlightFailsafeChanged
 
-  EventFlightArmed:
-    parent: EventFlightMessage
-    # Vehicle transitioned to armed.
-
-  EventFlightDisarmed:
-    parent: EventFlightMessage
-    # Vehicle transitioned to disarmed.
-
-  EventFlightTakeoffDetected:
-    parent: EventFlightMessage
-    fields:
-      # Vehicle detected as airborne.
-      AltitudeM: float
-
-  EventFlightLanded:
-    parent: EventFlightMessage
-    # Vehicle landed.
-
-  EventFlightFailsafeChanged:
-    parent: EventFlightMessage
-    fields:
-      # Failsafe state transition.
-      Failsafe: bool
+      SetControlOverride:
+        desc: Apply sparse normalized control override fields at the interface.
+        key: UAV.Action.Control.SetControlOverride
+        fields:
+          Roll: optional float
+          Pitch: optional float
+          Yaw: optional float
+          Throttle: optional float
+          Aux: optional list[optional float]
 
 
-  EventMissionMessage:
-    parent: EventMessage
+  EventFlight:
+    parent: Event
     variants:
-      ABORTED: EventMissionAborted
-      COMPLETED: EventMissionCompleted
 
-  EventMissionAborted:
-    parent: EventMissionMessage
-    fields:
-      # Mission abort event.
-      Reason: string
+      Armed:
+        desc: Vehicle transitioned to armed.
+        key: UAV.Event.Flight.Armed
 
-  EventMissionCompleted:
-    parent: EventMissionMessage
-    # Mission completion event.
+      Disarmed:
+        desc: Vehicle transitioned to disarmed.
+        key: UAV.Event.Flight.Disarmed
+
+      TakeoffDetected:
+        desc: Vehicle detected as airborne.
+        key: UAV.Event.Flight.TakeoffDetected
+        fields:
+          AltitudeM: float
+
+      Landed:
+        desc: Vehicle landed.
+        key: UAV.Event.Flight.Landed
+
+      FailsafeChanged:
+        desc: Failsafe state transition.
+        key: UAV.Event.Flight.FailsafeChanged
+        fields:
+          Failsafe: bool
+
+
+  EventMission:
+    parent: Event
+    variants:
+
+      Aborted:
+        desc: Mission abort event.
+        key: UAV.Event.Mission.Aborted
+        fields:
+          Reason: string
+
+      Completed:
+        desc: Mission completion event.
+        key: UAV.Event.Mission.Completed

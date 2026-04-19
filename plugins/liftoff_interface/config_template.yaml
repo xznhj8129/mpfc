@@ -1,0 +1,30 @@
+plugin: liftoff_interface
+cfg:
+  # required bus client id for the Liftoff telemetry bridge
+  id: liftoff
+  # required topic namespace shared with the core
+  topic_ns: UAV
+  is_interface: true
+  # required UDP bind host for Liftoff telemetry
+  telemetry_host: 0.0.0.0
+  # required UDP bind port for Liftoff telemetry
+  telemetry_port: 9001
+  # required UDP receive timeout seconds
+  socket_timeout_s: 0.2
+  # required seconds without telemetry before FC link is marked down
+  link_timeout_s: 1.0
+  # required UDP receive buffer size
+  packet_buffer_size: 1024
+  # required altitude threshold meters for in-air detection
+  in_air_alt_threshold: 0.5
+  # required publish intervals in seconds keyed by state field name
+  state_intervals:
+    FcConnected: 0.2
+    SensorConfig: 1.0
+    FlightMode: 0.5
+    IsInAir: 0.2
+    AltitudeM: 0.1
+    AttitudeRad: 0.1
+    RcTelemetry: 0.1
+    Battery: 0.5
+    Analog: 0.5

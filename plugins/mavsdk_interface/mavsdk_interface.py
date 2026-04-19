@@ -11,6 +11,7 @@ import logging
 import math
 import queue
 import threading
+import time
 import traceback
 from typing import Any, Dict
 
@@ -29,6 +30,7 @@ from lib.common import (
 )
 from lib.plugin_base import PluginBase
 from lib.state_scheduler import StateScheduler
+from lib.uav import merge_control_fields
 from protocols.namespace_loader import load_protocol_namespace
 
 
@@ -41,6 +43,13 @@ class MavsdkInterface(PluginBase):
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:  # Configure MAVSDK interface plugin.
         super().__init__(cfg, bus_config)
         apply_cfg(self, cfg)
+        self.control_override: Dict[str, Any] = {}
+        self.control_override_lock = threading.Lock()
+        self.control_override_updated_at = 0.0
+        self.control_output: Dict[str, Any] | None = None
+        if self.consume_control_override:
+            self.control_output = dict(self.control_output_initial)
+        self.manual_control_started = False
         if self.conn_type != "udp":
             raise RuntimeError(f"unsupported conn_type {self.conn_type}")
         self.system_address = self.conn_str
@@ -67,6 +76,11 @@ class MavsdkInterface(PluginBase):
         self.shutdown_requested = False
         self.last_abs_alt_m: float | None = None
         self.last_rel_alt_m: float | None = None
+
+    def _override_is_fresh(self) -> bool:  # Check whether the last control override is fresh enough to apply.
+        if not self.control_override:
+            return False
+        return time.monotonic() - self.control_override_updated_at <= float(self.control_override_timeout_s)
 
     def _update_state(self, key: str, value: Any) -> None:  # Update state only when the field is configured.
         if key not in self.state_scheduler.topics:
@@ -120,8 +134,28 @@ class MavsdkInterface(PluginBase):
                 )
                 return
 
+            if action == UAV.Action.Flight.SetTakeoffAltitude:
+                altitude_m = float(params[UAV.State.Navigation.AltitudeM])
+                await self.drone.action.set_takeoff_altitude(altitude_m)
+                self.enqueue_response(request_id, action, True, {UAV.State.Navigation.AltitudeM: altitude_m})
+                return
+
+            if action == UAV.Action.Control.SetControlOverride:
+                if not self.consume_control_override:
+                    self.enqueue_response(request_id, action, False, {"error": "control override disabled"})
+                    return
+                with self.control_override_lock:
+                    self.control_override = dict(params)
+                    self.control_override_updated_at = time.monotonic()
+                    self.control_output = merge_control_fields(self.control_output, self.control_override)
+                    control_override = dict(self.control_override)
+                    control_output = dict(self.control_output)
+                self._update_state(UAV.State.Control.ControlOverride, control_override)
+                self._update_state(UAV.State.Control.ControlOutput, control_output)
+                self.enqueue_response(request_id, action, True, control_override)
+                return
+
             action_table = {
-                UAV.Action.Flight.SetTakeoffAltitude: ("set_takeoff_altitude", UAV.State.Navigation.AltitudeM),
                 UAV.Action.Flight.Arm: ("arm", None),
                 UAV.Action.Flight.Disarm: ("disarm", None),
                 UAV.Action.Flight.Takeoff: ("takeoff", None),
@@ -180,7 +214,7 @@ class MavsdkInterface(PluginBase):
             # [latitude_deg: 47.3979705, longitude_deg: 8.5461639, absolute_altitude_m: 0.20900000631809235, relative_altitude_m: -0.055000003427267075]
             self.last_abs_alt_m = float(position.absolute_altitude_m)
             self.last_rel_alt_m = float(position.relative_altitude_m)
-            self._update_state(UAV.State.Navigation.AltitudeM, position.relative_altitude_m)
+            self._update_state(UAV.State.Navigation.AltitudeM, float(position.relative_altitude_m))
             self._update_state(
                 UAV.State.Navigation.Position,
                 {
@@ -298,6 +332,31 @@ class MavsdkInterface(PluginBase):
             if self.stop_event.is_set():
                 return
 
+    async def _manual_control_loop(self) -> None:  # Send normalized control override through MAVSDK manual control when enabled.
+        if not self.consume_control_override:
+            return
+        while not self.stop_event.is_set():
+            if not self._override_is_fresh():
+                self.manual_control_started = False
+                await asyncio.sleep(float(self.control_override_send_interval_s))
+                continue
+            with self.control_override_lock:
+                control_output = dict(self.control_output)
+                control_override = dict(self.control_override)
+            # MAVLink MANUAL_CONTROL uses x=pitch/forward, y=roll/right, z=thrust, r=yaw.
+            await self.drone.manual_control.set_manual_control_input(
+                float(control_output["Pitch"]),
+                float(control_output["Roll"]),
+                float(control_output["Throttle"]),
+                float(control_output["Yaw"]),
+            )
+            if not self.manual_control_started:
+                await self.drone.manual_control.start_altitude_control()
+                self.manual_control_started = True
+            self._update_state(UAV.State.Control.ControlOverride, control_override)
+            self._update_state(UAV.State.Control.ControlOutput, control_output)
+            await asyncio.sleep(float(self.control_override_send_interval_s))
+
     async def _publish_fc_info(self) -> None:  # Publish FC identification and version snapshot.
         for _ in range(25):
             if self.stop_event.is_set():
@@ -346,6 +405,10 @@ class MavsdkInterface(PluginBase):
         await self._publish_fc_info()
         self.send_online()
 
+        if self.consume_control_override:
+            self._update_state(UAV.State.Control.ControlOverride, {})
+            self._update_state(UAV.State.Control.ControlOutput, dict(self.control_output))
+
         tasks = [
             asyncio.create_task(self._process_requests()),
             asyncio.create_task(self._watch_in_air()),
@@ -360,6 +423,8 @@ class MavsdkInterface(PluginBase):
             asyncio.create_task(self._watch_flight_mode()),
             asyncio.create_task(self._watch_imu()),
         ]
+        if self.consume_control_override:
+            tasks.append(asyncio.create_task(self._manual_control_loop()))
 
         try:
             while not self.stop_event.is_set():

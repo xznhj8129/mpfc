@@ -1,0 +1,219 @@
+version: 1
+
+name: ATAK
+desc: "ATAK/CoT messaging contract for HiveOS interfaces."
+
+structs:
+  ATAK:
+    variants:
+      - State
+      - Action
+      - Event
+
+  State:
+    parent: ATAK
+    variants:
+      - StateLink
+      - StateRx
+      - StateTx
+      - StateSystem
+
+  Action:
+    parent: ATAK
+    variants:
+      - ActionCot
+      - ActionMarker
+      - ActionGeoChat
+
+  Event:
+    parent: ATAK
+    variants:
+      - EventCot
+      - EventMarker
+      - EventGeoChat
+      - EventSystem
+
+  StateLink:
+    parent: State
+    variants:
+      TcpClientConnected:
+        desc: Outbound TCP CoT client connection state.
+        key: ATAK.State.Link.TcpClientConnected
+        fields:
+          TcpClientConnected: bool
+
+  StateRx:
+    parent: State
+    variants:
+      LastEvent:
+        desc: Last received CoT event summary.
+        key: ATAK.State.Rx.LastEvent
+        fields:
+          Uid: string
+          Type: string
+          How: string
+          Callsign: optional string
+          Time: string
+          Start: string
+          Stale: string
+          PositionLatDeg: float
+          PositionLonDeg: float
+          PositionHaeM: float
+          PositionCe: float
+          PositionLe: float
+          DetailXml: optional string
+          SourceHost: string
+          SourcePort: int
+
+  StateTx:
+    parent: State
+    variants:
+      LastResult:
+        desc: Last transmission result summary.
+        key: ATAK.State.Tx.LastResult
+        fields:
+          TargetCount: int
+          Bytes: int
+
+  StateSystem:
+    parent: State
+    variants:
+      LastError:
+        desc: Last parser or transport error string.
+        key: ATAK.State.System.LastError
+        fields:
+          LastError: string
+
+      RxCount:
+        desc: Inbound event count.
+        key: ATAK.State.System.RxCount
+        fields:
+          RxCount: int
+
+      TxCount:
+        desc: Outbound send count.
+        key: ATAK.State.System.TxCount
+        fields:
+          TxCount: int
+
+      RxParseErrors:
+        desc: Inbound parse error count.
+        key: ATAK.State.System.RxParseErrors
+        fields:
+          RxParseErrors: int
+
+  ActionCot:
+    parent: Action
+    variants:
+      SendEvent:
+        desc: Transmit a generic CoT event JSON payload.
+        key: ATAK.Action.Cot.SendEvent
+        fields:
+          Uid: string
+          Type: string
+          How: string
+          Time: optional string
+          Start: optional string
+          Stale: optional string
+          PositionLatDeg: float
+          PositionLonDeg: float
+          PositionHaeM: float
+          PositionCe: float
+          PositionLe: float
+          Callsign: optional string
+          DetailXml: optional string
+          Targets: optional list[any]
+
+  ActionMarker:
+    parent: Action
+    variants:
+      SendMarker:
+        desc: Transmit marker CoT event.
+        key: ATAK.Action.Marker.SendMarker
+        fields:
+          Callsign: string
+          Uid: string
+          CotType: string
+          PositionLatDeg: float
+          PositionLonDeg: float
+          PositionAltM: float
+          PositionCe: float
+          PositionLe: float
+          StaleSeconds: optional int
+          Targets: optional list[any]
+
+  ActionGeoChat:
+    parent: Action
+    variants:
+      SendGeoChat:
+        desc: Transmit ATAK geochat message.
+        key: ATAK.Action.GeoChat.SendGeoChat
+        fields:
+          Message: string
+          ToTeam: string
+          PositionLatDeg: float
+          PositionLonDeg: float
+          PositionAltM: float
+          PositionCe: float
+          PositionLe: float
+          Targets: optional list[any]
+
+  EventCot:
+    parent: Event
+    variants:
+      ReceivedEvent:
+        desc: A CoT event was received and parsed.
+        key: ATAK.Event.Cot.ReceivedEvent
+        fields:
+          Uid: string
+          Type: string
+          How: string
+          Callsign: optional string
+          Time: string
+          Start: string
+          Stale: string
+          PositionLatDeg: float
+          PositionLonDeg: float
+          PositionHaeM: float
+          PositionCe: float
+          PositionLe: float
+          DetailXml: optional string
+          SourceHost: string
+          SourcePort: int
+
+  EventMarker:
+    parent: Event
+    variants:
+      ReceivedMarker:
+        desc: A marker-like CoT event was received.
+        key: ATAK.Event.Marker.ReceivedMarker
+        fields:
+          Uid: string
+          Callsign: optional string
+          CotType: string
+          PositionLatDeg: float
+          PositionLonDeg: float
+          PositionHaeM: float
+          PositionCe: float
+          PositionLe: float
+
+  EventGeoChat:
+    parent: Event
+    variants:
+      ReceivedGeoChat:
+        desc: A geochat CoT event was received.
+        key: ATAK.Event.GeoChat.ReceivedGeoChat
+        fields:
+          Uid: string
+          FromCallsign: optional string
+          ToTeam: optional string
+          Message: string
+
+  EventSystem:
+    parent: Event
+    variants:
+      ParseError:
+        desc: Inbound CoT parse failure.
+        key: ATAK.Event.System.ParseError
+        fields:
+          Error: string

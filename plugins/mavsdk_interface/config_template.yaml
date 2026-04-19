@@ -14,6 +14,18 @@ cfg:
   mav_sysid: 1
   # required; enable mavsdk_server debug logging
   mavsdk_log_debug: false
+  # required; enable normalized ControlOverride consumption via MAVSDK manual control
+  consume_control_override: false
+  # required when consume_control_override=true; stale override stops the manual-control stream
+  control_override_timeout_s: 0.3
+  # required when consume_control_override=true; manual-control send period
+  control_override_send_interval_s: 0.05
+  # required when consume_control_override=true; held normalized control state before sparse overrides are merged
+  control_output_initial:
+    Roll: 0.0
+    Pitch: 0.0
+    Yaw: 0.0
+    Throttle: 0.0
   # required publish intervals in seconds keyed by state field name
   state_intervals:
     IsInAir: 0.1
@@ -34,3 +46,5 @@ cfg:
     FlightMode: 0.2
     SensorConfig: 1.0
     ActiveModeNames: 0.2
+    ControlOverride: 0.1
+    ControlOutput: 0.1

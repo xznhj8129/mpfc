@@ -20,7 +20,7 @@
       "direction": "any <-> any",
       "summary": "General inter-client configuration/parameter setting topic",
       "data": {
-        "name": "value key (examples: rc_override, override_enabled, cv_cmd, guidance_enabled)",
+        "name": "value key (examples: control_override, cv_cmd, guidance_enabled)",
         "value": "value to set"
       }
     },
