@@ -1,2 +1,3 @@
 * Establush reference conventions
 * Pi interface module for GPIO, Wifi, BT, etc
+* Remove frogproto imports/deps

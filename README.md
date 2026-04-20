@@ -1,5 +1,3 @@
-/media/anon/WD2TB/DataVault/TechProjects/Software/GitRepos/hiveos/README.md
-
 # HiveOS
 
 ## WIP
@@ -9,7 +7,7 @@ This is pre-0.01 initial development and sketching out, a lot will change quickl
 
 HiveOS decouples mission logic from protocol complexity. Flight cores express linear, readable mission intent while plugins handle the messy details of MAVLink, MSP, YOLO, CoT, and other integrations — all communicating over a structured MQTT message bus.
 
-**Why not ROS**
+**Why not ROS**\
 HiveOS is simple on purpose: one mission core, plugins for protocol stuff, an MQTT bus, and messages you can read directly. No special build maze, no huge framework stack, no graph debugging rabbit hole. This is intended to just work.
 
 ---
@@ -46,16 +44,16 @@ HiveOS is simple on purpose: one mission core, plugins for protocol stuff, an MQ
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  main.py (supervisor)                                    │
-│  ┌────────────┐  ┌────────────────┐  ┌──────────────┐   │
-│  │ Flight Core │  │ uav_controller │  │ Interface     │   │
-│  │ (mission)   │  │ (flight policy)│  │ plugin/backend│   │
-│  └──────┬─────┘  └────────┬───────┘  └──────┬───────┘   │
-│         │                 │                  │            │
-│  ───────┴─────────────────┴──────────────────┴────────    │
-│              MQTT Bus  (hiveos/<instance>/...)            │
-└──────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  main.py (supervisor)                                      │
+│  ┌─────────────┐  ┌────────────────┐  ┌────────────────┐   │
+│  │ Flight Core │  │ uav_controller │  │ Interface      │   │
+│  │ (mission)   │  │ (flight policy)│  │ plugin/backend │   │
+│  └──────┬──────┘  └────────┬───────┘  └──────┬─────────┘   │
+│         │                  │                 │             │
+│  ───────┴──────────────────┴─────────────────┴────────     │
+│              MQTT Bus  (hiveos/<instance>/...)             │
+└────────────────────────────────────────────────────────────┘
 ```
 
 **Runtime flow:**
