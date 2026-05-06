@@ -32,7 +32,9 @@ class TakeoffLandCore(CoreBase):
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
         super().__init__(cfg, bus_config)
         apply_cfg(self, cfg)
-        self.poll_interval_s = float(cfg["poll_interval_s"])
+        mission_cfg = cfg["mission"]
+        apply_cfg(self, mission_cfg)
+        self.poll_interval_s = float(mission_cfg["poll_interval_s"])
         interface_cfg = cfg["interface"]
         self.interface_id = interface_cfg["id"]
         self.interface_ns = interface_cfg["topic_ns"]

@@ -1,0 +1,31 @@
+plugin: px4_sitl_gz_launcher
+cfg:
+  # required bus client id
+  id: px4_sitl
+  # required PX4/Gazebo auto-start flag
+  auto_start: true
+  # required poll interval seconds while the launched process is running
+  poll_interval_s: 0.5
+  # required PX4 settings
+  px4:
+    px4_dir: ../../../other_software/PX4-Autopilot
+    sitl_vehicle: gz_x500_mono_cam
+    companion_mavlink_port: 14540
+    qgc_mavlink_port: 14550
+    qgc_mavlink_enabled: true
+    qgc_local_port: 18571
+    home_lat: ""
+    home_lon: ""
+    home_alt: ""
+    model_pose: ""
+  # required Gazebo settings
+  gazebo:
+    gz_world: default
+    gz_ip: 127.0.0.1
+    gz_gui: true
+    video_host_ip: 127.0.0.1
+    video_host_port: 5601
+  # required log file path
+  log_file: logs/px4_sitl_<my_name>_<companion_mavlink_port>.log
+  # required shell pid file path
+  shell_pid_file: .px4_shell_<my_name>_<companion_mavlink_port>.pid

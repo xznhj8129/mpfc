@@ -10,13 +10,10 @@ if [[ -f "$ENV_FILE" ]]; then
     set +a
 fi
 
-MAV_MAIN_CONFIG="${MAV_MAIN_CONFIG:-flight_cores/test_takeoff_land/config_px4.yaml}"
-MY_NAME="${MY_NAME:-uav1}"
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --main-config)
-            MAV_MAIN_CONFIG="$2"
+            MCVST_MAIN_CONFIG="$2"
             shift 2
             ;;
         --my-name)
@@ -30,13 +27,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "${LD_LIBRARY_PATH:-}" == *"/tmp/.mount_vscodi"* ]]; then
-    unset LD_LIBRARY_PATH
-fi
+MCVST_MAIN_CONFIG="${MCVST_MAIN_CONFIG:-flight_cores/example_mcvst/config.yaml}"
+MY_NAME="${MY_NAME:-cv1}"
 
 main_args=(--my_name="$MY_NAME")
-
-MAIN_CONFIG="$MAV_MAIN_CONFIG"
+MAIN_CONFIG="$MCVST_MAIN_CONFIG"
 export MAIN_CONFIG
 echo "[RUN] MAIN_CONFIG=$MAIN_CONFIG my_name=$MY_NAME" >&2
 env -u LD_LIBRARY_PATH python main.py "${main_args[@]}"
