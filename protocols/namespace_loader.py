@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 
 PROTOCOLS_DIR = Path(__file__).resolve().parent
-REGISTRY_PATH = PROTOCOLS_DIR / "registry.yaml"
+SCHEMA_FORMAT_PATH = PROTOCOLS_DIR / "schema_format.yaml"
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -123,11 +123,14 @@ def _flatten_leaf_tokens(structs: dict[str, Any], struct_name: str) -> list[tupl
 
 @lru_cache(maxsize=None)
 def _load_schema(domain: str) -> dict[str, Any]:
-    registry = _load_yaml(REGISTRY_PATH)
-    protocol_entries = registry["Protocols"]
     target_name = domain.upper()
-    schema_path = PROTOCOLS_DIR / str(protocol_entries[target_name]["SchemaPath"])
-    return _load_yaml(schema_path)
+    for schema_path in sorted(PROTOCOLS_DIR.glob("*.yaml")):
+        if schema_path == SCHEMA_FORMAT_PATH:
+            continue
+        schema = _load_yaml(schema_path)
+        if type(schema) is dict and str(schema["name"]).upper() == target_name:
+            return schema
+    raise RuntimeError(f"protocol not found domain={domain}")
 
 
 @lru_cache(maxsize=None)

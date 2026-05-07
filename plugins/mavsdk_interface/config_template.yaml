@@ -52,5 +52,6 @@ cfg:
     FlightMode: 0.2
     SensorConfig: 1.0
     ActiveModeNames: 0.2
+    ControlAttitude: 0.1
     ControlOverride: 0.1
     ControlOutput: 0.1

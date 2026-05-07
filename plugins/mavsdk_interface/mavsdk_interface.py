@@ -20,6 +20,7 @@ from grpc.aio import AioRpcError
 from mavsdk import System
 from mavsdk.action import ActionError
 from mavsdk.info import InfoError
+from mavsdk.offboard import Attitude, OffboardError
 
 from lib.common import (
     apply_cfg,
@@ -50,6 +51,7 @@ class MavsdkInterface(PluginBase):
         if self.consume_control_override:
             self.control_output = dict(self.control_output_initial)
         self.manual_control_started = False
+        self.offboard_attitude_started = False
         if self.conn_type != "udp":
             raise RuntimeError(f"unsupported conn_type {self.conn_type}")
         self.system_address = self.conn_str
@@ -156,6 +158,45 @@ class MavsdkInterface(PluginBase):
                 self.enqueue_response(request_id, action, True, control_override)
                 return
 
+            if action == UAV.Action.Control.SetControlAttitude:
+                control_attitude = {
+                    "RollDeg": float(params["RollDeg"]),
+                    "PitchDeg": float(params["PitchDeg"]),
+                    "YawDeg": float(params["YawDeg"]),
+                    "ThrustValue": float(params["ThrustValue"]),
+                }
+                await self.drone.offboard.set_attitude(
+                    Attitude(
+                        control_attitude["RollDeg"],
+                        control_attitude["PitchDeg"],
+                        control_attitude["YawDeg"],
+                        control_attitude["ThrustValue"],
+                    )
+                )
+                self._update_state(UAV.State.Control.ControlAttitude, control_attitude)
+                self.enqueue_response(request_id, action, True, control_attitude)
+                print(
+                    f"[PLUGIN] {self.client_id} offboard_set_attitude "
+                    f"roll_deg={control_attitude['RollDeg']} pitch_deg={control_attitude['PitchDeg']} "
+                    f"yaw_deg={control_attitude['YawDeg']} thrust={control_attitude['ThrustValue']}",
+                    flush=True,
+                )
+                return
+
+            if action == UAV.Action.Control.StartOffboard:
+                await self.drone.offboard.start()
+                self.offboard_attitude_started = True
+                self.enqueue_response(request_id, action, True, {})
+                print(f"[PLUGIN] {self.client_id} offboard_start=True", flush=True)
+                return
+
+            if action == UAV.Action.Control.StopOffboard:
+                await self.drone.offboard.stop()
+                self.offboard_attitude_started = False
+                self.enqueue_response(request_id, action, True, {})
+                print(f"[PLUGIN] {self.client_id} offboard_stop=True", flush=True)
+                return
+
             action_table = {
                 UAV.Action.Flight.Arm: ("arm", None),
                 UAV.Action.Flight.Disarm: ("disarm", None),
@@ -175,7 +216,7 @@ class MavsdkInterface(PluginBase):
                 return
 
             self.enqueue_response(request_id, action, False, {"error": f"unknown action {action}"})
-        except ActionError as exc:
+        except (ActionError, OffboardError) as exc:
             self.enqueue_response(request_id, action, False, {"error": str(exc)})
 
     async def _watch_in_air(self) -> None:  # Watch in-air telemetry updates.

@@ -271,6 +271,7 @@ structs:
     variants:
       RC_TELEMETRY: RcTelemetry
       CONTROL_INPUT: ControlInput
+      CONTROL_ATTITUDE: ControlAttitude
       CONTROL_OVERRIDE: ControlOverride
       CONTROL_OUTPUT: ControlOutput
       RX_CONFIG: RxConfig
@@ -296,6 +297,15 @@ structs:
       Yaw: float
       Throttle: float
       Aux: optional list[float]
+
+  ControlAttitude:
+    desc: MAVSDK offboard attitude setpoint.
+    key: UAV.State.Control.ControlAttitude
+    fields:
+      RollDeg: float
+      PitchDeg: float
+      YawDeg: float
+      ThrustValue: float
 
   ControlOverride:
     desc: Sparse normalized control override mask.
@@ -496,6 +506,25 @@ structs:
           Yaw: optional float
           Throttle: optional float
           Aux: optional list[optional float]
+
+      SetControlAttitude:
+        desc: Apply MAVSDK offboard attitude setpoint at the interface.
+        key: UAV.Action.Control.SetControlAttitude
+        fields:
+          RollDeg: float
+          PitchDeg: float
+          YawDeg: float
+          ThrustValue: float
+
+      StartOffboard:
+        desc: Start PX4/MAVSDK offboard mode using the active offboard setpoint stream.
+        key: UAV.Action.Control.StartOffboard
+        fields: {}
+
+      StopOffboard:
+        desc: Stop PX4/MAVSDK offboard mode.
+        key: UAV.Action.Control.StopOffboard
+        fields: {}
 
 
   EventFlight:

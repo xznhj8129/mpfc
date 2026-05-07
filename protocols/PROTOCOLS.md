@@ -17,9 +17,9 @@ This is an architecture-first namespace layer:
 - Enforce explicit field-level contracts (no opaque object blobs).
 
 ## Layout
-- `registry.json`: protocol catalog and schema locations.
-- `schema_format.json`: canonical schema shape.
-- `<domain>.json`: protocol contract per domain (for example `uav.json`, `cv.json`, `atak.json`).
+- `schema_format.yaml`: canonical schema shape.
+- `<domain>.yaml`: protocol contract per domain (for example `uav.yaml`, `cv.yaml`, `atak.yaml`).
+- `namespace_loader.py` discovers valid protocol YAML files at runtime by their `name` field.
 
 ## Rules
 - `State`, `Action`, and `Event` are explicitly defined.
