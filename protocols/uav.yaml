@@ -38,6 +38,7 @@ structs:
       - StatePower
       - StateControl
       - StateSystem
+      - StateDebug
 
   Action:
     parent: UAV
@@ -417,6 +418,12 @@ structs:
         fields:
           FlightMode: string
 
+  StateDebug:
+    parent: State
+    desc: Generic debug string
+    key: UAV.State.Debug
+    fields:
+      data: string
 
   ActionFlight:
     parent: Action

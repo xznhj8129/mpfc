@@ -15,6 +15,9 @@ from typing import Any, Dict
 
 from lib.plugin_base import PluginBase
 
+HIVEOS_QGC_POST_BEGIN = "# HiveOS: begin dedicated QGC MAVLink output"
+HIVEOS_QGC_POST_END = "# HiveOS: end dedicated QGC MAVLink output"
+
 
 class Px4SitlGzLauncher(PluginBase):
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
@@ -34,11 +37,11 @@ class Px4SitlGzLauncher(PluginBase):
         if not bool(self.px4_cfg["qgc_mavlink_enabled"]):
             return
 
-        sitl_vehicle = self.px4_cfg["sitl_vehicle"]
+        airframe_vehicle = self.px4_cfg["airframe_vehicle"]
         autostart_dir = self.px4_dir / "build/px4_sitl_default/etc/init.d-posix/airframes"
         if not autostart_dir.is_dir():
             autostart_dir = self.px4_dir / "ROMFS/px4fmu_common/init.d-posix/airframes"
-        autostart_file = sorted(autostart_dir.glob(f"*_{sitl_vehicle}"))[0]
+        autostart_file = sorted(autostart_dir.glob(f"*_{airframe_vehicle}"))[0]
 
         self.autostart_post_file = autostart_file.with_name(f"{autostart_file.name}.post")
         if self.autostart_post_file.exists():
@@ -49,15 +52,29 @@ class Px4SitlGzLauncher(PluginBase):
         qgc_mavlink_port = self.px4_cfg["qgc_mavlink_port"]
         lines = []
         if self.autostart_post_backup is not None:
-            lines.extend(self.autostart_post_backup.read_text(encoding="utf-8").splitlines())
+            skip_hiveos_block = False
+            for line in self.autostart_post_backup.read_text(encoding="utf-8").splitlines():
+                if line == HIVEOS_QGC_POST_BEGIN or line == "# HiveOS: dedicated QGC MAVLink output":
+                    skip_hiveos_block = True
+                    continue
+                if skip_hiveos_block:
+                    if line == HIVEOS_QGC_POST_END:
+                        skip_hiveos_block = False
+                    elif line.startswith("mavlink start -x -u ") or line.startswith("mavlink stream ") and f" -u {qgc_local_port}" in line:
+                        continue
+                    else:
+                        skip_hiveos_block = False
+                if not skip_hiveos_block:
+                    lines.append(line)
         lines.extend(
             [
-                "# HiveOS: dedicated QGC MAVLink output",
+                HIVEOS_QGC_POST_BEGIN,
                 f"mavlink start -x -u {qgc_local_port} -r 4000000 -f -o {qgc_mavlink_port}",
                 f"mavlink stream -r 50 -s GLOBAL_POSITION_INT -u {qgc_local_port}",
                 f"mavlink stream -r 50 -s ATTITUDE -u {qgc_local_port}",
                 f"mavlink stream -r 20 -s RC_CHANNELS -u {qgc_local_port}",
                 f"mavlink stream -r 10 -s SYS_STATUS -u {qgc_local_port}",
+                HIVEOS_QGC_POST_END,
             ]
         )
         self.autostart_post_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -114,9 +131,7 @@ class Px4SitlGzLauncher(PluginBase):
             f"echo \"[PX4_SITL] exited status=$exit_code\"; "
             f"exit $exit_code"
         )
-        self.term_proc = subprocess.Popen(
-            ["gnome-terminal", f"--title=PX4 SITL {self.client_id}", "--", "bash", "-lc", cmd]
-        )
+        self.term_proc = subprocess.Popen(["bash", "-lc", cmd], start_new_session=True)
         print(
             f"[PX4_SITL] id={self.client_id} pid={self.term_proc.pid} vehicle={sitl_vehicle} world={gz_world} "
             f"companion_mavlink=udp://:{self.px4_cfg['companion_mavlink_port']} "

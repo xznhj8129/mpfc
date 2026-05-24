@@ -36,8 +36,6 @@ class StateScheduler:
         if key not in self.topics:
             raise RuntimeError(f"unknown state key {key}")
         with self.lock:
-            if key in self.state and self.state[key] == value:
-                return
             self.state[key] = value
             self.pending.add(key)
 

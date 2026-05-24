@@ -10,6 +10,7 @@ cfg:
   px4:
     px4_dir: ../../../other_software/PX4-Autopilot
     sitl_vehicle: gz_x500_mono_cam
+    airframe_vehicle: gz_x500_mono_cam
     companion_mavlink_port: 14540
     qgc_mavlink_port: 14550
     qgc_mavlink_enabled: true

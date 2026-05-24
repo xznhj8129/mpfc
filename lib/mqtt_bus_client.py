@@ -36,6 +36,7 @@ class MqttBusClient:
         self.subscriptions: set[str] = set()
         self.subscription_lock = threading.Lock()
         self.background_error: RuntimeError | None = None
+        self.closed = False
         self.client = mqtt.Client(client_id=client_id, clean_session=True, protocol=mqtt.MQTTv311)
         self.client.enable_logger()
         self.client.on_connect = self._on_connect
@@ -110,6 +111,8 @@ class MqttBusClient:
         self._subscribe_topic(topic)
 
     def publish(self, topic: str, payload: Dict) -> None:
+        if self.closed:
+            return
         self._raise_background_error()
         full = self._topic(topic)
         encoded = json.dumps(payload, separators=(",", ":")).encode(ENCODING)
@@ -127,6 +130,7 @@ class MqttBusClient:
         return item
 
     def close(self) -> None:
+        self.closed = True
         try:
             self.client.disconnect()
         finally:

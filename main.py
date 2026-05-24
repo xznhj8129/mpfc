@@ -362,6 +362,16 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
     except KeyboardInterrupt:
         print("[MAIN] interrupt received, terminating", flush=True)
     finally:
+        alive = [proc for proc in all_procs if proc.is_alive()]
+        if alive:
+            try:
+                bus_client.publish(CONTROL_SHUTDOWN_TOPIC, build_envelope("main", CONTROL_SHUTDOWN_TOPIC, {}))
+            except MqttPublishError:
+                pass
+            deadline = time.monotonic() + 5.0
+            while alive and time.monotonic() < deadline:
+                time.sleep(0.1)
+                alive = [proc for proc in all_procs if proc.is_alive()]
         try:
             bus_client.close()
         except Exception:

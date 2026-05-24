@@ -64,7 +64,11 @@ def _build_namespace(structs: dict[str, Any], struct_name: str, token_index: int
     if type(variants) is list:
         for child_struct_name in variants:
             child_name = _key_token(_first_message_key(structs, child_struct_name), token_index)
-            values[child_name] = _build_namespace(structs, child_struct_name, token_index + 1)
+            child_struct = structs[child_struct_name]
+            if "variants" in child_struct:
+                values[child_name] = _build_namespace(structs, child_struct_name, token_index + 1)
+            else:
+                values[child_name] = child_name
         return SimpleNamespace(**values)
 
     for child_name, child_value in variants.items():
