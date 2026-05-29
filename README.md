@@ -1,14 +1,14 @@
-# HiveOS
+# MPFC
 
 ## WIP
 This is pre-0.01 initial development and sketching out, a lot will change quickly. A lot of the current architecture, message formats, schema types, networking and else may change dramatically.
 
 **Bus-first modular flight runtime for UAV systems.**
 
-HiveOS decouples mission logic from protocol complexity. Flight cores express linear, readable mission intent while plugins handle the messy details of MAVLink, MSP, YOLO, CoT, and other integrations — all communicating over a structured MQTT message bus.
+MPFC decouples mission logic from protocol complexity. Flight cores express linear, readable mission intent while plugins handle the messy details of MAVLink, MSP, YOLO, CoT, and other integrations — all communicating over a structured MQTT message bus.
 
 **Why not ROS**\
-HiveOS is simple on purpose: one mission core, plugins for protocol stuff, an MQTT bus, and messages you can read directly. No special build maze, no huge framework stack, no graph debugging rabbit hole. This is intended to just work.
+MPFC is simple on purpose: one mission core, plugins for protocol stuff, an MQTT bus, and messages you can read directly. No special build maze, no huge framework stack, no graph debugging rabbit hole. This is intended to just work.
 
 ---
 
@@ -52,7 +52,7 @@ HiveOS is simple on purpose: one mission core, plugins for protocol stuff, an MQ
 │  └──────┬──────┘  └────────┬───────┘  └──────┬─────────┘   │
 │         │                  │                 │             │
 │  ───────┴──────────────────┴─────────────────┴────────     │
-│              MQTT Bus  (hiveos/<instance>/...)             │
+│              MQTT Bus  (mpfc/<instance>/...)             │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -115,7 +115,7 @@ Build a multi-arch image with Docker Buildx:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t hiveos:latest .
+  -t mpfc:latest .
 ```
 
 For Raspberry Pi Zero 2 W and Raspberry Pi 4B, prefer a 64-bit OS and the `linux/arm64` image. Both boards are 64-bit capable. The `linux/arm/v7` build stays available for 32-bit Pi OS, but the Dockerfile intentionally skips MAVSDK and YOLO there because upstream `grpcio` / Torch support is not dependable on 32-bit ARM.
@@ -132,9 +132,9 @@ docker run --rm -it \
   --device /dev/gpiomem \
   --device /dev/gpiochip0 \
   --device /dev/gpiochip1 \
-  -e MAIN_CONFIG=/opt/hiveos/flight_cores/test_core/config.yaml \
-  -v "$PWD:/opt/hiveos" \
-  hiveos:latest
+  -e MAIN_CONFIG=/opt/mpfc/flight_cores/test_core/config.yaml \
+  -v "$PWD:/opt/mpfc" \
+  mpfc:latest
 ```
 
 Notes:
@@ -142,7 +142,7 @@ Notes:
 - `--network host` is the recommended Linux mode for MAVLink UDP, ATAK multicast, Meshtastic sidecars, and local GCS tools.
 - Add or remove `--device` flags to match your hardware. For cameras also pass `/dev/video0` or the specific V4L device.
 - If you use `config/mavlink-router/main.conf`, point `plugins/mavsdk_interface/config_template.yaml` or your runtime config at `udp://:14540`, because the bundled router forwards the FC stream to `127.0.0.1:14540`.
-- The image starts Mosquitto, `mavlink-routerd`, and `main.py` together by default. Set `HIVEOS_START_MOSQUITTO=0` or `HIVEOS_START_MAVLINK_ROUTER=0` only when you want to use host-managed services instead.
+- The image starts Mosquitto, `mavlink-routerd`, and `main.py` together by default. Set `MPFC_START_MOSQUITTO=0` or `MPFC_START_MAVLINK_ROUTER=0` only when you want to use host-managed services instead.
 
 ### MSP (iNav)
 
@@ -231,7 +231,7 @@ Cores live in `flight_cores/` and inherit from `CoreBase`. Each implements a `ru
 
 ## Plugins
 
-Plugins live in `plugins/` and inherit from `PluginBase`. They translate between the standardized HiveOS bus vocabulary and external protocols/devices.
+Plugins live in `plugins/` and inherit from `PluginBase`. They translate between the standardized MPFC bus vocabulary and external protocols/devices.
 
 | Plugin | Description |
 |--------|-------------|
@@ -258,7 +258,7 @@ All communication flows through the MQTT bus using JSON envelopes:
 }
 ```
 
-Topics are prefixed with `hiveos/<instance_name>/` and follow these patterns:
+Topics are prefixed with `mpfc/<instance_name>/` and follow these patterns:
 
 | Pattern | Direction | Purpose |
 |---------|-----------|---------|
@@ -340,7 +340,7 @@ Central primitives in `lib/common.py`:
 ### Project Structure
 
 ```
-hiveos/
+mpfc/
 ├── main.py                     # Supervisor entrypoint
 ├── config/
 │   └── bus_topics_schema.json  # Topic pattern definitions

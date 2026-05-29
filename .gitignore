@@ -8,3 +8,15 @@ testing/
 yolov8n.pt
 .codex
 logs/
+*.key
+*.pem
+*.crt
+*.ovpn
+*.log
+captures/
+recordings/
+field/
+secrets/
+private/
+config/local*
+config/real*
