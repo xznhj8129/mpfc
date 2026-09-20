@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import uuid
 
 from lib.occid_bus import occid
 from plugins.execution_ingress.execution_ingress import (
@@ -13,25 +14,32 @@ from plugins.execution_ingress.execution_ingress import (
 )
 
 
-def sid(value: str) -> object:
-    return occid.StringID(id_type=occid.IdentifierType.DB_ID, value=value)
+def uid(value: str | None = None) -> object:
+    return occid.UID(root=uuid.UUID(value).bytes if value else uuid.uuid4().bytes)
 
 
 def record(value: str) -> object:
-    return occid.RecordMeta(
-        record_id=sid(f"record.{value}"),
-        revision=0,
-        created_ts=1.0,
-        updated_ts=1.0,
+    now = occid.Timestamp(utime=1.0, tz=0)
+    return occid.Record(
+        uid=uid(),
+        id=occid.IntID(root=0),
+        created_ts=now,
+        updated_ts=now,
         origin_system="mpfc.tests",
         provenance=[],
     )
 
 
+ASSET_UID = uid("11111111-1111-4111-8111-111111111111")
+EXECUTOR_UID = uid("22222222-2222-4222-8222-222222222222")
+CONTROL_UID = uid("33333333-3333-4333-8333-333333333333")
+
+
 def build_bundle() -> tuple[object, object, object, object, object]:
     location = occid.Mark(
         record=record("location"),
-        location_id=sid("location.target"),
+        uid=uid(),
+        id=occid.IntID(root=1),
         name="Target",
         position=occid.GlobalPosition(
             lat=36.530440,
@@ -42,81 +50,97 @@ def build_bundle() -> tuple[object, object, object, object, object]:
     )
     task = occid.TaskManeuver(
         record=record("task"),
-        task_id=sid("task.move"),
+        uid=uid(),
+        id=occid.IntID(root=1),
         instruction="Move to the designated target point and hold there.",
-        target_refs=[],
-        location_refs=[location.location_id],
-        objective_id=None,
+        target_uids=[],
+        location_uids=[location.uid],
+        objective_uid=None,
         constraints=[],
+        priority=occid.TaskPriority.ROUTINE,
+        status=occid.TaskStatus.ACCEPTED,
+        phase=occid.TaskPhase.ASSIGNED,
         intent=occid.ManeuverIntent.MOVE,
     )
-    plan = occid.Plan(
-        record=record("plan"),
-        plan_id=sid("plan.move"),
-        name="move",
-        objective_ids=[],
-        task_ids=[task.task_id],
-        actor_ids=[sid("uav1")],
-        resource_ids=[],
-        assignments=[],
-        steps=[],
-        routes=[],
-        constraints=[],
-        contingencies=[],
-        approval_state=occid.PlanApprovalState.APPROVED,
-    )
-    assignment = occid.Assignment(
+    assignment = occid.TaskAssignment(
         record=record("assignment"),
-        assignment_id=sid("assignment.move"),
-        task_id=task.task_id,
-        assignee_id=sid("uav1"),
-        plan_id=plan.plan_id,
-        authority_id=None,
-        assigned_by=sid("control"),
-        assigned_at=1.0,
+        uid=uid(),
+        id=occid.IntID(root=1),
+        assignee_uid=ASSET_UID,
+        authority_uid=CONTROL_UID,
+        assigned_by_uid=CONTROL_UID,
         status=occid.AssignmentStatus.ASSIGNED,
         constraints=[],
+        task_uid=task.uid,
+    )
+    plan = occid.OperationalPlan(
+        record=record("plan"),
+        uid=uid(),
+        id=occid.IntID(root=1),
+        name="move",
+        approval_state=occid.PlanApprovalState.APPROVED,
+        objective_uids=[],
+        task_uids=[task.uid],
+        actor_uids=[ASSET_UID],
+        resource_uids=[],
+        assignment_uids=[assignment.uid],
+        constraints=[],
+        contingencies=[],
     )
     execution = occid.Execution(
         record=record("execution"),
-        execution_id=sid("execution.move"),
-        assignment_id=assignment.assignment_id,
-        executor_id=sid("mpfc:uav1"),
+        uid=uid(),
+        id=occid.IntID(root=1),
+        assignment_uid=assignment.uid,
+        executor_uid=EXECUTOR_UID,
+        attempt=0,
         phase=occid.ExecutionPhase.CREATED,
-        external_job_refs=[sid("dispatch.move.1")],
+        started_at=occid.Timestamp(utime=1.0, tz=0),
+        completed_at=occid.Timestamp(utime=1.0, tz=0),
+        external_job_refs=["dispatch.move.1"],
     )
     return location, task, plan, assignment, execution
+
+
+def _validate(execution, assignment, task, plan):
+    return validate_execution_bundle(
+        execution,
+        assignment,
+        task,
+        plan,
+        executor_uid=EXECUTOR_UID,
+        asset_uid=ASSET_UID,
+    )
 
 
 class ExecutionIngressTests(unittest.TestCase):
     def test_bundle_validation_preserves_execution_correlation(self) -> None:
         _, task, plan, assignment, execution = build_bundle()
-        bundle = validate_execution_bundle(execution, assignment, task, plan)
-        self.assertEqual(bundle.task.task_id, assignment.task_id)
-        self.assertEqual(bundle.plan.plan_id, assignment.plan_id)
-        self.assertEqual(bundle.execution.assignment_id, assignment.assignment_id)
+        bundle = _validate(execution, assignment, task, plan)
+        self.assertEqual(bundle.task.uid, assignment.task_uid)
+        self.assertEqual(bundle.execution.assignment_uid, assignment.uid)
 
     def test_bundle_validation_rejects_mismatched_assignment(self) -> None:
         _, task, plan, assignment, execution = build_bundle()
-        bad_execution = execution.model_copy(update={"assignment_id": sid("assignment.other")})
-        with self.assertRaisesRegex(ValueError, "Execution.assignment_id"):
-            validate_execution_bundle(bad_execution, assignment, task, plan)
+        bad_execution = execution.model_copy(update={"assignment_uid": uid()})
+        with self.assertRaisesRegex(ValueError, "assignment_uid"):
+            _validate(bad_execution, assignment, task, plan)
 
     def test_unapproved_plan_is_rejected_independently(self) -> None:
         _, task, plan, assignment, execution = build_bundle()
         draft = plan.model_copy(update={"approval_state": occid.PlanApprovalState.DRAFT})
         with self.assertRaisesRegex(ValueError, "not approved"):
-            validate_execution_bundle(execution, assignment, task, draft)
+            _validate(execution, assignment, task, draft)
 
     def test_move_task_resolves_global_position_through_location_ref(self) -> None:
         location, task, _, _, _ = build_bundle()
         ingress = ExecutionIngress.__new__(ExecutionIngress)
         ingress.records = {
-            ("control", "location", "DB_ID:location.target"): location,
+            ("control", "location", _uid_key(location.uid)): location,
         }
         destination = ingress._resolve_move_destination("control", task)
         self.assertEqual(destination, location.position)
-        self.assertEqual(_location_identity(location), location.location_id)
+        self.assertEqual(_location_identity(location), location.uid)
         self.assertEqual(_location_position(location), location.position)
 
     def test_move_task_rejects_unresolved_location(self) -> None:
@@ -127,10 +151,19 @@ class ExecutionIngressTests(unittest.TestCase):
             ingress._resolve_move_destination("control", task)
 
     def test_unsupported_task_family_rejects_before_execution(self) -> None:
-        _, task, _, _, _ = build_bundle()
-        data = task.model_dump(exclude={"intent"})
+        _, _, _, _, _ = build_bundle()
         info_task = occid.TaskInformation(
-            **data,
+            record=record("info"),
+            uid=uid(),
+            id=occid.IntID(root=1),
+            instruction="search",
+            target_uids=[],
+            location_uids=[],
+            objective_uid=None,
+            constraints=[],
+            priority=occid.TaskPriority.ROUTINE,
+            status=occid.TaskStatus.ACCEPTED,
+            phase=occid.TaskPhase.ASSIGNED,
             intent=occid.InformationIntent.SEARCH,
         )
         ingress = ExecutionIngress.__new__(ExecutionIngress)
@@ -176,6 +209,10 @@ class ExecutionIngressTests(unittest.TestCase):
         horizontal_m, altitude_error_m = _arrival_metrics(observed, location.position)
         self.assertAlmostEqual(horizontal_m, 0.0, places=5)
         self.assertAlmostEqual(altitude_error_m, 0.5, places=5)
+
+
+def _uid_key(value: object) -> str:
+    return str(uuid.UUID(bytes=bytes(value.root)))
 
 
 if __name__ == "__main__":

@@ -12,14 +12,10 @@ cfg:
   takeoff_altitude_m: 10.0
   takeoff_altitude_ok_fraction: 0.8
   post_takeoff_wait_s: 1.0
+  control_node: control
+  state_publish_interval_s: 1.0
   occid_in_topic: OCCID/IN
   occid_out_topic: OCCID/OUT
-  executor_id:
-    id_type: DB_ID
-    value: mpfc:<my_name>
-  asset_id:
-    id_type: DB_ID
-    value: <my_name>
   interface:
     id: uav_controller
     topic_ns: UAV

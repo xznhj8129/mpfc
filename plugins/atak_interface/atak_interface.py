@@ -8,6 +8,7 @@ import socket
 import struct
 import time
 import traceback
+import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable
 
@@ -289,6 +290,7 @@ class AtakInterface(PluginBase):
         self.tx_count = 0
         self.rx_parse_errors = 0
         self.tcp_client_connected: bool | None = None
+        self._subject_cot_uids: dict[str, str] = {}
 
     def _parse_targets(self, raw_targets: list[Dict[str, Any]]) -> list[Endpoint]:
         return [Endpoint(entry["host"], int(entry["port"])) for entry in raw_targets]
@@ -308,25 +310,30 @@ class AtakInterface(PluginBase):
         self.tcp_client_connected = connected
         print(f"[PLUGIN] {self.client_id} tcp_client_connected={connected}", flush=True)
 
+    @staticmethod
+    def _uid_text(value: Any) -> str:
+        return str(uuid.UUID(bytes=bytes(value.root)))
+
     def _record_id(self, uid: str, timestamp: float) -> Any:
-        return occid.StringID(
-            id_type=occid.IdentifierType.DB_ID,
-            value=f"record:cot:{uid}:{int(timestamp * 1000)}",
+        return occid.UID(
+            root=uuid.uuid5(uuid.NAMESPACE_URL, f"record:cot:{uid}:{int(timestamp * 1000)}").bytes
         )
 
     def _subject_id(self, uid: str) -> Any:
         """Create a local OCCID identity for an unresolved external CoT identity."""
-        return occid.StringID(
-            id_type=occid.IdentifierType.DB_ID,
-            value=f"{COT_SUBJECT_PREFIX}{uid}",
+        subject = occid.UID(
+            root=uuid.uuid5(uuid.NAMESPACE_URL, f"{COT_SUBJECT_PREFIX}{uid}").bytes
         )
+        self._subject_cot_uids[self._uid_text(subject)] = uid
+        return subject
 
     def _cot_uid_for_subject(self, subject_id: Any) -> str:
         """Map an OCCID subject to a CoT UID without treating the IDs as aliases."""
-        value = str(subject_id.value)
-        if subject_id.id_type == occid.IdentifierType.DB_ID and value.startswith(COT_SUBJECT_PREFIX):
-            return value[len(COT_SUBJECT_PREFIX):]
-        return f"occid:{subject_id.id_type.name}:{value}"
+        text = self._uid_text(subject_id)
+        cached = self._subject_cot_uids.get(text)
+        if cached is not None:
+            return cached
+        return f"occid:uid:{text}"
 
     def _event_to_entity_state(self, event: Any, source: tuple[str, int]) -> Any:
         uid = str(event.unique_id)
@@ -339,16 +346,18 @@ class AtakInterface(PluginBase):
             le_m=None if event.point.linear_error is None else float(event.point.linear_error),
         )
         location = cot_point_to_location_state(point)
+        stamp = occid.Timestamp(utime=timestamp, tz=0)
         return occid.EntityState(
-            record=occid.RecordMeta(
-                record_id=self._record_id(uid, timestamp),
-                created_ts=timestamp,
-                updated_ts=timestamp,
+            record=occid.Record(
+                uid=self._record_id(uid, timestamp),
+                id=occid.IntID(root=0),
+                created_ts=stamp,
+                updated_ts=stamp,
                 origin_system="CoT",
                 provenance=[f"{source[0]}:{source[1]}", str(event.event_type), f"cot_uid:{uid}"],
             ),
-            subject_id=self._subject_id(uid),
-            timestamp=timestamp,
+            subject_uid=self._subject_id(uid),
+            timestamp=stamp,
             position=location,
             link_states={},
         )
@@ -409,10 +418,10 @@ class AtakInterface(PluginBase):
             raise ValueError("HumanTextMessage requires position for ATAK geochat translation")
         point = global_position_to_cot_point(message.position)
         destination = message.destination_group
-        if destination is None and message.destination_id is not None:
-            destination = message.destination_id.value
+        if destination is None and message.destination_uid is not None:
+            destination = self._uid_text(message.destination_uid)
         if destination is None:
-            destination = message.dst.target_id.value
+            destination = self._uid_text(message.dst)
         return self.translator.geochat_xml(message.message, str(destination), point)
 
     def _handle_request(self, request: Dict[str, Any]) -> None:

@@ -3,10 +3,14 @@ from __future__ import annotations
 import subprocess
 import sys
 import unittest
+import uuid
 from pathlib import Path
 
-from lib.occid_bus import occid
+from lib.occid_bus import occid, unpack_occid
 from lib.uav_client import UavClient
+
+
+TARGET_UID = occid.UID(root=uuid.UUID("11111111-1111-4111-8111-111111111111").bytes)
 
 
 class FakeBus:
@@ -38,6 +42,7 @@ class UavClientRoutingTests(unittest.TestCase):
             self.runtime,
             {"id": "uav_controller", "topic_ns": "UAV"},
             response_timeout_s=10.0,
+            target_uid=TARGET_UID,
         )
 
     def test_convenience_arm_maps_to_state_change_without_waiting(self) -> None:
@@ -52,7 +57,8 @@ class UavClientRoutingTests(unittest.TestCase):
         self.assertEqual(command["operation"], "SET")
         self.assertEqual(command["property_name"], "armed")
         self.assertTrue(command["value"]["bool"])
-        self.assertEqual(command["target_ref"]["value"], "uav1")
+        target = unpack_occid(command["target_uid"])
+        self.assertEqual(bytes(target.root), bytes(TARGET_UID.root))
 
     def test_execute_waits_only_when_explicitly_requested(self) -> None:
         response = self.uav.execute(self.uav.arm_command(), timeout_s=3.0)
@@ -64,7 +70,7 @@ class UavClientRoutingTests(unittest.TestCase):
         command = self.runtime.bus.published[-1][1]["data"]["command"]
         self.assertEqual(command["_occid_model"], "MotionCommand")
         self.assertEqual(command["operation"], "MOVE_TO")
-        self.assertEqual(command["destination"]["alt"], 20.0)
+        self.assertEqual(command["destination"]["lat"], 45.0)
 
     def test_high_rate_attitude_uses_input_path_without_request_id(self) -> None:
         self.uav.set_attitude(0.1, -0.2, 0.3, 0.4)
@@ -75,19 +81,19 @@ class UavClientRoutingTests(unittest.TestCase):
         self.assertEqual(self.runtime.wait_calls, [])
 
     def test_generic_command_is_not_accepted_by_uav_service(self) -> None:
-        command = occid.Command(target_ref=self.uav.target_ref, constraints=[])
+        command = occid.Command(target_uid=TARGET_UID, constraints=[])
         with self.assertRaises(TypeError):
             self.uav.send(command)
 
     def test_wrong_target_is_rejected(self) -> None:
         command = occid.StateChangeCommand(
-            target_ref=occid.StringID(id_type=occid.IdentifierType.DB_ID, value="other"),
+            target_uid=occid.UID(root=uuid.uuid4().bytes),
             constraints=[],
             operation=occid.StateChangeOperation.SET,
             property_name="armed",
             value=occid.MetadataValue(bool=True),
         )
-        with self.assertRaisesRegex(ValueError, "target_ref"):
+        with self.assertRaisesRegex(ValueError, "target_uid"):
             self.uav.send(command)
 
     def test_direct_control_lifecycle_uses_process_control(self) -> None:
@@ -97,7 +103,10 @@ class UavClientRoutingTests(unittest.TestCase):
         self.assertTrue(end["ok"])
         self.assertEqual(self.runtime.wait_calls, [("req-1", 10.0), ("req-2", 10.0)])
         commands = [item[1]["data"]["command"] for item in self.runtime.bus.published]
-        self.assertEqual([command["_occid_model"] for command in commands], ["ProcessControlCommand", "ProcessControlCommand"])
+        self.assertEqual(
+            [command["_occid_model"] for command in commands],
+            ["ProcessControlCommand", "ProcessControlCommand"],
+        )
         self.assertEqual(commands[0]["operation"], "START")
         self.assertEqual(commands[0]["process_name"], "direct_control.attitude_thrust")
         self.assertEqual(commands[1]["operation"], "STOP")

@@ -33,6 +33,7 @@ from lib.occid_bus import (
 )
 from lib.occid_topics import FLIGHT_CONTROL, LOCATION
 from lib.plugin_base import PluginBase
+from lib.provisioning import asset_uid
 
 
 class UavController(PluginBase):
@@ -60,16 +61,12 @@ class UavController(PluginBase):
         self.backend = dict(cfg["backend"])
         self.backend_state_keys = list(cfg["backend_state_keys"])
         self.backend_event_keys = list(cfg.get("backend_event_keys", []))
-        raw_target = cfg.get("target_ref")
+        raw_target = cfg.get("target_uid")
         if raw_target is None:
-            topic_prefix = str(bus_config.get("topic_prefix", ""))
-            if not topic_prefix.startswith("mpfc/") or topic_prefix.count("/") != 1:
-                raise ValueError("uav_controller requires target_ref or an mpfc/<asset> topic prefix")
-            raw_target = {
-                "id_type": "DB_ID",
-                "value": topic_prefix.split("/", 1)[1],
-            }
-        self.target_ref = occid.StringID.model_validate(raw_target)
+            raw_target = asset_uid()
+        self.target_uid = (
+            raw_target if isinstance(raw_target, occid.UID) else occid.UID.model_validate(raw_target)
+        )
         self.arm_ready_since: float | None = None
         self.takeoff_ready_since: float | None = None
         self.backend_flight_control: Any | None = None
@@ -238,10 +235,10 @@ class UavController(PluginBase):
                     f"uav_controller accepts concrete OCCID Command families only "
                     f"allowed={allowed} actual={command_name}"
                 )
-            if command.target_ref != self.target_ref:
+            if command.target_uid != self.target_uid:
                 raise ValueError(
-                    f"command target_ref does not address this UAV "
-                    f"expected={self.target_ref} actual={command.target_ref}"
+                    f"command target_uid does not address this UAV "
+                    f"expected={self.target_uid} actual={command.target_uid}"
                 )
             backend_request_id = send_occid_command(self.bus, self.backend_request_topic, command)
             self.pending_backend_requests[backend_request_id] = (

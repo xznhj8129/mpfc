@@ -518,15 +518,28 @@ class MavsdkInterface(PluginBase):
             remaining = battery.remaining_percent
             remaining_pct = None if remaining is None else float(remaining) * 100.0
             state = occid.ElectricalResourceState(
-                source_id=occid.StringID(
-                    id_type=occid.IdentifierType.ASSET_ID,
-                    value=f"battery:{int(battery.id)}",
+                source_uid=None,
+                potential=(
+                    None if battery.voltage_v is None else occid.Volts(root=float(battery.voltage_v))
                 ),
-                voltage_v=None if battery.voltage_v is None else float(battery.voltage_v),
-                current_a=None if battery.current_battery_a is None else float(battery.current_battery_a),
-                consumed_ah=None if battery.capacity_consumed_ah is None else float(battery.capacity_consumed_ah),
-                remaining_pct=remaining_pct,
-                temperature_deg_c=None if battery.temperature_degc is None else float(battery.temperature_degc),
+                current=(
+                    None
+                    if battery.current_battery_a is None
+                    else occid.Amperes(root=float(battery.current_battery_a))
+                ),
+                consumed_charge=(
+                    None
+                    if battery.capacity_consumed_ah is None
+                    else occid.AmpereHours(root=float(battery.capacity_consumed_ah))
+                ),
+                remaining_ratio=(
+                    None if remaining_pct is None else occid.NormalizedRatio(root=remaining_pct / 100.0)
+                ),
+                temperature=(
+                    None
+                    if battery.temperature_degc is None
+                    else occid.DegreesCelsius(root=float(battery.temperature_degc))
+                ),
             )
             self._publish_model(POWER, state)
             if self.stop_event.is_set():

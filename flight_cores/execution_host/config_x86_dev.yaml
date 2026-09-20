@@ -58,12 +58,6 @@ plugins:
     id: execution_ingress
     topic_ns: EXECUTION
     auto_takeoff_for_move: true
-    executor_id:
-      id_type: DB_ID
-      value: mpfc:uav1
-    asset_id:
-      id_type: DB_ID
-      value: uav1
 
 - plugin: uav_controller
   cfg:

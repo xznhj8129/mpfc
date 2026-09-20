@@ -22,7 +22,7 @@ OCCID_META_KEYS = {OCCID_MODEL_KEY, OCCID_MODEL_ID_KEY}
 
 
 def is_occid_model(value: Any) -> bool:
-    return isinstance(value, occid.OCCIDModel)
+    return isinstance(value, (occid.OCCIDModel, occid.OCCIDValue))
 
 
 def _to_bus_value(value: Any) -> Any:
@@ -50,6 +50,9 @@ def _pack_occid_model(model: Any) -> dict[str, Any]:
         OCCID_MODEL_KEY: model_type.__name__,
         OCCID_MODEL_ID_KEY: int(model_id),
     }
+    if isinstance(model, occid.OCCIDValue):
+        payload["value"] = _to_bus_value(model.root)
+        return payload
     payload.update(
         {
             field_name: _to_bus_value(getattr(model, field_name))
@@ -82,6 +85,9 @@ def _bus_model_to_wire(payload: dict[str, Any]) -> tuple[type, dict[str, Any]]:
             f"expected={model_type.__name__}"
         )
 
+    if issubclass(model_type, occid.OCCIDValue):
+        return model_type, {"value": _bus_to_wire(payload.get("value"))}
+
     fields = {
         key: _bus_to_wire(value)
         for key, value in payload.items()
@@ -90,16 +96,26 @@ def _bus_model_to_wire(payload: dict[str, Any]) -> tuple[type, dict[str, Any]]:
     return model_type, fields
 
 
+def _ordinal_fields(model_type: type, fields: dict[str, Any]) -> dict[int, Any]:
+    """Map named bus fields onto the compiled numeric wire ordinals."""
+    names = tuple(model_type.model_fields)
+    return {
+        names.index(name): value
+        for name, value in fields.items()
+        if name in names
+    }
+
+
 def _bus_to_wire(value: Any) -> Any:
     if type(value) == dict:
         if set(value) == {OCCID_BYTES_KEY}:
             return base64.b64decode(value[OCCID_BYTES_KEY], validate=True)
         if OCCID_META_KEYS.issubset(value):
             model_type, fields = _bus_model_to_wire(value)
-            return {
-                "model_id": occid.OCCID_MODEL_ID_BY_CLASS[model_type],
-                "fields": fields,
-            }
+            model_id = occid.OCCID_MODEL_ID_BY_CLASS[model_type]
+            if issubclass(model_type, occid.OCCIDValue):
+                return [model_id, fields["value"]]
+            return [model_id, _ordinal_fields(model_type, fields)]
         return {key: _bus_to_wire(item) for key, item in value.items()}
     if type(value) == list:
         return [_bus_to_wire(item) for item in value]
@@ -111,7 +127,9 @@ def unpack_occid(payload: Any) -> Any:
     if type(payload) is not dict:
         raise ValueError(f"invalid OCCID bus payload type={type(payload).__name__}")
     model_type, fields = _bus_model_to_wire(payload)
-    return model_type._from_wire_fields(fields)
+    if issubclass(model_type, occid.OCCIDValue):
+        return model_type._from_wire_value(fields["value"])
+    return model_type._from_wire_fields(_ordinal_fields(model_type, fields))
 
 
 def get_occid_state(state: dict[str, Any], key: str, expected_type: type | tuple[type, ...] | None = None) -> Any:
@@ -149,7 +167,7 @@ def decode_occid_request(request: dict[str, Any]) -> tuple[str, Any]:
 
 
 def send_occid_command(router: Any, request_topic: str, command: Any) -> str:
-    if not isinstance(command, occid.Command):
+    if not occid.is_a(command, occid.Command):
         raise TypeError(f"expected OCCID Command, got {type(command).__name__}")
     request_id = _next_request_id(router)
     payload = {"request_id": request_id, "command": pack_occid(command)}
@@ -162,14 +180,14 @@ def send_occid_command(router: Any, request_topic: str, command: Any) -> str:
 def decode_occid_command(request: dict[str, Any]) -> tuple[str, Any]:
     request_id = str(request["request_id"])
     command = unpack_occid(request["command"])
-    if not isinstance(command, occid.Command):
+    if not occid.is_a(command, occid.Command):
         raise TypeError(f"request payload is not OCCID Command actual={type(command).__name__}")
     return request_id, command
 
 
 def send_occid_input(router: Any, input_topic: str, input_model: Any) -> None:
     """Publish one latest-value OCCID Input sample without request/response correlation."""
-    if not isinstance(input_model, occid.Input):
+    if not occid.is_a(input_model, occid.Input):
         raise TypeError(f"expected OCCID Input, got {type(input_model).__name__}")
     from lib.common import build_envelope
 
@@ -178,6 +196,6 @@ def send_occid_input(router: Any, input_topic: str, input_model: Any) -> None:
 
 def decode_occid_input(payload: Any) -> Any:
     model = unpack_occid(payload)
-    if not isinstance(model, occid.Input):
+    if not occid.is_a(model, occid.Input):
         raise TypeError(f"input payload is not OCCID Input actual={type(model).__name__}")
     return model

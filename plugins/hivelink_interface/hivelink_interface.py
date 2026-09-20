@@ -11,6 +11,7 @@ node and never becomes the network API.
 from __future__ import annotations
 
 import asyncio
+import base64
 import queue
 import threading
 import time
@@ -152,10 +153,26 @@ class HiveLinkPlugin(PluginBase):
         dest = str(data["dest"])
         if not dest:
             raise ValueError("OCCID/OUT requires dest")
-        model = unpack_occid(data["model"])
         datalink = self.datalink
         if datalink is None:
             raise RuntimeError("HiveLink datalink is not started")
+
+        if "sdk_payload" in data:
+            # Sigma SDK messages travel as opaque bytes; HiveLink is delivery.
+            payload = base64.b64decode(str(data["sdk_payload"]))
+            sent = datalink.send(
+                payload,
+                dest,
+                udp=bool(data.get("udp", self.default_udp)),
+                meshtastic=bool(data.get("meshtastic", self.default_mesh)),
+                multicast=bool(data.get("multicast", self.default_multicast)),
+            )
+            if not sent:
+                raise RuntimeError(f"HiveLink could not send SDK payload dest={dest}")
+            print(f"[HIVELINK_TX] dest={dest} sdk_payload={len(payload)}B", flush=True)
+            return
+
+        model = unpack_occid(data["model"])
         sent = datalink.send_model(
             model,
             dest,

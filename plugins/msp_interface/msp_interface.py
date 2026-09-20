@@ -493,17 +493,26 @@ class MspInterface(PluginBase):
         )
 
         power = occid.ElectricalResourceState(
-            source_id=occid.StringID(
-                id_type=occid.IdentifierType.ASSET_ID,
-                value="battery:0",
+            source_uid=None,
+            potential=None if analog.get("vbat") is None else occid.Volts(root=float(analog["vbat"])),
+            current=None if analog.get("amperage") is None else occid.Amperes(root=float(analog["amperage"])),
+            power=None if analog.get("powerDraw") is None else occid.Watts(root=float(analog["powerDraw"])),
+            consumed_charge=(
+                None if analog.get("mAhDrawn") is None else occid.AmpereHours(root=float(analog["mAhDrawn"]) / 1000.0)
             ),
-            voltage_v=analog.get("vbat"),
-            current_a=analog.get("amperage"),
-            power_w=analog.get("powerDraw"),
-            consumed_mah=analog.get("mAhDrawn"),
-            consumed_mwh=analog.get("mWhDrawn"),
-            remaining_pct=analog.get("percentageRemaining"),
-            remaining_capacity=analog.get("remainingCapacity"),
+            consumed_energy=(
+                None if analog.get("mWhDrawn") is None else occid.WattHours(root=float(analog["mWhDrawn"]) / 1000.0)
+            ),
+            remaining_ratio=(
+                None
+                if analog.get("percentageRemaining") is None
+                else occid.NormalizedRatio(root=float(analog["percentageRemaining"]) / 100.0)
+            ),
+            remaining_charge=(
+                None
+                if analog.get("remainingCapacity") is None
+                else occid.AmpereHours(root=float(analog["remainingCapacity"]) / 1000.0)
+            ),
         )
         self._publish_model(POWER, power)
 
@@ -518,7 +527,7 @@ class MspInterface(PluginBase):
         self._publish_model(CONTROL_OUTPUT, output)
         self._publish_model(
             REMOTE_CONTROL,
-            occid.RemoteControlSchema(
+            occid.RemoteControl(
                 rc_telemetry=rc,
                 control_output=output,
                 control_override=override,

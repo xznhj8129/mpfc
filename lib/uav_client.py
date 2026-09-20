@@ -12,6 +12,7 @@ from typing import Any, Iterable
 from lib.common import build_request_topic, build_response_topic, build_state_topics, build_topic_base
 from lib.occid_bus import get_occid_state, occid, send_occid_command, send_occid_input
 from lib.occid_topics import ANGULAR_VELOCITY, ATTITUDE, FLIGHT_CONTROL, LOCATION
+from lib.provisioning import asset_uid
 from lib.uav_semantics import (
     DIRECT_CONTROL_ATTITUDE,
     DIRECT_CONTROL_MANUAL,
@@ -52,26 +53,17 @@ class UavClient:
         interface: dict[str, Any],
         response_timeout_s: float,
         *,
-        target_ref: Any | None = None,
+        target_uid: Any | None = None,
     ) -> None:
         self.runtime = runtime
         self.interface_id = str(interface["id"])
         self.topic_ns = str(interface["topic_ns"])
         self.response_timeout_s = float(response_timeout_s)
-        raw_target = target_ref if target_ref is not None else interface.get("target_ref")
+        raw_target = target_uid if target_uid is not None else interface.get("target_uid")
         if raw_target is None:
-            topic_prefix = str(getattr(runtime, "bus_config", {}).get("topic_prefix", ""))
-            if topic_prefix.startswith("mpfc/") and topic_prefix.count("/") == 1:
-                raw_target = occid.StringID(
-                    id_type=occid.IdentifierType.DB_ID,
-                    value=topic_prefix.split("/", 1)[1],
-                )
-        if raw_target is None:
-            raise ValueError("UavClient requires a concrete OCCID target_ref")
-        self.target_ref = (
-            raw_target
-            if isinstance(raw_target, occid.StringID)
-            else occid.StringID.model_validate(raw_target)
+            raw_target = asset_uid()
+        self.target_uid = (
+            raw_target if isinstance(raw_target, occid.UID) else occid.UID.model_validate(raw_target)
         )
         self.base_topic = build_topic_base(self.interface_id, self.topic_ns)
         self.request_topic = build_request_topic(self.interface_id, self.topic_ns)
@@ -104,10 +96,10 @@ class UavClient:
                 f"UavClient accepts concrete OCCID Command families only "
                 f"allowed={allowed} actual={type(command).__name__}"
             )
-        if command.target_ref != self.target_ref:
+        if command.target_uid != self.target_uid:
             raise ValueError(
-                f"command target_ref does not match client target "
-                f"expected={self.target_ref} actual={command.target_ref}"
+                f"command target_uid does not match client target "
+                f"expected={self.target_uid} actual={command.target_uid}"
             )
         return send_occid_command(self.runtime.bus, self.request_topic, command)
 
@@ -132,7 +124,7 @@ class UavClient:
         value: Any | None = None,
     ) -> Any:
         return occid.StateChangeCommand(
-            target_ref=self.target_ref,
+            target_uid=self.target_uid,
             constraints=[],
             operation=operation,
             property_name=property_name,
@@ -141,7 +133,7 @@ class UavClient:
 
     def _process(self, operation: Any, process_name: str) -> Any:
         return occid.ProcessControlCommand(
-            target_ref=self.target_ref,
+            target_uid=self.target_uid,
             constraints=[],
             operation=operation,
             process_name=process_name,
@@ -156,7 +148,7 @@ class UavClient:
 
     def takeoff_altitude_command(self, relative_altitude_m: float) -> Any:
         return occid.ConfigurationCommand(
-            target_ref=self.target_ref,
+            target_uid=self.target_uid,
             constraints=[],
             operation=occid.ConfigurationOperation.SET_PARAMETER,
             parameter_name=PARAM_TAKEOFF_ALTITUDE_M,
@@ -183,7 +175,7 @@ class UavClient:
     ) -> Any:
         datum = occid.AltitudeDatum.RELATIVE if altitude_datum is None else altitude_datum
         return occid.MotionCommand(
-            target_ref=self.target_ref,
+            target_uid=self.target_uid,
             constraints=[],
             operation=occid.MotionOperation.MOVE_TO,
             destination=occid.GlobalPosition(

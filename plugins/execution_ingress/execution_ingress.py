@@ -5,9 +5,14 @@ Remote Location, Plan, Task, Assignment, and Execution records arrive as
 canonical OCCID on the node-local ``OCCID/IN`` bridge topic. This plugin owns
 execution semantics; HiveLink owns only delivery and MPFC's MQTT bus remains
 private node-local IPC.
+
+Execution acceptance and status travel back to the control node as Sigma SDK
+messages (``ExecutionAcceptance`` and ``ExecutionStatusReport``) carried as
+opaque HiveLink payloads. OCCID ``ExecutionStatus`` is the durable status fact.
 """
 from __future__ import annotations
 
+import base64
 import math
 import time
 import traceback
@@ -15,9 +20,13 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Dict
 
+from sigma_sdk.codec import MessageCodec
+from sigma_sdk.messages import ExecutionAcceptance, ExecutionStatusReport, TaskDelta
+
 from lib.common import apply_cfg, build_envelope
 from lib.occid_bus import occid, pack_occid, unpack_occid
 from lib.plugin_base import PluginBase
+from lib.provisioning import asset_uid, node_uid
 from lib.uav_client import UavClient
 
 
@@ -26,12 +35,12 @@ OCCID_OUT_TOPIC = "OCCID/OUT"
 EARTH_RADIUS_M = 6371008.8
 
 
-def _id_text(value: Any) -> str:
-    return f"{value.id_type.name}:{value.value}"
+def _uid_text(value: Any) -> str:
+    return str(uuid.UUID(bytes=bytes(value.root)))
 
 
-def _id_key(value: Any) -> str:
-    return _id_text(value)
+def _uid_key(value: Any) -> str:
+    return _uid_text(value)
 
 
 def _distance_m(a: Any, b: Any) -> float:
@@ -73,22 +82,32 @@ def _arrival_metrics(location: Any, destination: Any) -> tuple[float, float]:
 
 
 def _location_identity(location: Any) -> Any:
-    for field_name in ("uid", "id", "location_id"):
-        value = getattr(location, field_name, None)
-        if isinstance(value, occid.StringID):
-            return value
-    raise ValueError(
-        f"Location record {type(location).__name__} has no stable StringID field"
-    )
+    uid = getattr(location, "uid", None)
+    if uid is None:
+        raise ValueError(
+            f"Location record {type(location).__name__} has no stable UID field"
+        )
+    return uid
 
 
 def _location_position(location: Any) -> Any:
-    for field_name in ("pos", "position"):
-        value = getattr(location, field_name, None)
-        if isinstance(value, occid.GlobalPosition):
-            return value
+    position = getattr(location, "position", None)
+    if isinstance(position, occid.GlobalPosition):
+        return position
     raise ValueError(
         f"Location record {type(location).__name__} does not carry a GlobalPosition"
+    )
+
+
+def _record(origin: str, now: float, provenance: list[str] | None = None) -> Any:
+    stamp = occid.Timestamp(utime=now, tz=0)
+    return occid.Record(
+        uid=occid.UID(root=uuid.uuid4().bytes),
+        id=occid.IntID(root=0),
+        created_ts=stamp,
+        updated_ts=stamp,
+        origin_system=origin,
+        provenance=list(provenance or ()),
     )
 
 
@@ -112,37 +131,52 @@ def validate_execution_bundle(
     assignment: Any,
     task: Any,
     plan: Any,
+    *,
+    executor_uid: Any,
+    asset_uid: Any,
 ) -> ExecutionBundle:
-    if not isinstance(execution, occid.Execution):
+    if not occid.is_a(execution, occid.Execution):
         raise TypeError(f"expected Execution, got {type(execution).__name__}")
-    if not isinstance(assignment, occid.Assignment):
+    if not occid.is_a(assignment, occid.Assignment):
         raise TypeError(f"expected Assignment, got {type(assignment).__name__}")
-    if not isinstance(task, occid.Task):
+    if not occid.is_a(task, occid.Task):
         raise TypeError(f"expected Task, got {type(task).__name__}")
-    if not isinstance(plan, occid.Plan):
+    if not occid.is_a(plan, occid.Plan):
         raise TypeError(f"expected Plan, got {type(plan).__name__}")
 
-    if execution.assignment_id != assignment.assignment_id:
+    task_uid = getattr(assignment, "task_uid", None)
+    if task_uid is None:
         raise ValueError(
-            "Execution.assignment_id does not match supplied Assignment: "
-            f"{_id_text(execution.assignment_id)} != {_id_text(assignment.assignment_id)}"
+            f"Assignment {type(assignment).__name__} does not reference a Task"
         )
-    if assignment.task_id != task.task_id:
+    if execution.assignment_uid != assignment.uid:
         raise ValueError(
-            "Assignment.task_id does not match supplied Task: "
-            f"{_id_text(assignment.task_id)} != {_id_text(task.task_id)}"
+            "Execution.assignment_uid does not match supplied Assignment: "
+            f"{_uid_text(execution.assignment_uid)} != {_uid_text(assignment.uid)}"
         )
-    if assignment.plan_id is None:
-        raise ValueError("OCCID-native managed execution requires an approved Plan")
-    if assignment.plan_id != plan.plan_id:
+    if task_uid != task.uid:
         raise ValueError(
-            "Assignment.plan_id does not match supplied Plan: "
-            f"{_id_text(assignment.plan_id)} != {_id_text(plan.plan_id)}"
+            "Assignment.task_uid does not match supplied Task: "
+            f"{_uid_text(task_uid)} != {_uid_text(task.uid)}"
+        )
+    if execution.executor_uid != executor_uid:
+        raise ValueError(
+            "Execution.executor_uid does not address this executor: "
+            f"{_uid_text(execution.executor_uid)} != {_uid_text(executor_uid)}"
+        )
+    if assignment.assignee_uid != asset_uid:
+        raise ValueError(
+            "Assignment.assignee_uid does not address this asset: "
+            f"{_uid_text(assignment.assignee_uid)} != {_uid_text(asset_uid)}"
         )
     if plan.approval_state != occid.PlanApprovalState.APPROVED:
         raise ValueError(f"supplied Plan is not approved state={plan.approval_state.name}")
-    if task.task_id not in plan.task_ids:
+    plan_task_uids = getattr(plan, "task_uids", None)
+    if plan_task_uids is not None and task.uid not in plan_task_uids:
         raise ValueError("supplied Plan does not contain the assigned Task")
+    plan_assignment_uids = getattr(plan, "assignment_uids", None)
+    if plan_assignment_uids is not None and assignment.uid not in plan_assignment_uids:
+        raise ValueError("supplied Plan does not contain the Assignment")
     if assignment.status not in (
         occid.AssignmentStatus.ASSIGNED,
         occid.AssignmentStatus.ACCEPTED,
@@ -194,9 +228,11 @@ class ExecutionIngress(PluginBase):
             cfg.get("takeoff_altitude_ok_fraction", 0.8)
         )
         self.post_takeoff_wait_s = float(cfg.get("post_takeoff_wait_s", 1.0))
+        self.control_node = str(cfg.get("control_node", "control"))
+        self.state_publish_interval_s = float(cfg.get("state_publish_interval_s", 1.0))
 
-        self.executor_id = occid.StringID.model_validate(cfg["executor_id"])
-        self.asset_id = occid.StringID.model_validate(cfg["asset_id"])
+        self.executor_uid = self._uid_from_cfg(cfg.get("executor_uid"), node_uid())
+        self.asset_uid = self._uid_from_cfg(cfg.get("asset_uid"), asset_uid())
         self.in_topic = str(cfg.get("occid_in_topic", OCCID_IN_TOPIC))
         self.out_topic = str(cfg.get("occid_out_topic", OCCID_OUT_TOPIC))
         self.client.subscribe(self.in_topic)
@@ -205,7 +241,7 @@ class ExecutionIngress(PluginBase):
             self,
             dict(cfg["interface"]),
             self.response_timeout_s,
-            target_ref=self.asset_id,
+            target_uid=self.asset_uid,
         )
         self.init_bus(
             self.poll_interval_s,
@@ -217,8 +253,17 @@ class ExecutionIngress(PluginBase):
         self.pending_executions: dict[tuple[str, str], Any] = {}
         self.active_execution_id: Any | None = None
         self.active_dispatch_id: str | None = None
+        self.last_state_publish = 0.0
         self.lifecycle_state = "STARTING"
         self.lifecycle_topic = f"DIAG/{self.client_id}/LIFECYCLE"
+
+    @staticmethod
+    def _uid_from_cfg(raw: Any, default: Any) -> Any:
+        if raw is None:
+            return default
+        if isinstance(raw, occid.UID):
+            return raw
+        return occid.UID(root=uuid.UUID(str(raw)).bytes)
 
     def _set_lifecycle(
         self,
@@ -230,7 +275,7 @@ class ExecutionIngress(PluginBase):
         data: dict[str, Any] = {"state": self.lifecycle_state}
         if remote is not None:
             data["dispatch_id"] = remote.dispatch_id
-            data["execution_id"] = _id_text(remote.bundle.execution.execution_id)
+            data["execution_id"] = _uid_text(remote.bundle.execution.uid)
             data["task_instruction"] = remote.bundle.task.instruction
         if detail:
             data["detail"] = str(detail)
@@ -242,7 +287,7 @@ class ExecutionIngress(PluginBase):
         if remote is not None:
             suffix = (
                 f" dispatch_id={remote.dispatch_id} "
-                f"task={type(remote.bundle.task).__name__}:{remote.bundle.task.intent.name}"
+                f"task={type(remote.bundle.task).__name__}"
             )
         if detail:
             suffix += f" detail={detail}"
@@ -255,13 +300,14 @@ class ExecutionIngress(PluginBase):
     def _dispatch_id(execution: Any) -> str:
         if not execution.external_job_refs:
             raise ValueError("Execution has no persisted dispatch identity")
-        dispatch_id = str(execution.external_job_refs[-1].value)
+        dispatch_id = str(execution.external_job_refs[-1])
         if not dispatch_id:
             raise ValueError("Execution dispatch identity is empty")
         return dispatch_id
 
-    def _send_model(self, dest: str, model: Any) -> None:
-        data = {"dest": str(dest), "model": pack_occid(model)}
+    def _send_sdk(self, dest: str, message: Any) -> None:
+        payload = base64.b64encode(MessageCodec.encode(message)).decode("ascii")
+        data = {"dest": str(dest), "sdk_payload": payload}
         self.client.publish(
             self.out_topic,
             build_envelope(self.client_id, self.out_topic, data),
@@ -277,37 +323,16 @@ class ExecutionIngress(PluginBase):
         retryable: bool = False,
         reason: str | None = None,
     ) -> None:
-        report = occid.ExecutionAcceptance(
-            execution_id=execution.execution_id,
-            dispatch_id=occid.StringID(
-                id_type=occid.IdentifierType.DB_ID,
-                value=str(dispatch_id),
-            ),
-            executor_id=self.executor_id,
+        report = ExecutionAcceptance(
+            source_node_uid=self.executor_uid,
+            execution_uid=execution.uid,
+            dispatch_ref=str(dispatch_id),
             accepted=bool(accepted),
             retryable=bool(retryable),
             reason=reason,
-            reported_at=time.time(),
+            reported_at=occid.Timestamp(utime=time.time(), tz=0),
         )
-        self._send_model(dest, report)
-
-    def _record_meta(self, bundle: ExecutionBundle) -> Any:
-        now = time.time()
-        return occid.RecordMeta(
-            record_id=occid.StringID(
-                id_type=occid.IdentifierType.DB_ID,
-                value=str(uuid.uuid4()),
-            ),
-            revision=0,
-            created_ts=now,
-            updated_ts=now,
-            origin_system=f"mpfc.{self.client_id}",
-            provenance=[
-                bundle.execution.record.record_id.value,
-                bundle.assignment.record.record_id.value,
-                bundle.task.record.record_id.value,
-            ],
-        )
+        self._send_sdk(dest, report)
 
     def _task_delta(
         self,
@@ -315,28 +340,48 @@ class ExecutionIngress(PluginBase):
         phase: Any,
         *,
         progress: float | None = None,
-    ) -> Any:
-        return occid.TaskDelta(
-            record=self._record_meta(bundle),
-            task_id=bundle.task.task_id,
-            task_rev=bundle.task.record.revision,
+    ) -> TaskDelta:
+        return TaskDelta(
+            task_uid=bundle.task.uid,
             phase=phase,
             progress=progress,
-            owner_id=self.asset_id,
-            updated_ts=time.time(),
+            updated_at=occid.Timestamp(utime=time.time(), tz=0),
         )
 
-    def _entity_state(self, bundle: ExecutionBundle, location: Any) -> Any:
+    def _entity_state(
+        self,
+        location: Any,
+        *,
+        provenance: list[str] | None = None,
+    ) -> Any:
         if location.attitude is None:
             attitude = self.uav.attitude()
             if attitude is not None:
                 location = location.model_copy(update={"attitude": attitude})
+        stamp = occid.Timestamp(utime=time.time(), tz=0)
         return occid.EntityState(
-            record=self._record_meta(bundle),
-            subject_id=self.asset_id,
-            timestamp=time.time(),
+            record=_record(f"mpfc.{self.client_id}", time.time(), provenance),
+            subject_uid=self.asset_uid,
+            timestamp=stamp,
             position=location,
+            flight_control=self.uav.flight_control(),
+            operational_status=occid.EntityOperationalState.ACTIVE,
+            lifecycle_status=occid.EntityLifecycleStatus.ACTIVE,
             link_states={},
+            received_ts=stamp,
+            published_ts=stamp,
+        )
+
+    def _publish_entity_state(self) -> None:
+        """Publish current entity state to the control node as native OCCID."""
+        location = self.uav.location()
+        if location is None or location.position is None:
+            return
+        state = self._entity_state(location)
+        data = {"dest": self.control_node, "model": pack_occid(state)}
+        self.client.publish(
+            self.out_topic,
+            build_envelope(self.client_id, self.out_topic, data),
         )
 
     def _publish_status(
@@ -346,64 +391,61 @@ class ExecutionIngress(PluginBase):
         dispatch_id: str,
         phase: Any,
         *,
-        task_delta: Any | None = None,
+        task_delta: TaskDelta | None = None,
         entity_state: Any | None = None,
         progress: float | None = None,
         failure: str | None = None,
-    ) -> Any:
-        report = occid.ExecutionStatusReport(
-            execution_id=bundle.execution.execution_id,
-            dispatch_id=occid.StringID(
-                id_type=occid.IdentifierType.DB_ID,
-                value=str(dispatch_id),
-            ),
-            executor_id=self.executor_id,
-            found=True,
+    ) -> None:
+        status = occid.ExecutionStatus(
+            record=_record(f"mpfc.{self.client_id}", time.time(), [str(dispatch_id)]),
+            subject_uid=bundle.execution.uid,
+            timestamp=occid.Timestamp(utime=time.time(), tz=0),
             phase=phase,
             progress=progress,
+            failure=failure,
+        )
+        report = ExecutionStatusReport(
+            source_node_uid=self.executor_uid,
+            status=status,
             task_delta=task_delta,
             entity_state=entity_state,
-            failure=failure,
-            reported_at=time.time(),
         )
-        self._send_model(dest, report)
-        return report
+        self._send_sdk(dest, report)
 
     def _store_model(self, source: str, model: Any) -> bool:
-        if isinstance(model, occid.Location):
-            location_id = _location_identity(model)
-            self.records[(source, "location", _id_key(location_id))] = model
+        if occid.is_a(model, occid.Location):
+            self.records[(source, "location", _uid_key(model.uid))] = model
             return True
-        if isinstance(model, occid.Plan):
-            self.records[(source, "plan", _id_key(model.plan_id))] = model
+        if occid.is_a(model, occid.Plan):
+            self.records[(source, "plan", _uid_key(model.uid))] = model
             return True
-        if isinstance(model, occid.Task):
-            self.records[(source, "task", _id_key(model.task_id))] = model
+        if occid.is_a(model, occid.Task):
+            self.records[(source, "task", _uid_key(model.uid))] = model
             return True
-        if isinstance(model, occid.Assignment):
-            self.records[(source, "assignment", _id_key(model.assignment_id))] = model
+        if occid.is_a(model, occid.Assignment):
+            self.records[(source, "assignment", _uid_key(model.uid))] = model
             return True
-        if isinstance(model, occid.Execution):
+        if occid.is_a(model, occid.Execution):
             dispatch_id = self._dispatch_id(model)
             self.pending_executions[(source, dispatch_id)] = model
             return True
         return False
 
     def _move_dependency_missing(self, source: str, task: Any) -> bool:
-        if not isinstance(task, occid.TaskManeuver):
+        if not occid.is_a(task, occid.TaskManeuver):
             return False
         if task.intent != occid.ManeuverIntent.MOVE:
             return False
-        if len(task.location_refs) != 1:
+        if len(task.location_uids) != 1:
             return False
         return (
             source,
             "location",
-            _id_key(task.location_refs[0]),
+            _uid_key(task.location_uids[0]),
         ) not in self.records
 
     def _resolve_move_destination(self, source: str, task: Any) -> Any:
-        if not isinstance(task, occid.TaskManeuver):
+        if not occid.is_a(task, occid.TaskManeuver):
             raise TypeError(
                 f"no local handler for {type(task).__name__}; current handler is TaskManeuver/MOVE"
             )
@@ -411,15 +453,15 @@ class ExecutionIngress(PluginBase):
             raise TypeError(
                 f"no local handler for TaskManeuver/{task.intent.name}; current handler is MOVE"
             )
-        if len(task.location_refs) != 1:
+        if len(task.location_uids) != 1:
             raise ValueError(
-                f"TaskManeuver/MOVE requires exactly one location_ref; got {len(task.location_refs)}"
+                f"TaskManeuver/MOVE requires exactly one location_uid; got {len(task.location_uids)}"
             )
-        location_ref = task.location_refs[0]
-        location = self.records.get((source, "location", _id_key(location_ref)))
+        location_ref = task.location_uids[0]
+        location = self.records.get((source, "location", _uid_key(location_ref)))
         if location is None:
             raise ValueError(
-                f"TaskManeuver/MOVE location_ref is unresolved: {_id_text(location_ref)}"
+                f"TaskManeuver/MOVE location_uid is unresolved: {_uid_text(location_ref)}"
             )
         return _location_position(location)
 
@@ -431,14 +473,17 @@ class ExecutionIngress(PluginBase):
             if pending_source != source:
                 continue
             assignment = self.records.get(
-                (source, "assignment", _id_key(execution.assignment_id))
+                (source, "assignment", _uid_key(execution.assignment_uid))
             )
             if assignment is None:
                 continue
-            task = self.records.get((source, "task", _id_key(assignment.task_id)))
-            if task is None or assignment.plan_id is None:
+            task_uid = getattr(assignment, "task_uid", None)
+            if task_uid is None:
                 continue
-            plan = self.records.get((source, "plan", _id_key(assignment.plan_id)))
+            task = self.records.get((source, "task", _uid_key(task_uid)))
+            if task is None:
+                continue
+            plan = self._plan_for(source, task, assignment)
             if plan is None:
                 continue
             if self._move_dependency_missing(source, task):
@@ -446,7 +491,14 @@ class ExecutionIngress(PluginBase):
 
             self.pending_executions.pop((source, dispatch_id), None)
             try:
-                bundle = validate_execution_bundle(execution, assignment, task, plan)
+                bundle = validate_execution_bundle(
+                    execution,
+                    assignment,
+                    task,
+                    plan,
+                    executor_uid=self.executor_uid,
+                    asset_uid=self.asset_uid,
+                )
             except Exception as exc:
                 self._send_acceptance(
                     source,
@@ -465,6 +517,18 @@ class ExecutionIngress(PluginBase):
                 )
             )
         return ready
+
+    def _plan_for(self, source: str, task: Any, assignment: Any) -> Any | None:
+        for (record_source, kind, _), plan in self.records.items():
+            if record_source != source or kind != "plan":
+                continue
+            plan_task_uids = getattr(plan, "task_uids", None)
+            plan_assignment_uids = getattr(plan, "assignment_uids", None)
+            if plan_task_uids is not None and task.uid in plan_task_uids:
+                return plan
+            if plan_assignment_uids is not None and assignment.uid in plan_assignment_uids:
+                return plan
+        return None
 
     def _ingest_occid(self, envelope: Dict[str, Any]) -> list[RemoteExecution]:
         data = envelope.get("data")
@@ -641,7 +705,7 @@ class ExecutionIngress(PluginBase):
             remote.dispatch_id,
             occid.ExecutionPhase.RUNNING,
             task_delta=running,
-            entity_state=self._entity_state(bundle, current),
+            entity_state=self._entity_state(current, provenance=[_uid_text(bundle.execution.uid)]),
             progress=0.0,
         )
 
@@ -674,7 +738,7 @@ class ExecutionIngress(PluginBase):
                         remote.dispatch_id,
                         occid.ExecutionPhase.SUCCEEDED,
                         task_delta=complete,
-                        entity_state=self._entity_state(bundle, current),
+                        entity_state=self._entity_state(current, provenance=[_uid_text(bundle.execution.uid)]),
                         progress=1.0,
                     )
                     return
@@ -692,7 +756,7 @@ class ExecutionIngress(PluginBase):
                         remote.dispatch_id,
                         occid.ExecutionPhase.RUNNING,
                         task_delta=delta,
-                        entity_state=self._entity_state(bundle, current),
+                        entity_state=self._entity_state(current, provenance=[_uid_text(bundle.execution.uid)]),
                         progress=progress,
                     )
                     last_progress_publish = now
@@ -709,24 +773,14 @@ class ExecutionIngress(PluginBase):
         bundle = remote.bundle
         semantic_accepted = False
         try:
-            if bundle.execution.executor_id != self.executor_id:
-                raise ValueError(
-                    "Execution.executor_id does not address this executor: "
-                    f"{_id_text(bundle.execution.executor_id)} != {_id_text(self.executor_id)}"
-                )
-            if bundle.assignment.assignee_id != self.asset_id:
-                raise ValueError(
-                    "Assignment.assignee_id does not address this asset: "
-                    f"{_id_text(bundle.assignment.assignee_id)} != {_id_text(self.asset_id)}"
-                )
             destination = self._resolve_move_destination(remote.source, bundle.task)
 
-            self.active_execution_id = bundle.execution.execution_id
+            self.active_execution_id = bundle.execution.uid
             self.active_dispatch_id = remote.dispatch_id
             self._set_lifecycle("EXECUTING", remote)
             print(
                 f"[TASK] instruction={bundle.task.instruction!r} "
-                f"location_ref={_id_text(bundle.task.location_refs[0])}",
+                f"location_uid={_uid_text(bundle.task.location_uids[0])}",
                 flush=True,
             )
             self._send_acceptance(
@@ -756,7 +810,7 @@ class ExecutionIngress(PluginBase):
             if not semantic_accepted:
                 self._send_acceptance(
                     remote.source,
-                    bundle.execution,
+                    bundle,
                     remote.dispatch_id,
                     accepted=False,
                     retryable=False,
@@ -774,7 +828,7 @@ class ExecutionIngress(PluginBase):
                     entity_state=(
                         None
                         if location is None or location.position is None
-                        else self._entity_state(bundle, location)
+                        else self._entity_state(location, provenance=[_uid_text(bundle.execution.uid)])
                     ),
                     failure=str(exc),
                 )
@@ -796,6 +850,10 @@ class ExecutionIngress(PluginBase):
                 topic, payload = self._pump_once(
                     time.monotonic() + self.poll_interval_s
                 )
+                now = time.monotonic()
+                if now - self.last_state_publish >= self.state_publish_interval_s:
+                    self._publish_entity_state()
+                    self.last_state_publish = now
                 if topic != self.in_topic or payload is None:
                     continue
                 for remote in self._ingest_occid(payload):
