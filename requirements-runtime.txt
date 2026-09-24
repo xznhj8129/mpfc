@@ -1,5 +1,7 @@
 # Core dependencies for the standard MPFC runtime and companion appliance.
-mavsdk
+# mavsdk>=4 is the native binding with a different API; MPFC uses MAVSDK-Python
+# (gRPC-based) under the same import name.
+mavsdk<4
 paho-mqtt>=1.6,<3
 PyYAML>=6
 pydantic>=2.6
