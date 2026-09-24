@@ -177,6 +177,13 @@ The builder never executes provisioning content. Components adapt upstream paths
 back to `/home/mpfc/keys`; deployment material does not create another discovery
 mechanism.
 
+`mpfc-identity.json` is the Sigma provisioning export for this node's asset
+(`name`/`handle`, `entity_uid`, `node_uid`, optional `organization_uid`). When
+present, the builder points `MPFC_PROVISIONING` at
+`/home/mpfc/keys/mpfc-identity.json` in `/etc/mpfc/runtime.env`, and the final
+manifest records `mpfc_identity=yes`. Without it the appliance still boots, but
+the resident MPFC execution host cannot start.
+
 `provisioning.example/` documents a non-secret example structure. Keep real
 provisioning outside Git.
 

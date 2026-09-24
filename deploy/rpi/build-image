@@ -170,11 +170,18 @@ rm -rf "${KEYS_DIR}"
 install -d -o "${MPFC_UID}" -g "${MPFC_GID}" -m 0700 "${KEYS_DIR}"
 PROVISIONING_FILES=
 PROVISIONING_HASH=
+MPFC_IDENTITY=no
 if [[ -n ${PROVISION} ]]; then
     rsync -a "${PROVISION}/" "${KEYS_DIR}/"
     chown -R "${MPFC_UID}:${MPFC_GID}" "${KEYS_DIR}"
     find "${KEYS_DIR}" -type d -exec chmod 0700 {} +
     find "${KEYS_DIR}" -type f -exec chmod 0600 {} +
+    # The MPFC deployment identity stays deployment data under /home/mpfc/keys;
+    # MPFC is pointed at it rather than discovering another location.
+    if [[ -f ${PROVISION}/mpfc-identity.json ]]; then
+        printf 'MPFC_PROVISIONING=/home/mpfc/keys/mpfc-identity.json\n' >> "${ROOT_MNT}/etc/mpfc/runtime.env"
+        MPFC_IDENTITY=yes
+    fi
     PROVISIONING_FILES=$(cd "${PROVISION}" && find . -type f -printf '%P\n' | LC_ALL=C sort | paste -sd, -)
     PROVISIONING_HASH=$(python3 - "${PROVISION}" <<'PY'
 from hashlib import sha256
@@ -291,6 +298,7 @@ rm -f "${CORE_IMAGE}.sha256" "${CORE_IMAGE}.kernel8.img" "${CORE_IMAGE}.raspi3ap
         printf 'provisioning_files=\n'
         printf 'provisioning_hash=\n'
     fi
+    printf 'mpfc_identity=%s\n' "${MPFC_IDENTITY}"
     cat "${COMPONENT_MANIFEST}"
 } >> "${OUTPUT}.manifest"
 
