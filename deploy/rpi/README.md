@@ -59,6 +59,7 @@ The authoritative non-interactive interface is an INI file:
 [image]
 hostname=mpfc
 target=pi-zero-2w
+size=4G
 
 [components]
 wfb-ng=yes
@@ -71,6 +72,10 @@ wifi_region=CA
 [provisioning]
 directory=/path/to/provisioning
 ```
+
+The optional `size` follows the `--size` core-builder option and defaults to
+4G. Optional components are installed inside the image, so a larger driver
+build (for example RTL8812AU DKMS) may require a larger size.
 
 See `image.conf.example`.
 

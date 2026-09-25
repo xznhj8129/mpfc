@@ -104,6 +104,15 @@ TARGET=$(conf_get image target pi-zero-2w)
 [[ ${HOSTNAME} =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || { echo "invalid image hostname: ${HOSTNAME}" >&2; exit 1; }
 [[ ${TARGET} == pi-zero-2w ]] || { echo "unsupported image target: ${TARGET}" >&2; exit 1; }
 
+# Component installation happens inside the image, so the reported SD size must
+# cover optional packages and DKMS builds, not only the core runtime.
+IMAGE_SIZE=$(conf_get image size '')
+if [[ -n ${IMAGE_SIZE} ]]; then
+    if [[ " ${CORE_ARGS[*]-} " != *" --size "* ]]; then
+        CORE_ARGS+=(--size "${IMAGE_SIZE}")
+    fi
+fi
+
 PROVISION=${PROVISION_OVERRIDE:-$(conf_get provisioning directory '')}
 if [[ -n ${PROVISION} ]]; then
     PROVISION=$(realpath "${PROVISION}")

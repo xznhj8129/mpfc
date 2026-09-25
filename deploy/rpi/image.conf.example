@@ -1,6 +1,9 @@
 [image]
 hostname=mpfc
 target=pi-zero-2w
+# Final SD size; bump when optional components (for example the AU driver
+# DKMS build) need more room than the 4G default.
+#size=4G
 
 [components]
 wfb-ng=no
