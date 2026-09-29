@@ -377,6 +377,22 @@ class ExecutionIngress(PluginBase):
         )
         self.lattice.entities.publish_entity(**entity.model_dump())
 
+    def _maybe_publish_entity_state(self) -> None:
+        """Refresh the Lattice entity on its configured interval.
+
+        Execution runs block the main loop, so the entity must also be
+        refreshed from the in-flight pump or the asset expires on the Lattice
+        side (ENTITY_EXPIRY_S) for the whole duration of a task.
+        """
+        now = time.monotonic()
+        if now - self.last_state_publish < self.state_publish_interval_s:
+            return
+        try:
+            self._publish_entity_state()
+        except ApiError as exc:
+            print(f"[ENTITY_PUBLISH_FAILED] error={exc}", flush=True)
+        self.last_state_publish = now
+
     def _update_status(
         self,
         task_id: str,
@@ -764,11 +780,12 @@ class ExecutionIngress(PluginBase):
             )
 
     def _execute_orbit(self, task_id: str, orbit: OrbitSpec) -> None:
-        # The sample Orbit task asks the asset to hold at the objective.  The
-        # available MAVLink command set has no orbit-radius/direction command in
-        # this toolchain, so MPFC flies to the orbit centre at the requested
-        # height (explicit datum) and remains executing; the manager completes
-        # or cancels the task.
+        # The sample Orbit task asks the asset to orbit the objective.  MPFC
+        # arms/takes off when needed and flies to the objective at
+        # centre-HAE + orbit height (explicit datum); the available MAVLink
+        # command set has no orbit-radius/direction command in this toolchain,
+        # so the agent holds on the objective and stays executing until the
+        # manager completes or cancels the task.
         print(
             f"[TASK_ORBIT] task_id={task_id} lat={orbit.latitude_deg} "
             f"lon={orbit.longitude_deg} hae_m={orbit.altitude_hae_m} "
@@ -782,6 +799,8 @@ class ExecutionIngress(PluginBase):
             altitude_m=orbit.altitude_hae_m + orbit.height_m,
             altitude_reference="hae",
         )
+        self._wait_for_location(self.state_timeout_s)
+        self._prepare_vehicle_for_move(orbit_destination)
         command_altitude_m, command_reference = self._command_altitude(orbit_destination)
         self.uav.execute(
             self.uav.go_to_command(
@@ -795,8 +814,10 @@ class ExecutionIngress(PluginBase):
         self._update_status(task_id, "STATUS_EXECUTING", progress=0.0)
         # Keep the agent alive on the task: report executing until the manager
         # sends complete/cancel or a telemetry-driven progress source exists.
+        # Pump on a deadline instead of sleeping a fixed interval: the pump
+        # blocks only when the bus is idle, so full-rate telemetry keeps the
+        # published entity current throughout the task.
         while not self.active_cancel_requested:
-            time.sleep(self.poll_interval_s)
             self._pump_with_ingress(time.monotonic() + self.poll_interval_s)
 
     def _handle_execute(self, request: Any) -> None:
@@ -920,6 +941,7 @@ class ExecutionIngress(PluginBase):
         be interrupted; execute requests stay queued for the main loop so a
         second execution cannot start on top of the active one.
         """
+        self._maybe_publish_entity_state()
         self._pump_once(deadline)
         deferred: list[Any] = []
         while True:
@@ -944,13 +966,7 @@ class ExecutionIngress(PluginBase):
         self._set_lifecycle("IDLE")
         try:
             while True:
-                now = time.monotonic()
-                if now - self.last_state_publish >= self.state_publish_interval_s:
-                    try:
-                        self._publish_entity_state()
-                    except ApiError as exc:
-                        print(f"[ENTITY_PUBLISH_FAILED] error={exc}", flush=True)
-                    self.last_state_publish = now
+                self._maybe_publish_entity_state()
                 try:
                     request = self.agent_requests.get_nowait()
                 except queue.Empty:
