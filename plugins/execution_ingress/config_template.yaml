@@ -20,9 +20,23 @@ cfg:
   lattice_client_id: mpfc
   lattice_client_secret: mpfc
   sandboxes_token: ''
-  # HAE home altitude when the vehicle only reports home-relative altitude;
-  # required to evaluate arrival against HAE task objectives.
+  # Bounded retries for every Lattice exchange (listen/publish/status).  Every
+  # failed attempt is logged with endpoint, operation, task id, and cause.
+  lattice_attempts: 3
+  lattice_retry_delay_s: 1.0
+  # Agent listen is a long poll: the server may hold it for minutes, so it uses
+  # its own timeout instead of the command-response timeout.
+  lattice_listen_timeout_s: 300.0
+  # HAE home altitude required to command/evaluate HAE task objectives.  When
+  # null it is derived at startup from live telemetry
+  # (absolute_altitude - relative_altitude); if neither source is available
+  # the plugin faults visibly instead of guessing a datum.
   home_altitude_hae_m: null
+  home_altitude_timeout_s: 60.0
+  # Link/manager-loss failsafe: after this long without any successful Lattice
+  # exchange the armed vehicle executes failsafe_action (rtl or land) once.
+  link_loss_timeout_s: 60.0
+  failsafe_action: rtl
   interface:
     id: uav_controller
     topic_ns: UAV
