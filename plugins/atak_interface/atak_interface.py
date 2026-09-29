@@ -20,7 +20,7 @@ from lib.lattice_bus import decode_json_request, decode_request, pack_lattice
 from lib.bus_topics import COT_RAW, ENTITY_STATE
 from lib.plugin_base import PluginBase
 from lib.state_scheduler import StateScheduler
-from lib.interop_cot import CotPointFields, cot_point_to_location, location_to_cot_point
+from .interop_cot import CotPointFields, cot_point_to_location, location_to_cot_point
 
 
 @dataclass(frozen=True)

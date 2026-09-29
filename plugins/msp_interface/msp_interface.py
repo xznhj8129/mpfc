@@ -15,7 +15,7 @@ from mspapi2.msp_serial import MSPSerial
 from pymavlink import mavutil
 
 from lib.interop_common import normalized_to_pwm
-from lib.interop_msp import (
+from .interop_msp import (
     InavGpsFields,
     angular_velocity_from_fru_degrees_s,
     attitude_from_degrees,

@@ -20,7 +20,7 @@ from mavsdk.info import InfoError
 from mavsdk.offboard import Attitude, OffboardError
 from pymavlink import mavutil
 
-from lib.interop_mavsdk import (
+from .interop_mavsdk import (
     MavsdkPositionFields,
     angular_velocity_from_body_rates,
     attitude_from_euler_degrees,
