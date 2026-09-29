@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OCCID telemetry snapshot program for an MSP-backed UAV."""
+"""Telemetry snapshot program for an MSP-backed UAV."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ from typing import Any, Dict
 
 from lib.common import apply_cfg
 from lib.core_base import CoreBase
-from lib.occid_bus import occid
-from lib.occid_topics import (
+from lib.bus_topics import (
     ANGULAR_VELOCITY,
     ATTITUDE,
     CONTROL_OUTPUT,
@@ -21,6 +20,17 @@ from lib.occid_topics import (
     POWER,
     RC_TELEMETRY,
     RUNTIME_LOAD,
+)
+from lib.mavlink_models import (
+    AngularVelocity,
+    Attitude,
+    BatteryStatus,
+    ControlAxes,
+    ControlOverride,
+    GpsRawInt,
+    HighresImu,
+    RuntimeLoad,
+    VehicleControl,
 )
 from lib.uav_client import UavClient
 
@@ -46,19 +56,19 @@ class ExampleMspCore(CoreBase):
         self.init_bus(float(self.poll_interval_s), self.uav.state_topics(self.state_keys), self.uav.response_topic)
 
     def _print_snapshot(self) -> None:
-        print("\n=== MSP/OCCID Snapshot ===", flush=True)
+        print("\n=== MSP Snapshot ===", flush=True)
         for key, expected in (
-            (FLIGHT_CONTROL, occid.FlightControlState),
-            (LOCATION, occid.LocationState),
-            (ATTITUDE, occid.EulerAngles),
-            (ANGULAR_VELOCITY, occid.AngularVelocityVector),
-            (GNSS, occid.GnssSolution),
-            (POWER, occid.ElectricalResourceState),
-            (IMU, occid.ImuSample),
-            (RC_TELEMETRY, occid.ControlAxisSet),
-            (CONTROL_OVERRIDE, occid.ControlOverride),
-            (CONTROL_OUTPUT, occid.ControlAxisSet),
-            (RUNTIME_LOAD, occid.RuntimeLoadState),
+            (FLIGHT_CONTROL, VehicleControl),
+            (LOCATION, None),
+            (ATTITUDE, Attitude),
+            (ANGULAR_VELOCITY, AngularVelocity),
+            (GNSS, GpsRawInt),
+            (POWER, BatteryStatus),
+            (IMU, HighresImu),
+            (RC_TELEMETRY, ControlAxes),
+            (CONTROL_OVERRIDE, ControlOverride),
+            (CONTROL_OUTPUT, ControlAxes),
+            (RUNTIME_LOAD, RuntimeLoad),
         ):
             print(f"{key}: {self.uav.state(key, expected)}", flush=True)
 
@@ -67,7 +77,7 @@ class ExampleMspCore(CoreBase):
         self.wait_until(
             lambda: self.uav.flight_control() is not None,
             float(self.state_timeout_s),
-            RuntimeError("MSP OCCID flight state timeout"),
+            RuntimeError("MSP vehicle flight state timeout"),
         )
         print(f"[CORE] {self.client_id} msp_uav_state_online=True", flush=True)
         last_print = 0.0

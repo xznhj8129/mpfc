@@ -1,8 +1,8 @@
 my_name: uav1
 vehicle:
-  autopilot: AutopilotType.ARDUPILOT
-  airframe: AirframeType.COPTER
-  telem_type: TelemetryType.MAVLINK
+  autopilot: Autopilot.ARDUPILOT
+  airframe: Airframe.COPTER
+  telem_type: Telemetry.MAVLINK
 core:
   name: test_takeoff_land
   cfg:

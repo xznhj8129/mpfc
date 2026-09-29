@@ -312,7 +312,7 @@ case "${COMMAND}" in
         )
         rsync -az --delete "${common_excludes[@]}" -e "${RSYNC_SSH}" \
             "${REPO_ROOT}/" "mpfc@${GUEST_IP}:/opt/mpfc/"
-        "${ssh_base[@]}" /opt/mpfc/.venv/bin/python -m occid.contract check /opt/mpfc
+        "${ssh_base[@]}" /opt/mpfc/.venv/bin/python -c "from importlib.metadata import version; print('anduril-lattice-sdk', version('anduril-lattice-sdk'))"
         "${ssh_base[@]}" sudo -n /usr/bin/systemctl restart mpfc.service
         ;;
     *)

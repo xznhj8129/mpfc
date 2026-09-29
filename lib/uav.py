@@ -1,13 +1,11 @@
 """Shared UAV compatibility helpers.
 
-Signed normalized-control/PWM conversion is canonical in OCCID SDK interop.
-These wrappers preserve the existing MPFC helper names for current callers.
+Signed normalized-control/PWM conversion is pure MPFC-local math (see
+:mod:`lib.interop_common`).  These wrappers preserve the existing helper names
+for current callers.
 """
 
-# Importing occid_bus resolves OCCID_PATH / the sibling OCCID checkout before
-# importing SDK interop modules, so these helpers also work outside main.py.
-from lib.occid_bus import occid as _occid  # noqa: F401
-from interop.common import normalized_to_pwm, pwm_to_normalized
+from lib.interop_common import normalized_to_pwm, pwm_to_normalized
 
 
 def scale_float_pwm(value: float, pwm_low: int, pwm_high: int) -> int:

@@ -1,4 +1,4 @@
-"""Minimal Program/plugin OCCID request-response smoke test."""
+"""Minimal Program/plugin local request-response smoke test."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from lib.common import build_request_topic, build_response_topic
 from lib.core_base import CoreBase
-from lib.occid_bus import occid, send_occid_request, unpack_occid
+from lib.lattice_bus import send_json_request
 
 
 class HelloCore(CoreBase):
@@ -30,20 +30,23 @@ class HelloCore(CoreBase):
         try:
             for iteration in range(self.count):
                 for target_id, request_topic, _response_topic in self.target_topics:
-                    request = occid.ProtocolPayload(
-                        format=occid.ProtocolPayloadFormat.TEXT,
-                        content_type="text/plain",
-                        text=f"hello {target_id} #{iteration}",
+                    request_id = send_json_request(
+                        self.bus,
+                        request_topic,
+                        {
+                            "format": "TEXT",
+                            "content_type": "text/plain",
+                            "text": f"hello {target_id} #{iteration}",
+                        },
                     )
-                    request_id = send_occid_request(self.bus, request_topic, request)
                     response = self._wait_response(request_id, self.response_timeout_s)
                     if not response.get("ok"):
                         raise RuntimeError(f"hello request failed target={target_id} response={response}")
-                    reply = unpack_occid(response["data"]["reply"])
-                    if not isinstance(reply, occid.ProtocolPayload):
-                        raise RuntimeError(f"invalid hello reply type {type(reply).__name__}")
+                    reply = response["data"]["reply"]
+                    if type(reply) is not dict or type(reply.get("text")) is not str:
+                        raise RuntimeError(f"invalid hello reply payload {reply!r}")
                     print(
-                        f"[CORE] {self.client_id} target={target_id} request_id={request_id} reply={reply.text!r}",
+                        f"[CORE] {self.client_id} target={target_id} request_id={request_id} reply={reply['text']!r}",
                         flush=True,
                     )
                 if iteration + 1 < self.count:

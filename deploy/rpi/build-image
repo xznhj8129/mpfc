@@ -30,7 +30,6 @@ Core image options are passed through unchanged:
   --base-image PATH
   --base-url URL
   --base-sha256 SHA
-  --occid-path PATH
   --hivelink-path PATH
   --size SIZE
 
@@ -44,7 +43,7 @@ while [[ $# -gt 0 ]]; do
         --provision) PROVISION_OVERRIDE=$2; shift 2 ;;
         --output) OUTPUT=$2; shift 2 ;;
         --compress) COMPRESS=1; shift ;;
-        --base-image|--base-url|--base-sha256|--occid-path|--hivelink-path|--size)
+        --base-image|--base-url|--base-sha256|--hivelink-path|--size)
             CORE_ARGS+=("$1" "$2")
             shift 2
             ;;

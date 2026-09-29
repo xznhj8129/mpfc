@@ -1,53 +1,148 @@
 #!/usr/bin/env python3
-"""OCCID-native autonomous execution ingress for MPFC.
+"""Lattice agent execution ingress for MPFC.
 
-Remote Location, Plan, Task, Assignment, and Execution records arrive as
-canonical OCCID on the node-local ``OCCID/IN`` bridge topic. This plugin owns
-execution semantics; HiveLink owns only delivery and MPFC's MQTT bus remains
-private node-local IPC.
+MPFC is a Lattice agent: it publishes its Entity (with a task catalog), listens
+as an agent for its own entity id, accepts or rejects execute requests, executes
+supported task specifications against the vehicle through MAVLink command
+records, and reports task status with ``StatusUpdate``/``TaskStatus`` through the
+official ``anduril`` SDK.  No relay or control-node message shapes are involved.
 
-Execution acceptance and status travel back to the control node as Sigma SDK
-messages (``ExecutionAcceptance`` and ``ExecutionStatusReport``) carried as
-opaque HiveLink payloads. OCCID ``ExecutionStatus`` is the durable status fact.
+Supported task specifications:
+
+* ``anduril.tasks.v2.Transit`` -- fly the requested route and report arrival.
+* the Anduril sample auto-reconnaissance ``Orbit`` task -- fly to the orbit
+  centre and hold; the task stays executing until the manager completes or
+  cancels it.  This is the one local schema kept because the sample flow
+  publishes it (see ``tasks/sim_asset_tasks.proto`` in the sample repo).
+
+Task status semantics follow the Lattice 14-state lifecycle; progress is the
+local ``{"progress": 0..1}`` document on ``TaskStatus.progress`` (ENG-2).
 """
 from __future__ import annotations
 
-import base64
 import math
+import os
+import queue
+import threading
 import time
 import traceback
-import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
-from sigma_sdk.codec import MessageCodec
-from sigma_sdk.messages import ExecutionAcceptance, ExecutionStatusReport, TaskDelta
+import httpx
+from anduril import (
+    Aliases,
+    Classification,
+    ClassificationInformation,
+    Entity,
+    EntityIdsSelector,
+    Enu,
+    GoogleProtobufAny,
+    Health,
+    Lattice,
+    Location as LatticeLocation,
+    MilView,
+    Ontology,
+    Position,
+    PowerLevel,
+    PowerSource,
+    PowerState,
+    Principal,
+    Provenance,
+    Quaternion,
+    RequestTimeoutError,
+    System,
+    TaskCatalog,
+    TaskDefinition,
+    TaskError,
+    TaskStatus,
+)
+from anduril.core import ApiError
 
 from lib.common import apply_cfg, build_envelope
-from lib.occid_bus import occid, pack_occid, unpack_occid
+from lib.lattice_bus import get_record_state
+from lib.mavlink_models import (
+    BatteryStatus,
+    GlobalPositionInt,
+    VehicleControl,
+)
 from lib.plugin_base import PluginBase
-from lib.provisioning import asset_uid, node_uid
+from lib.provisioning import asset_id
 from lib.uav_client import UavClient
 
-
-OCCID_IN_TOPIC = "OCCID/IN"
-OCCID_OUT_TOPIC = "OCCID/OUT"
+TRANSIT_SPECIFICATION_URL = "type.googleapis.com/anduril.tasks.v2.Transit"
+ORBIT_SPECIFICATION_URL = (
+    "type.googleapis.com/anduril.sample_app_auto_reconnaissance.v1.Orbit"
+)
+SUPPORTED_SPECIFICATIONS = (TRANSIT_SPECIFICATION_URL, ORBIT_SPECIFICATION_URL)
+MPFC_PROGRESS_TYPE_URL = "type.googleapis.com/mpfc.TaskProgress"
 EARTH_RADIUS_M = 6371008.8
+ENTITY_EXPIRY_S = 15.0
 
 
-def _uid_text(value: Any) -> str:
-    return str(uuid.UUID(bytes=bytes(value.root)))
+@dataclass(frozen=True)
+class Destination:
+    latitude_deg: float
+    longitude_deg: float
+    altitude_m: float
+    altitude_reference: str
 
 
-def _uid_key(value: Any) -> str:
-    return _uid_text(value)
+@dataclass(frozen=True)
+class OrbitSpec:
+    """Minimal local parse of the sample-app Orbit task (published schema)."""
+
+    latitude_deg: float
+    longitude_deg: float
+    altitude_hae_m: float
+    radius_m: float
+    height_m: float
+    direction: str
 
 
-def _distance_m(a: Any, b: Any) -> float:
-    lat1 = math.radians(float(a.lat))
-    lat2 = math.radians(float(b.lat))
+def _field(node: Any, *names: str) -> Any:
+    if node is None:
+        return None
+    if isinstance(node, dict):
+        mapping = node
+    elif hasattr(node, "model_extra"):
+        mapping = dict(node.model_extra or {})
+    else:
+        return None
+    for name in names:
+        if name in mapping and mapping[name] is not None:
+            return mapping[name]
+    return None
+
+
+def _float_field(node: Any, *names: str) -> float | None:
+    value = _field(node, *names)
+    if value is None:
+        return None
+    return float(value)
+
+
+def _standard_altitude_reference(raw: Any, default: str) -> str:
+    if raw is None:
+        return default
+    name = str(raw).upper()
+    if "WGS84" in name or "ELLIPSOID" in name:
+        return "hae"
+    if "EGM96" in name or "MSL" in name or "MEAN_SEA" in name:
+        return "asl"
+    if "AGL" in name or "GROUND" in name:
+        return "agl"
+    if "SEA_FLOOR" in name:
+        return "asf"
+    return default
+
+
+def _distance_m(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
+    lat1 = math.radians(float(a_lat))
+    lat2 = math.radians(float(b_lat))
     dlat = lat2 - lat1
-    dlon = math.radians(float(b.lon) - float(a.lon))
+    dlon = math.radians(float(b_lon) - float(a_lon))
     hav = (
         math.sin(dlat / 2.0) ** 2
         + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2.0) ** 2
@@ -55,160 +150,30 @@ def _distance_m(a: Any, b: Any) -> float:
     return 2.0 * EARTH_RADIUS_M * math.asin(min(1.0, math.sqrt(hav)))
 
 
-def _altitude_for_datum(location: Any, datum: Any) -> float:
-    altitude = location.altitude
-    if altitude is not None:
-        if datum == altitude.absolute_datum and altitude.absolute_m is not None:
-            return float(altitude.absolute_m)
-        if datum == altitude.relative_datum and altitude.relative_m is not None:
-            return float(altitude.relative_m)
-
-    position = location.position
-    if position is not None and position.alt_frame == datum:
-        return float(position.alt)
-    raise RuntimeError(
-        "LocationState has no altitude observation for destination datum "
-        f"{datum.name}"
-    )
-
-
-def _arrival_metrics(location: Any, destination: Any) -> tuple[float, float]:
-    if location.position is None:
-        raise RuntimeError("cannot evaluate arrival without LocationState.position")
-    horizontal_m = _distance_m(location.position, destination)
-    observed_altitude_m = _altitude_for_datum(location, destination.alt_frame)
-    altitude_error_m = abs(observed_altitude_m - float(destination.alt))
-    return horizontal_m, altitude_error_m
-
-
-def _location_identity(location: Any) -> Any:
-    uid = getattr(location, "uid", None)
-    if uid is None:
-        raise ValueError(
-            f"Location record {type(location).__name__} has no stable UID field"
-        )
-    return uid
-
-
-def _location_position(location: Any) -> Any:
-    position = getattr(location, "position", None)
-    if isinstance(position, occid.GlobalPosition):
-        return position
-    raise ValueError(
-        f"Location record {type(location).__name__} does not carry a GlobalPosition"
-    )
-
-
-def _record(origin: str, now: float, provenance: list[str] | None = None) -> Any:
-    stamp = occid.Timestamp(utime=now, tz=0)
-    return occid.Record(
-        uid=occid.UID(root=uuid.uuid4().bytes),
-        id=occid.IntID(root=0),
-        created_ts=stamp,
-        updated_ts=stamp,
-        origin_system=origin,
-        provenance=list(provenance or ()),
-    )
-
-
-@dataclass(frozen=True)
-class ExecutionBundle:
-    execution: Any
-    assignment: Any
-    task: Any
-    plan: Any
-
-
-@dataclass(frozen=True)
-class RemoteExecution:
-    source: str
-    dispatch_id: str
-    bundle: ExecutionBundle
-
-
-def validate_execution_bundle(
-    execution: Any,
-    assignment: Any,
-    task: Any,
-    plan: Any,
-    *,
-    executor_uid: Any,
-    asset_uid: Any,
-) -> ExecutionBundle:
-    if not occid.is_a(execution, occid.Execution):
-        raise TypeError(f"expected Execution, got {type(execution).__name__}")
-    if not occid.is_a(assignment, occid.Assignment):
-        raise TypeError(f"expected Assignment, got {type(assignment).__name__}")
-    if not occid.is_a(task, occid.Task):
-        raise TypeError(f"expected Task, got {type(task).__name__}")
-    if not occid.is_a(plan, occid.Plan):
-        raise TypeError(f"expected Plan, got {type(plan).__name__}")
-
-    task_uid = getattr(assignment, "task_uid", None)
-    if task_uid is None:
-        raise ValueError(
-            f"Assignment {type(assignment).__name__} does not reference a Task"
-        )
-    if execution.assignment_uid != assignment.uid:
-        raise ValueError(
-            "Execution.assignment_uid does not match supplied Assignment: "
-            f"{_uid_text(execution.assignment_uid)} != {_uid_text(assignment.uid)}"
-        )
-    if task_uid != task.uid:
-        raise ValueError(
-            "Assignment.task_uid does not match supplied Task: "
-            f"{_uid_text(task_uid)} != {_uid_text(task.uid)}"
-        )
-    if execution.executor_uid != executor_uid:
-        raise ValueError(
-            "Execution.executor_uid does not address this executor: "
-            f"{_uid_text(execution.executor_uid)} != {_uid_text(executor_uid)}"
-        )
-    if assignment.assignee_uid != asset_uid:
-        raise ValueError(
-            "Assignment.assignee_uid does not address this asset: "
-            f"{_uid_text(assignment.assignee_uid)} != {_uid_text(asset_uid)}"
-        )
-    if plan.approval_state != occid.PlanApprovalState.APPROVED:
-        raise ValueError(f"supplied Plan is not approved state={plan.approval_state.name}")
-    plan_task_uids = getattr(plan, "task_uids", None)
-    if plan_task_uids is not None and task.uid not in plan_task_uids:
-        raise ValueError("supplied Plan does not contain the assigned Task")
-    plan_assignment_uids = getattr(plan, "assignment_uids", None)
-    if plan_assignment_uids is not None and assignment.uid not in plan_assignment_uids:
-        raise ValueError("supplied Plan does not contain the Assignment")
-    if assignment.status not in (
-        occid.AssignmentStatus.ASSIGNED,
-        occid.AssignmentStatus.ACCEPTED,
-        occid.AssignmentStatus.ACTIVE,
-    ):
-        raise ValueError(
-            f"supplied Assignment is not executable state={assignment.status.name}"
-        )
-    if task.status in (
-        occid.TaskStatus.COMPLETE,
-        occid.TaskStatus.FAILED,
-        occid.TaskStatus.CANCELLED,
-    ):
-        raise ValueError(f"supplied Task is terminal state={task.status.name}")
-    if execution.phase not in (
-        occid.ExecutionPhase.CREATED,
-        occid.ExecutionPhase.QUEUED,
-    ):
-        raise ValueError(
-            f"supplied Execution is not dispatchable phase={execution.phase.name}"
-        )
-
-    return ExecutionBundle(
-        execution=execution,
-        assignment=assignment,
-        task=task,
-        plan=plan,
-    )
+def _attitude_enu_quaternion(attitude: Any) -> Quaternion | None:
+    """Convert a MAVLink FRD attitude record to the Lattice FLU->ENU quaternion."""
+    if attitude is None:
+        return None
+    roll = float(attitude.roll_rad)
+    pitch = float(attitude.pitch_rad)
+    yaw = float(attitude.yaw_rad)
+    # MAVLink attitude is body FRD relative to NED.  Lattice attitude_enu is a
+    # body FLU -> ENU quaternion.  FRD->FLU is a 180 deg roll (x and y negated),
+    # NED->ENU is a 180 deg yaw about the down axis.
+    cr, sr = math.cos(roll / 2.0), math.sin(roll / 2.0)
+    cp, sp = math.cos(pitch / 2.0), math.sin(pitch / 2.0)
+    cy, sy = math.cos(yaw / 2.0), math.sin(yaw / 2.0)
+    # q_ned_frd = q_z(yaw) * q_y(pitch) * q_x(roll)
+    w = cr * cp * cy + sr * sp * sy
+    x = sr * cp * cy - cr * sp * sy
+    y = cr * sp * cy + sr * cp * sy
+    z = cr * cp * sy - sr * sp * cy
+    # FRD -> FLU: negate x, y.  NED -> ENU: negate y, z.
+    return Quaternion(x=-x, y=y, z=-z, w=w)
 
 
 class ExecutionIngress(PluginBase):
-    """High-level OCCID execution consumer backed by existing MPFC UAV services."""
+    """Lattice agent task consumer backed by MPFC's UAV service."""
 
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
         super().__init__(cfg, bus_config)
@@ -228,20 +193,55 @@ class ExecutionIngress(PluginBase):
             cfg.get("takeoff_altitude_ok_fraction", 0.8)
         )
         self.post_takeoff_wait_s = float(cfg.get("post_takeoff_wait_s", 1.0))
-        self.control_node = str(cfg.get("control_node", "control"))
         self.state_publish_interval_s = float(cfg.get("state_publish_interval_s", 1.0))
+        self.home_altitude_hae_m = cfg.get("home_altitude_hae_m")
+        if self.home_altitude_hae_m is not None:
+            self.home_altitude_hae_m = float(self.home_altitude_hae_m)
 
-        self.executor_uid = self._uid_from_cfg(cfg.get("executor_uid"), node_uid())
-        self.asset_uid = self._uid_from_cfg(cfg.get("asset_uid"), asset_uid())
-        self.in_topic = str(cfg.get("occid_in_topic", OCCID_IN_TOPIC))
-        self.out_topic = str(cfg.get("occid_out_topic", OCCID_OUT_TOPIC))
-        self.client.subscribe(self.in_topic)
+        self.lattice_endpoint = str(
+            cfg.get("lattice_endpoint") or os.environ.get("LATTICE_ENDPOINT") or ""
+        )
+        self.lattice_client_id = str(
+            cfg.get("lattice_client_id") or os.environ.get("LATTICE_CLIENT_ID") or ""
+        )
+        self.lattice_client_secret = str(
+            cfg.get("lattice_client_secret")
+            or os.environ.get("LATTICE_CLIENT_SECRET")
+            or ""
+        )
+        sandboxes_token = str(
+            cfg.get("sandboxes_token") or os.environ.get("SANDBOXES_TOKEN") or ""
+        )
+        if not self.lattice_endpoint:
+            raise ValueError(
+                "execution_ingress requires a Lattice endpoint "
+                "(cfg lattice_endpoint or LATTICE_ENDPOINT)"
+            )
+        headers = (
+            {"anduril-sandbox-authorization": f"Bearer {sandboxes_token}"}
+            if sandboxes_token
+            else None
+        )
+        base_url = (
+            self.lattice_endpoint
+            if self.lattice_endpoint.startswith("http")
+            else f"https://{self.lattice_endpoint}"
+        )
+        self.lattice_kwargs = {
+            "base_url": base_url,
+            "client_id": self.lattice_client_id,
+            "client_secret": self.lattice_client_secret,
+            "headers": headers,
+            "timeout": self.response_timeout_s,
+        }
+        self.lattice = Lattice(**self.lattice_kwargs)
 
+        self.entity_id = str(cfg.get("asset_id") or asset_id())
         self.uav = UavClient(
             self,
             dict(cfg["interface"]),
             self.response_timeout_s,
-            target_uid=self.asset_uid,
+            target_id=self.entity_id,
         )
         self.init_bus(
             self.poll_interval_s,
@@ -249,316 +249,309 @@ class ExecutionIngress(PluginBase):
             response_topic=self.uav.response_topic,
         )
 
-        self.records: dict[tuple[str, str, str], Any] = {}
-        self.pending_executions: dict[tuple[str, str], Any] = {}
-        self.active_execution_id: Any | None = None
-        self.active_dispatch_id: str | None = None
+        self.status_versions: dict[str, int] = {}
+        self.active_task_id: str | None = None
+        self.active_specification_url: str | None = None
+        self.active_cancel_requested = False
+        self.active_complete_requested = False
+        self.active_lock = threading.Lock()
         self.last_state_publish = 0.0
         self.lifecycle_state = "STARTING"
         self.lifecycle_topic = f"DIAG/{self.client_id}/LIFECYCLE"
+        self.agent_requests: "queue.Queue[Any]" = queue.Queue()
+        self.listener_stop = threading.Event()
+        self.listener_thread: threading.Thread | None = None
+        self.listener_error: BaseException | None = None
 
-    @staticmethod
-    def _uid_from_cfg(raw: Any, default: Any) -> Any:
-        if raw is None:
-            return default
-        if isinstance(raw, occid.UID):
-            return raw
-        return occid.UID(root=uuid.UUID(str(raw)).bytes)
+    # -- diagnostics --------------------------------------------------------
 
-    def _set_lifecycle(
-        self,
-        state: str,
-        remote: RemoteExecution | None = None,
-        detail: str | None = None,
-    ) -> None:
+    def _set_lifecycle(self, state: str, detail: str | None = None) -> None:
         self.lifecycle_state = str(state)
         data: dict[str, Any] = {"state": self.lifecycle_state}
-        if remote is not None:
-            data["dispatch_id"] = remote.dispatch_id
-            data["execution_id"] = _uid_text(remote.bundle.execution.uid)
-            data["task_instruction"] = remote.bundle.task.instruction
+        if self.active_task_id is not None:
+            data["task_id"] = self.active_task_id
         if detail:
             data["detail"] = str(detail)
         self.client.publish(
             self.lifecycle_topic,
             build_envelope(self.client_id, self.lifecycle_topic, data),
         )
-        suffix = ""
-        if remote is not None:
-            suffix = (
-                f" dispatch_id={remote.dispatch_id} "
-                f"task={type(remote.bundle.task).__name__}"
-            )
+        suffix = f" task={self.active_task_id}" if self.active_task_id else ""
         if detail:
             suffix += f" detail={detail}"
+        print(f"[EXECUTION_LIFECYCLE] state={self.lifecycle_state}{suffix}", flush=True)
+
+    # -- Lattice agent surface ---------------------------------------------
+
+    def _target_entity(self, entity_id: str) -> Entity | None:
+        try:
+            return self.lattice.entities.get_entity(entity_id)
+        except ApiError:
+            return None
+
+    def _publish_entity_state(self) -> None:
+        location = self.uav.location()
+        if location is None:
+            return
+        attitude = self.uav.attitude()
+        battery = get_record_state(self.state, "power", BatteryStatus)
+        power_state = None
+        if battery is not None:
+            power_state = PowerState(
+                source_id_to_state={
+                    "mpfc": PowerSource(
+                        power_type="POWER_TYPE_PRIMARY",
+                        power_status="POWER_SOURCE_POWER_STATUS_ONLINE",
+                        power_level=PowerLevel(
+                            voltage=(
+                                None
+                                if battery.voltage_v is None
+                                else float(battery.voltage_v)
+                            ),
+                            current_amps=(
+                                None
+                                if battery.current_a is None
+                                else float(battery.current_a)
+                            ),
+                            percent_remaining=(
+                                None
+                                if battery.remaining_pct is None
+                                else float(battery.remaining_pct) / 100.0
+                            ),
+                        ),
+                    )
+                }
+            )
+        # ENG-13: MAVLink relative altitude is home-relative; publish it as the
+        # explicit AGL reference instead of an ambiguous altitude.
+        entity = Entity(
+            entity_id=self.entity_id,
+            is_live=True,
+            expiry_time=datetime.now(timezone.utc)
+            + timedelta(seconds=ENTITY_EXPIRY_S),
+            aliases=Aliases(name=f"MPFC {self.client_id}"),
+            data_classification=Classification(
+                default=ClassificationInformation(
+                    level="CLASSIFICATION_LEVELS_UNCLASSIFIED"
+                )
+            ),
+            health=Health(
+                connection_status="CONNECTION_STATUS_ONLINE",
+                health_status="HEALTH_STATUS_HEALTHY",
+            ),
+            location=LatticeLocation(
+                position=Position(
+                    latitude_degrees=float(location.latitude_deg),
+                    longitude_degrees=float(location.longitude_deg),
+                    altitude_agl_meters=float(location.relative_altitude_m),
+                ),
+                speed_mps=math.hypot(
+                    float(location.vx_m_s), float(location.vy_m_s)
+                ),
+                velocity_enu=Enu(
+                    e=float(location.vx_m_s),
+                    n=float(location.vy_m_s),
+                    u=float(location.vz_m_s),
+                ),
+                attitude_enu=_attitude_enu_quaternion(attitude),
+            ),
+            mil_view=MilView(
+                disposition="DISPOSITION_FRIENDLY",
+                environment="ENVIRONMENT_AIR",
+                platform_type="UAV",
+            ),
+            ontology=Ontology(template="TEMPLATE_ASSET", platform_type="UAV"),
+            provenance=Provenance(
+                integration_name=f"mpfc.{self.client_id}",
+                data_type="MPFC UAV",
+                source_id=self.client_id,
+                source_update_time=datetime.now(timezone.utc),
+            ),
+            power_state=power_state,
+            task_catalog=TaskCatalog(
+                task_definitions=[
+                    TaskDefinition(task_specification_url=url)
+                    for url in SUPPORTED_SPECIFICATIONS
+                ]
+            ),
+        )
+        self.lattice.entities.publish_entity(**entity.model_dump())
+
+    def _update_status(
+        self,
+        task_id: str,
+        status: str,
+        *,
+        progress: float | None = None,
+        error: TaskError | None = None,
+    ) -> None:
+        version = self.status_versions.get(task_id, 0) + 1
+        self.status_versions[task_id] = version
+        progress_document = None
+        if progress is not None:
+            progress_document = GoogleProtobufAny(
+                type=MPFC_PROGRESS_TYPE_URL,
+                progress=max(0.0, min(1.0, float(progress))),
+            )
+        new_status = TaskStatus(
+            status=status,
+            task_error=error,
+            progress=progress_document,
+        )
+        try:
+            self.lattice.tasks.update_task_status(
+                task_id=task_id,
+                status_version=version,
+                new_status=new_status,
+                author=Principal(system=System(entity_id=self.entity_id)),
+            )
+        except ApiError as exc:
+            print(
+                f"[TASK_STATUS_FAILED] task_id={task_id} status={status} error={exc}",
+                flush=True,
+            )
+            return
         print(
-            f"[EXECUTION_LIFECYCLE] state={self.lifecycle_state}{suffix}",
+            f"[TASK_STATUS] task_id={task_id} status={status} "
+            f"version={version} progress={progress}",
             flush=True,
         )
 
-    @staticmethod
-    def _dispatch_id(execution: Any) -> str:
-        if not execution.external_job_refs:
-            raise ValueError("Execution has no persisted dispatch identity")
-        dispatch_id = str(execution.external_job_refs[-1])
-        if not dispatch_id:
-            raise ValueError("Execution dispatch identity is empty")
-        return dispatch_id
-
-    def _send_sdk(self, dest: str, message: Any) -> None:
-        payload = base64.b64encode(MessageCodec.encode(message)).decode("ascii")
-        data = {"dest": str(dest), "sdk_payload": payload}
-        self.client.publish(
-            self.out_topic,
-            build_envelope(self.client_id, self.out_topic, data),
-        )
-
-    def _send_acceptance(
-        self,
-        dest: str,
-        execution: Any,
-        dispatch_id: str,
-        *,
-        accepted: bool,
-        retryable: bool = False,
-        reason: str | None = None,
-    ) -> None:
-        report = ExecutionAcceptance(
-            source_node_uid=self.executor_uid,
-            execution_uid=execution.uid,
-            dispatch_ref=str(dispatch_id),
-            accepted=bool(accepted),
-            retryable=bool(retryable),
-            reason=reason,
-            reported_at=occid.Timestamp(utime=time.time(), tz=0),
-        )
-        self._send_sdk(dest, report)
-
-    def _task_delta(
-        self,
-        bundle: ExecutionBundle,
-        phase: Any,
-        *,
-        progress: float | None = None,
-    ) -> TaskDelta:
-        return TaskDelta(
-            task_uid=bundle.task.uid,
-            phase=phase,
-            progress=progress,
-            updated_at=occid.Timestamp(utime=time.time(), tz=0),
-        )
-
-    def _entity_state(
-        self,
-        location: Any,
-        *,
-        provenance: list[str] | None = None,
-    ) -> Any:
-        if location.attitude is None:
-            attitude = self.uav.attitude()
-            if attitude is not None:
-                location = location.model_copy(update={"attitude": attitude})
-        stamp = occid.Timestamp(utime=time.time(), tz=0)
-        return occid.EntityState(
-            record=_record(f"mpfc.{self.client_id}", time.time(), provenance),
-            subject_uid=self.asset_uid,
-            timestamp=stamp,
-            position=location,
-            flight_control=self.uav.flight_control(),
-            operational_status=occid.EntityOperationalState.ACTIVE,
-            lifecycle_status=occid.EntityLifecycleStatus.ACTIVE,
-            link_states={},
-            received_ts=stamp,
-            published_ts=stamp,
-        )
-
-    def _publish_entity_state(self) -> None:
-        """Publish current entity state to the control node as native OCCID."""
-        location = self.uav.location()
-        if location is None or location.position is None:
-            return
-        state = self._entity_state(location)
-        data = {"dest": self.control_node, "model": pack_occid(state)}
-        self.client.publish(
-            self.out_topic,
-            build_envelope(self.client_id, self.out_topic, data),
-        )
-
-    def _publish_status(
-        self,
-        dest: str,
-        bundle: ExecutionBundle,
-        dispatch_id: str,
-        phase: Any,
-        *,
-        task_delta: TaskDelta | None = None,
-        entity_state: Any | None = None,
-        progress: float | None = None,
-        failure: str | None = None,
-    ) -> None:
-        status = occid.ExecutionStatus(
-            record=_record(f"mpfc.{self.client_id}", time.time(), [str(dispatch_id)]),
-            subject_uid=bundle.execution.uid,
-            timestamp=occid.Timestamp(utime=time.time(), tz=0),
-            phase=phase,
-            progress=progress,
-            failure=failure,
-        )
-        report = ExecutionStatusReport(
-            source_node_uid=self.executor_uid,
-            status=status,
-            task_delta=task_delta,
-            entity_state=entity_state,
-        )
-        self._send_sdk(dest, report)
-
-    def _store_model(self, source: str, model: Any) -> bool:
-        if occid.is_a(model, occid.Location):
-            self.records[(source, "location", _uid_key(model.uid))] = model
-            return True
-        if occid.is_a(model, occid.Plan):
-            self.records[(source, "plan", _uid_key(model.uid))] = model
-            return True
-        if occid.is_a(model, occid.Task):
-            self.records[(source, "task", _uid_key(model.uid))] = model
-            return True
-        if occid.is_a(model, occid.Assignment):
-            self.records[(source, "assignment", _uid_key(model.uid))] = model
-            return True
-        if occid.is_a(model, occid.Execution):
-            dispatch_id = self._dispatch_id(model)
-            self.pending_executions[(source, dispatch_id)] = model
-            return True
-        return False
-
-    def _move_dependency_missing(self, source: str, task: Any) -> bool:
-        if not occid.is_a(task, occid.TaskManeuver):
-            return False
-        if task.intent != occid.ManeuverIntent.MOVE:
-            return False
-        if len(task.location_uids) != 1:
-            return False
-        return (
-            source,
-            "location",
-            _uid_key(task.location_uids[0]),
-        ) not in self.records
-
-    def _resolve_move_destination(self, source: str, task: Any) -> Any:
-        if not occid.is_a(task, occid.TaskManeuver):
-            raise TypeError(
-                f"no local handler for {type(task).__name__}; current handler is TaskManeuver/MOVE"
-            )
-        if task.intent != occid.ManeuverIntent.MOVE:
-            raise TypeError(
-                f"no local handler for TaskManeuver/{task.intent.name}; current handler is MOVE"
-            )
-        if len(task.location_uids) != 1:
-            raise ValueError(
-                f"TaskManeuver/MOVE requires exactly one location_uid; got {len(task.location_uids)}"
-            )
-        location_ref = task.location_uids[0]
-        location = self.records.get((source, "location", _uid_key(location_ref)))
-        if location is None:
-            raise ValueError(
-                f"TaskManeuver/MOVE location_uid is unresolved: {_uid_text(location_ref)}"
-            )
-        return _location_position(location)
-
-    def _assemble_ready(self, source: str) -> list[RemoteExecution]:
-        ready: list[RemoteExecution] = []
-        for (pending_source, dispatch_id), execution in list(
-            self.pending_executions.items()
-        ):
-            if pending_source != source:
-                continue
-            assignment = self.records.get(
-                (source, "assignment", _uid_key(execution.assignment_uid))
-            )
-            if assignment is None:
-                continue
-            task_uid = getattr(assignment, "task_uid", None)
-            if task_uid is None:
-                continue
-            task = self.records.get((source, "task", _uid_key(task_uid)))
-            if task is None:
-                continue
-            plan = self._plan_for(source, task, assignment)
-            if plan is None:
-                continue
-            if self._move_dependency_missing(source, task):
-                continue
-
-            self.pending_executions.pop((source, dispatch_id), None)
+    def _listener_main(self) -> None:
+        listener_client = Lattice(**self.lattice_kwargs)
+        selector = EntityIdsSelector(entity_ids=[self.entity_id])
+        while not self.listener_stop.is_set():
             try:
-                bundle = validate_execution_bundle(
-                    execution,
-                    assignment,
-                    task,
-                    plan,
-                    executor_uid=self.executor_uid,
-                    asset_uid=self.asset_uid,
+                request = listener_client.tasks.listen_as_agent(
+                    agent_selector=selector
                 )
-            except Exception as exc:
-                self._send_acceptance(
-                    source,
-                    execution,
-                    dispatch_id,
-                    accepted=False,
-                    retryable=False,
-                    reason=str(exc),
-                )
+            except (RequestTimeoutError, httpx.ReadTimeout, httpx.ReadError):
                 continue
-            ready.append(
-                RemoteExecution(
-                    source=source,
-                    dispatch_id=dispatch_id,
-                    bundle=bundle,
+            except (ApiError, httpx.HTTPError) as exc:
+                self.listener_error = exc
+                print(
+                    f"[TASK_LISTEN_FAILED] entity_id={self.entity_id} error={exc}",
+                    flush=True,
                 )
+                time.sleep(max(1.0, self.poll_interval_s))
+                continue
+            if request is not None:
+                self.agent_requests.put(request)
+
+    # -- task specification parsing ----------------------------------------
+
+    def _resolve_objective(self, objective: Any) -> Destination:
+        if not isinstance(objective, dict):
+            raise ValueError("task objective must be an object")
+        entity_id = _field(objective, "entityId", "entity_id")
+        if entity_id:
+            entity = self._target_entity(str(entity_id))
+            if entity is None or entity.location is None or entity.location.position is None:
+                raise ValueError(f"objective entity {entity_id} has no known position")
+            position = entity.location.position
+            return Destination(
+                latitude_deg=float(position.latitude_degrees),
+                longitude_deg=float(position.longitude_degrees),
+                altitude_m=float(
+                    position.altitude_hae_meters
+                    if position.altitude_hae_meters is not None
+                    else (
+                        position.altitude_agl_meters
+                        if position.altitude_agl_meters is not None
+                        else 0.0
+                    )
+                ),
+                altitude_reference=(
+                    "hae"
+                    if position.altitude_hae_meters is not None
+                    else "agl"
+                ),
             )
-        return ready
+        point = _field(objective, "point")
+        if point:
+            lla = _field(point, "lla")
+            if not isinstance(lla, dict):
+                raise ValueError("point objective has no lla")
+            return self._lla_destination(lla)
+        # Sample-app Orbit objectives carry the lla oneof directly.
+        lla = _field(objective, "lla")
+        if isinstance(lla, dict):
+            return self._lla_destination(lla)
+        raise ValueError(f"unsupported task objective {objective!r}")
 
-    def _plan_for(self, source: str, task: Any, assignment: Any) -> Any | None:
-        for (record_source, kind, _), plan in self.records.items():
-            if record_source != source or kind != "plan":
-                continue
-            plan_task_uids = getattr(plan, "task_uids", None)
-            plan_assignment_uids = getattr(plan, "assignment_uids", None)
-            if plan_task_uids is not None and task.uid in plan_task_uids:
-                return plan
-            if plan_assignment_uids is not None and assignment.uid in plan_assignment_uids:
-                return plan
-        return None
-
-    def _ingest_occid(self, envelope: Dict[str, Any]) -> list[RemoteExecution]:
-        data = envelope.get("data")
-        if type(data) is not dict:
-            raise ValueError("OCCID/IN data must be an object")
-        source = str(data.get("source") or "")
-        if not source:
-            raise ValueError("OCCID/IN is missing source node id")
-        model = unpack_occid(data["model"])
-        if not self._store_model(source, model):
-            return []
-        return self._assemble_ready(source)
-
-    def _reject_busy(self, remote: RemoteExecution) -> None:
-        self._send_acceptance(
-            remote.source,
-            remote.bundle.execution,
-            remote.dispatch_id,
-            accepted=False,
-            retryable=True,
-            reason="execution ingress is busy",
+    @staticmethod
+    def _lla_destination(lla: dict) -> Destination:
+        latitude = _float_field(lla, "latitudeDegrees", "latitude_degrees", "lat")
+        longitude = _float_field(lla, "longitudeDegrees", "longitude_degrees", "lon")
+        altitude = _float_field(
+            lla, "altitudeHaeM", "altitude_hae_meters", "alt", "altitudeM"
+        )
+        if latitude is None or longitude is None:
+            raise ValueError(f"objective lla missing lat/lon: {lla}")
+        if altitude is None:
+            raise ValueError(f"objective lla missing altitude: {lla}")
+        reference = _standard_altitude_reference(
+            _field(lla, "altitudeReference", "altitude_reference"), "hae"
+        )
+        return Destination(
+            latitude_deg=latitude,
+            longitude_deg=longitude,
+            altitude_m=altitude,
+            altitude_reference=reference,
         )
 
-    def _pump_with_ingress(self, deadline: float | None = None) -> tuple[Any, Any]:
-        topic, payload = self._pump_once(deadline)
-        if topic == self.in_topic and payload is not None:
-            for remote in self._ingest_occid(payload):
-                self._reject_busy(remote)
-            return None, None
-        return topic, payload
+    def _transit_destination(self, specification: Any) -> Destination:
+        plan = _field(specification, "plan")
+        route = _field(plan, "route")
+        path = _field(route, "path")
+        if not isinstance(path, list) or not path:
+            raise ValueError("Transit task has no route path")
+        segment = path[-1]
+        waypoint = _field(segment, "waypoint")
+        if waypoint:
+            lla = _field(waypoint, "llaPoint", "lla_point")
+            if isinstance(lla, dict):
+                return self._lla_destination(lla)
+        loiter = _field(segment, "loiter")
+        if loiter:
+            center = _field(loiter, "center", "loiterCenter")
+            if isinstance(center, dict):
+                return self._lla_destination(center)
+        raise ValueError("Transit task final path segment has no point")
+
+    def _orbit_spec(self, specification: Any) -> OrbitSpec:
+        objective = _field(specification, "objective")
+        destination = self._resolve_objective(objective)
+        radius = _float_field(specification, "orbitRadius", "orbit_radius")
+        height = _float_field(specification, "orbitHeight", "orbit_height")
+        if radius is None:
+            raise ValueError("Orbit task missing orbitRadius")
+        if height is None:
+            raise ValueError("Orbit task missing orbitHeight")
+        direction = str(
+            _field(specification, "orbitDirection", "orbit_direction")
+            or "ORBIT_CLOCKWISE"
+        )
+        return OrbitSpec(
+            latitude_deg=destination.latitude_deg,
+            longitude_deg=destination.longitude_deg,
+            altitude_hae_m=destination.altitude_m,
+            radius_m=radius,
+            height_m=height,
+            direction=direction,
+        )
+
+    # -- execution ----------------------------------------------------------
+
+    def _wait_for_location(self, timeout_s: float) -> GlobalPositionInt:
+        deadline = time.monotonic() + float(timeout_s)
+        while True:
+            location = self.uav.location()
+            if location is not None:
+                return location
+            if time.monotonic() > deadline:
+                raise RuntimeError("timed out waiting for UAV position telemetry")
+            self._pump_with_ingress(deadline)
 
     def _wait_response(self, request_id: str, timeout_s: float) -> Dict[str, Any]:
         deadline = time.monotonic() + float(timeout_s)
@@ -569,17 +562,7 @@ class ExecutionIngress(PluginBase):
                 raise RuntimeError(f"timeout waiting for UAV result id={request_id}")
             self._pump_with_ingress(deadline)
 
-    def _wait_for_location(self, timeout_s: float) -> Any:
-        deadline = time.monotonic() + float(timeout_s)
-        while True:
-            location = self.uav.location()
-            if location is not None and location.position is not None:
-                return location
-            if time.monotonic() > deadline:
-                raise RuntimeError("timed out waiting for UAV LocationState.position")
-            self._pump_with_ingress(deadline)
-
-    def _wait_until(self, predicate, timeout_s: float, error: str) -> None:
+    def _wait_until(self, predicate: Any, timeout_s: float, error: str) -> None:
         deadline = time.monotonic() + float(timeout_s)
         while True:
             if predicate():
@@ -588,79 +571,113 @@ class ExecutionIngress(PluginBase):
                 raise RuntimeError(error)
             self._pump_with_ingress(deadline)
 
+    def _vehicle_control(self) -> VehicleControl:
+        control = self.uav.flight_control()
+        if control is None:
+            raise RuntimeError("timed out waiting for UAV vehicle state")
+        return control
+
+    def _arrival_altitude_m(self, location: GlobalPositionInt, reference: str) -> float:
+        if reference in ("relative", "agl"):
+            return float(location.relative_altitude_m)
+        if reference in ("asl", "amsl"):
+            return float(location.altitude_m)
+        if reference == "hae":
+            if self.home_altitude_hae_m is None:
+                raise RuntimeError(
+                    "destination altitude reference is HAE but home_altitude_hae_m "
+                    "is not configured; cannot resolve the vehicle altitude datum"
+                )
+            return float(location.relative_altitude_m) + float(self.home_altitude_hae_m)
+        raise RuntimeError(f"unsupported altitude reference {reference!r}")
+
+    def _command_altitude(self, destination: Destination) -> tuple[float, str]:
+        """Convert a destination altitude to a vehicle-resolvable command altitude.
+
+        The vehicle reports altitude relative to its home position (MAVLink
+        ``relative_alt``); HAE is resolved against the configured home HAE so
+        no ambiguous altitude ever reaches the vehicle.  ENG-13.
+        """
+        reference = destination.altitude_reference
+        if reference == "hae":
+            if self.home_altitude_hae_m is None:
+                raise RuntimeError(
+                    "destination altitude reference is HAE but home_altitude_hae_m "
+                    "is not configured; cannot resolve the vehicle altitude datum"
+                )
+            return destination.altitude_m - float(self.home_altitude_hae_m), "relative"
+        if reference in ("relative", "agl"):
+            return destination.altitude_m, "relative"
+        if reference in ("asl", "amsl"):
+            return destination.altitude_m, "asl"
+        raise RuntimeError(f"unsupported altitude reference {reference!r}")
+
+    def _arrival_metrics(
+        self, location: GlobalPositionInt, destination: Destination
+    ) -> tuple[float, float]:
+        horizontal_m = _distance_m(
+            location.latitude_deg,
+            location.longitude_deg,
+            destination.latitude_deg,
+            destination.longitude_deg,
+        )
+        observed_altitude_m = self._arrival_altitude_m(
+            location, destination.altitude_reference
+        )
+        return horizontal_m, abs(observed_altitude_m - destination.altitude_m)
+
     def _relative_altitude(self) -> float | None:
         location = self.uav.location()
-        if location is None or location.altitude is None:
+        if location is None:
             return None
-        if location.altitude.relative_datum != occid.AltitudeDatum.RELATIVE:
-            return None
-        return location.altitude.relative_m
+        return float(location.relative_altitude_m)
 
-    def _prepare_vehicle_for_move(self, destination: Any) -> None:
-        flight = self.uav.flight_control()
-        if flight is not None and bool(flight.in_air):
+    def _prepare_vehicle_for_move(self, destination: Destination) -> None:
+        control = self._vehicle_control()
+        if control.heartbeat.armed and self._in_air():
             return
         if not self.auto_takeoff_for_move:
             raise RuntimeError(
-                "TaskManeuver/MOVE requires an airborne vehicle when auto_takeoff_for_move is false"
+                "Transit requires an airborne vehicle when auto_takeoff_for_move is false"
             )
 
         takeoff_altitude_m = self.takeoff_altitude_m
-        if (
-            destination.alt_frame == occid.AltitudeDatum.RELATIVE
-            and float(destination.alt) > 0.0
-        ):
-            takeoff_altitude_m = min(takeoff_altitude_m, float(destination.alt))
+        if destination.altitude_reference == "relative" and destination.altitude_m > 0.0:
+            takeoff_altitude_m = min(takeoff_altitude_m, destination.altitude_m)
         if takeoff_altitude_m <= 0.0:
-            raise RuntimeError("TaskManeuver/MOVE automatic takeoff altitude must be positive")
+            raise RuntimeError("Transit automatic takeoff altitude must be positive")
 
         self.uav.execute(
             self.uav.takeoff_altitude_command(takeoff_altitude_m),
             timeout_s=self.response_timeout_s,
         )
         self._wait_until(
-            lambda: (
-                self.uav.flight_control() is not None
-                and self.uav.flight_control().readiness is not None
-                and bool(self.uav.flight_control().readiness.arm_ready)
-            ),
+            lambda: self._readiness().arm_ready,
             self.state_timeout_s,
             "timed out waiting for UAV arm readiness",
         )
 
-        flight = self.uav.flight_control()
-        if flight is None or not bool(flight.armed):
-            self.uav.execute(
-                self.uav.arm_command(True),
-                timeout_s=self.response_timeout_s,
-            )
+        control = self._vehicle_control()
+        if not control.heartbeat.armed:
+            self.uav.execute(self.uav.arm_command(True), timeout_s=self.response_timeout_s)
             self._wait_until(
-                lambda: (
-                    self.uav.flight_control() is not None
-                    and bool(self.uav.flight_control().armed)
-                ),
+                lambda: self._vehicle_control().heartbeat.armed,
                 self.state_timeout_s,
                 "timed out waiting for UAV armed state",
             )
 
         self._wait_until(
-            lambda: (
-                self.uav.flight_control() is not None
-                and bool(self.uav.flight_control().armed)
-                and self.uav.flight_control().readiness is not None
-                and bool(self.uav.flight_control().readiness.takeoff_ready)
-            ),
+            lambda: self._readiness().takeoff_ready,
             self.state_timeout_s,
             "timed out waiting for UAV takeoff readiness",
         )
         self.uav.execute(
-            self.uav.takeoff_command(),
+            self.uav.takeoff_command(takeoff_altitude_m),
             timeout_s=self.response_timeout_s,
         )
         self._wait_until(
             lambda: (
-                self.uav.flight_control() is not None
-                and bool(self.uav.flight_control().in_air)
+                self._in_air()
                 and self._relative_altitude() is not None
                 and float(self._relative_altitude())
                 >= takeoff_altitude_m * self.takeoff_altitude_ok_fraction
@@ -673,50 +690,52 @@ class ExecutionIngress(PluginBase):
             while time.monotonic() < deadline:
                 self._pump_with_ingress(deadline)
 
-    def _execute_move(self, remote: RemoteExecution, destination: Any) -> None:
-        bundle = remote.bundle
+    def _readiness(self):
+        control = self.uav.flight_control()
+        if control is None:
+            return _EmptyReadiness()
+        return control.readiness
+
+    def _in_air(self) -> bool:
+        location = self.uav.location()
+        if location is None:
+            return False
+        return float(location.relative_altitude_m) > 0.5
+
+    def _execute_transit(self, task_id: str, destination: Destination) -> None:
         self._wait_for_location(self.state_timeout_s)
         self._prepare_vehicle_for_move(destination)
         current = self._wait_for_location(self.state_timeout_s)
-        initial_distance_m, initial_altitude_error_m = _arrival_metrics(
-            current,
-            destination,
+        initial_horizontal_m, initial_altitude_error_m = self._arrival_metrics(
+            current, destination
         )
-        horizontal_denominator = max(initial_distance_m, self.arrival_radius_m, 0.01)
+        horizontal_denominator = max(initial_horizontal_m, self.arrival_radius_m, 0.01)
         altitude_denominator = max(
             initial_altitude_error_m,
             self.arrival_altitude_tolerance_m,
             0.01,
         )
 
+        command_altitude_m, command_reference = self._command_altitude(destination)
         self.uav.execute(
             self.uav.go_to_command(
-                float(destination.lat),
-                float(destination.lon),
-                float(destination.alt),
-                altitude_datum=destination.alt_frame,
+                destination.latitude_deg,
+                destination.longitude_deg,
+                command_altitude_m,
+                altitude_reference=command_reference,
             ),
             timeout_s=self.response_timeout_s,
-        )
-        running = self._task_delta(bundle, occid.TaskPhase.RUNNING, progress=0.0)
-        self._publish_status(
-            remote.source,
-            bundle,
-            remote.dispatch_id,
-            occid.ExecutionPhase.RUNNING,
-            task_delta=running,
-            entity_state=self._entity_state(current, provenance=[_uid_text(bundle.execution.uid)]),
-            progress=0.0,
         )
 
         deadline = time.monotonic() + self.execution_timeout_s
         last_progress_publish = 0.0
         while True:
+            if self.active_cancel_requested:
+                raise _TaskCancelled()
             current = self.uav.location()
-            if current is not None and current.position is not None:
-                horizontal_m, altitude_error_m = _arrival_metrics(
-                    current,
-                    destination,
+            if current is not None:
+                horizontal_m, altitude_error_m = self._arrival_metrics(
+                    current, destination
                 )
                 remaining_fraction = max(
                     horizontal_m / horizontal_denominator,
@@ -727,137 +746,227 @@ class ExecutionIngress(PluginBase):
                     horizontal_m <= self.arrival_radius_m
                     and altitude_error_m <= self.arrival_altitude_tolerance_m
                 ):
-                    complete = self._task_delta(
-                        bundle,
-                        occid.TaskPhase.DONE_OK,
-                        progress=1.0,
-                    )
-                    self._publish_status(
-                        remote.source,
-                        bundle,
-                        remote.dispatch_id,
-                        occid.ExecutionPhase.SUCCEEDED,
-                        task_delta=complete,
-                        entity_state=self._entity_state(current, provenance=[_uid_text(bundle.execution.uid)]),
-                        progress=1.0,
-                    )
+                    self._update_status(task_id, "STATUS_DONE_OK", progress=1.0)
                     return
-
                 now = time.monotonic()
                 if now - last_progress_publish >= self.progress_interval_s:
-                    delta = self._task_delta(
-                        bundle,
-                        occid.TaskPhase.RUNNING,
-                        progress=progress,
-                    )
-                    self._publish_status(
-                        remote.source,
-                        bundle,
-                        remote.dispatch_id,
-                        occid.ExecutionPhase.RUNNING,
-                        task_delta=delta,
-                        entity_state=self._entity_state(current, provenance=[_uid_text(bundle.execution.uid)]),
-                        progress=progress,
+                    self._update_status(
+                        task_id, "STATUS_EXECUTING", progress=progress
                     )
                     last_progress_publish = now
 
             if time.monotonic() > deadline:
                 raise RuntimeError(
-                    f"TaskManeuver/MOVE timed out after {self.execution_timeout_s:.1f}s without arrival"
+                    f"Transit timed out after {self.execution_timeout_s:.1f}s without arrival"
                 )
             self._pump_with_ingress(
                 min(deadline, time.monotonic() + self.poll_interval_s)
             )
 
-    def _execute_remote(self, remote: RemoteExecution) -> None:
-        bundle = remote.bundle
-        semantic_accepted = False
-        try:
-            destination = self._resolve_move_destination(remote.source, bundle.task)
+    def _execute_orbit(self, task_id: str, orbit: OrbitSpec) -> None:
+        # The sample Orbit task asks the asset to hold at the objective.  The
+        # available MAVLink command set has no orbit-radius/direction command in
+        # this toolchain, so MPFC flies to the orbit centre at the requested
+        # height (explicit datum) and remains executing; the manager completes
+        # or cancels the task.
+        print(
+            f"[TASK_ORBIT] task_id={task_id} lat={orbit.latitude_deg} "
+            f"lon={orbit.longitude_deg} hae_m={orbit.altitude_hae_m} "
+            f"radius_m={orbit.radius_m} height_m={orbit.height_m} "
+            f"direction={orbit.direction}",
+            flush=True,
+        )
+        orbit_destination = Destination(
+            latitude_deg=orbit.latitude_deg,
+            longitude_deg=orbit.longitude_deg,
+            altitude_m=orbit.altitude_hae_m + orbit.height_m,
+            altitude_reference="hae",
+        )
+        command_altitude_m, command_reference = self._command_altitude(orbit_destination)
+        self.uav.execute(
+            self.uav.go_to_command(
+                orbit.latitude_deg,
+                orbit.longitude_deg,
+                command_altitude_m,
+                altitude_reference=command_reference,
+            ),
+            timeout_s=self.response_timeout_s,
+        )
+        self._update_status(task_id, "STATUS_EXECUTING", progress=0.0)
+        # Keep the agent alive on the task: report executing until the manager
+        # sends complete/cancel or a telemetry-driven progress source exists.
+        while not self.active_cancel_requested:
+            time.sleep(self.poll_interval_s)
+            self._pump_with_ingress(time.monotonic() + self.poll_interval_s)
 
-            self.active_execution_id = bundle.execution.uid
-            self.active_dispatch_id = remote.dispatch_id
-            self._set_lifecycle("EXECUTING", remote)
+    def _handle_execute(self, request: Any) -> None:
+        task = request.execute_request.task
+        task_id = str(task.version.task_id)
+        specification = task.specification
+        spec_url = "" if specification is None else str(specification.type or "")
+        print(
+            f"[TASK_EXECUTE] task_id={task_id} spec={spec_url} "
+            f"display_name={task.display_name!r}",
+            flush=True,
+        )
+        if spec_url not in SUPPORTED_SPECIFICATIONS:
+            self._update_status(
+                task_id,
+                "STATUS_DONE_NOT_OK",
+                error=TaskError(
+                    code="ERROR_CODE_REJECTED",
+                    message=f"unsupported task specification {spec_url!r}",
+                ),
+            )
+            return
+        # Machine receipt, then wilco/executing per the Lattice lifecycle.
+        self._update_status(task_id, "STATUS_ACK")
+        self._update_status(task_id, "STATUS_EXECUTING", progress=0.0)
+        try:
+            if spec_url == TRANSIT_SPECIFICATION_URL:
+                destination = self._transit_destination(specification)
+            else:
+                orbit = self._orbit_spec(specification)
+                destination = None
+        except Exception as exc:
+            self._update_status(
+                task_id,
+                "STATUS_DONE_NOT_OK",
+                error=TaskError(code="ERROR_CODE_REJECTED", message=str(exc)),
+            )
+            return
+
+        with self.active_lock:
+            self.active_task_id = task_id
+            self.active_specification_url = spec_url
+            self.active_cancel_requested = False
+            self.active_complete_requested = False
+        self._set_lifecycle("EXECUTING")
+        try:
+            if spec_url == TRANSIT_SPECIFICATION_URL:
+                self._execute_transit(task_id, destination)
+            else:
+                self._execute_orbit(task_id, orbit)
+        except _TaskCancelled:
+            with self.active_lock:
+                completed = self.active_complete_requested
+            if not completed:
+                self._update_status(task_id, "STATUS_CANCEL_REQUESTED")
+                self._update_status(
+                    task_id,
+                    "STATUS_DONE_NOT_OK",
+                    error=TaskError(
+                        code="ERROR_CODE_CANCELLED", message="task cancelled"
+                    ),
+                )
+        except Exception as exc:
+            self._update_status(
+                task_id,
+                "STATUS_DONE_NOT_OK",
+                error=TaskError(code="ERROR_CODE_FAILED", message=str(exc)),
+            )
             print(
-                f"[TASK] instruction={bundle.task.instruction!r} "
-                f"location_uid={_uid_text(bundle.task.location_uids[0])}",
+                f"[EXECUTION_FAILED] task_id={task_id} error={exc}\n"
+                f"{traceback.format_exc().strip()}",
                 flush=True,
             )
-            self._send_acceptance(
-                remote.source,
-                bundle.execution,
-                remote.dispatch_id,
-                accepted=True,
-            )
-            semantic_accepted = True
-
-            accepted_delta = self._task_delta(
-                bundle,
-                occid.TaskPhase.DISPATCHED,
-                progress=0.0,
-            )
-            self._publish_status(
-                remote.source,
-                bundle,
-                remote.dispatch_id,
-                occid.ExecutionPhase.QUEUED,
-                task_delta=accepted_delta,
-                progress=0.0,
-            )
-
-            self._execute_move(remote, destination)
-        except Exception as exc:
-            if not semantic_accepted:
-                self._send_acceptance(
-                    remote.source,
-                    bundle,
-                    remote.dispatch_id,
-                    accepted=False,
-                    retryable=False,
-                    reason=str(exc),
-                )
-            else:
-                failed = self._task_delta(bundle, occid.TaskPhase.DONE_FAIL)
-                location = self.uav.location()
-                self._publish_status(
-                    remote.source,
-                    bundle,
-                    remote.dispatch_id,
-                    occid.ExecutionPhase.FAILED,
-                    task_delta=failed,
-                    entity_state=(
-                        None
-                        if location is None or location.position is None
-                        else self._entity_state(location, provenance=[_uid_text(bundle.execution.uid)])
-                    ),
-                    failure=str(exc),
-                )
-                print(
-                    f"[EXECUTION_FAILED] dispatch_id={remote.dispatch_id} error={exc}\n"
-                    f"{traceback.format_exc().strip()}",
-                    flush=True,
-                )
         finally:
-            self.active_execution_id = None
-            self.active_dispatch_id = None
+            with self.active_lock:
+                self.active_task_id = None
+                self.active_specification_url = None
+                self.active_cancel_requested = False
+                self.active_complete_requested = False
             self._set_lifecycle("IDLE")
 
+    def _handle_cancel(self, request: Any) -> None:
+        task_id = str(request.cancel_request.task_id)
+        print(f"[TASK_CANCEL] task_id={task_id}", flush=True)
+        with self.active_lock:
+            matches = self.active_task_id == task_id
+            self.active_cancel_requested = matches
+        if not matches:
+            self._update_status(task_id, "STATUS_CANCEL_REQUESTED")
+            self._update_status(
+                task_id,
+                "STATUS_DONE_NOT_OK",
+                error=TaskError(
+                    code="ERROR_CODE_CANCELLED", message="task cancelled"
+                ),
+            )
+
+    def _handle_complete(self, request: Any) -> None:
+        task_id = str(request.complete_request.task_id)
+        print(f"[TASK_COMPLETE] task_id={task_id}", flush=True)
+        with self.active_lock:
+            if self.active_task_id == task_id:
+                self.active_cancel_requested = True
+                self.active_complete_requested = True
+        self._update_status(task_id, "STATUS_DONE_OK", progress=1.0)
+
+    def _handle_request(self, request: Any) -> None:
+        if request.execute_request is not None:
+            self._handle_execute(request)
+        elif request.cancel_request is not None:
+            self._handle_cancel(request)
+        elif request.complete_request is not None:
+            self._handle_complete(request)
+
+    # -- runtime ------------------------------------------------------------
+
+    def _pump_with_ingress(self, deadline: float | None = None) -> None:
+        """Pump the node bus while vehicle work is in progress.
+
+        Cancel and complete requests are serviced here so a task in flight can
+        be interrupted; execute requests stay queued for the main loop so a
+        second execution cannot start on top of the active one.
+        """
+        self._pump_once(deadline)
+        deferred: list[Any] = []
+        while True:
+            try:
+                request = self.agent_requests.get_nowait()
+            except queue.Empty:
+                break
+            if request.execute_request is not None:
+                deferred.append(request)
+                continue
+            self._handle_request(request)
+        for request in deferred:
+            self.agent_requests.put(request)
+
     def run(self) -> None:
+        self.listener_stop.clear()
+        self.listener_thread = threading.Thread(
+            target=self._listener_main, name="lattice-agent-listen", daemon=True
+        )
+        self.listener_thread.start()
         self.send_online()
         self._set_lifecycle("IDLE")
         try:
             while True:
-                topic, payload = self._pump_once(
-                    time.monotonic() + self.poll_interval_s
-                )
                 now = time.monotonic()
                 if now - self.last_state_publish >= self.state_publish_interval_s:
-                    self._publish_entity_state()
+                    try:
+                        self._publish_entity_state()
+                    except ApiError as exc:
+                        print(f"[ENTITY_PUBLISH_FAILED] error={exc}", flush=True)
                     self.last_state_publish = now
-                if topic != self.in_topic or payload is None:
-                    continue
-                for remote in self._ingest_occid(payload):
-                    self._execute_remote(remote)
+                try:
+                    request = self.agent_requests.get_nowait()
+                except queue.Empty:
+                    request = None
+                if request is not None:
+                    try:
+                        self._handle_request(request)
+                    except Exception as exc:
+                        print(
+                            f"[TASK_HANDLING_FAILED] error={exc}\n"
+                            f"{traceback.format_exc().strip()}",
+                            flush=True,
+                        )
+                self._pump_once(
+                    time.monotonic() + self.poll_interval_s
+                )
         except KeyboardInterrupt:
             pass
         except Exception:
@@ -869,12 +978,25 @@ class ExecutionIngress(PluginBase):
             self.publish_error(trace)
             raise
         finally:
+            self.listener_stop.set()
+            if self.listener_thread is not None:
+                self.listener_thread.join(timeout=1.0)
             if self.lifecycle_state != "FAULTED":
                 try:
                     self._set_lifecycle("STOPPING")
                 except Exception:
                     pass
             self.stop()
+
+
+class _TaskCancelled(Exception):
+    pass
+
+
+class _EmptyReadiness:
+    arm_ready = False
+    takeoff_ready = False
+    problems: tuple[str, ...] = ()
 
 
 def run_plugin(cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:

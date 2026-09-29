@@ -5,10 +5,10 @@ cfg:
   is_interface: true
   supports:
     autopilot:
-    - AutopilotType.INAV
-    - AutopilotType.BETAFLIGHT
+    - Autopilot.INAV
+    - Autopilot.BETAFLIGHT
     telem_type:
-    - TelemetryType.MSP
+    - Telemetry.MSP
   is_datalink: false
   conn_type: serial
   conn_str: /dev/ttyACM0

@@ -12,10 +12,17 @@ cfg:
   takeoff_altitude_m: 10.0
   takeoff_altitude_ok_fraction: 0.8
   post_takeoff_wait_s: 1.0
-  control_node: control
   state_publish_interval_s: 1.0
-  occid_in_topic: OCCID/IN
-  occid_out_topic: OCCID/OUT
+  # Lattice agent endpoint (official anduril-lattice-sdk).  The deployment may
+  # also supply these through LATTICE_ENDPOINT / LATTICE_CLIENT_ID /
+  # LATTICE_CLIENT_SECRET / SANDBOXES_TOKEN.
+  lattice_endpoint: localhost:8443
+  lattice_client_id: mpfc
+  lattice_client_secret: mpfc
+  sandboxes_token: ''
+  # HAE home altitude when the vehicle only reports home-relative altitude;
+  # required to evaluate arrival against HAE task objectives.
+  home_altitude_hae_m: null
   interface:
     id: uav_controller
     topic_ns: UAV

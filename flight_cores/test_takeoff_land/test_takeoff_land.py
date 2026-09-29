@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OCCID-native takeoff/goto/RTL/land acceptance program."""
+"""Takeoff/goto/RTL/land acceptance program over MAVLink-shaped records."""
 
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ from typing import Any, Dict
 from lib.common import apply_cfg, build_envelope
 from lib.core_base import CoreBase
 from lib.geo_utils import GPSposition, gps_distance_m, vector_to_gps
-from lib.occid_bus import occid
-from lib.occid_topics import ANGULAR_VELOCITY, ATTITUDE, FLIGHT_CONTROL, LOCATION
+from lib.bus_topics import ANGULAR_VELOCITY, ATTITUDE, FLIGHT_CONTROL, LOCATION
 from lib.uav_client import UavClient, UavCommandError
 
 
@@ -44,21 +43,23 @@ class TakeoffLandCore(CoreBase):
     def _angular_velocity(self) -> Any | None:
         return self.uav.angular_velocity()
 
+    def _in_air(self) -> bool:
+        altitude = self._relative_altitude()
+        return altitude is not None and float(altitude) > 0.5
+
     def _relative_altitude(self, location: Any | None = None) -> float | None:
         state = self._location() if location is None else location
-        if state is None or state.altitude is None:
+        if state is None:
             return None
-        return state.altitude.relative_m
+        return float(state.relative_altitude_m)
 
     def _gps_position(self, location: Any) -> GPSposition:
-        if location.position is None:
-            raise MissionAbort("location state has no global position")
         relative_altitude = self._relative_altitude(location)
         if relative_altitude is None:
-            raise MissionAbort("location state has no relative altitude")
+            raise MissionAbort("location record has no relative altitude")
         return GPSposition(
-            float(location.position.lat),
-            float(location.position.lon),
+            float(location.latitude_deg),
+            float(location.longitude_deg),
             float(relative_altitude),
         )
 
@@ -67,12 +68,8 @@ class TakeoffLandCore(CoreBase):
         angular_velocity = self._angular_velocity()
         if attitude is None or angular_velocity is None:
             raise MissionAbort("attitude/angular-velocity state unavailable")
-        if attitude.body_frame != occid.BodyReferenceFrame.FRD:
-            raise MissionAbort(f"attitude body frame must be FRD actual={attitude.body_frame}")
-        if attitude.reference_frame != occid.InertialReferenceFrame.NED:
-            raise MissionAbort(f"attitude reference frame must be NED actual={attitude.reference_frame}")
-        if angular_velocity.frame != occid.BodyReferenceFrame.FRD:
-            raise MissionAbort(f"angular velocity frame must be FRD actual={angular_velocity.frame}")
+        # MAVLink body attitude and rates are FRD relative to NED; the records
+        # carry those conventions without a frame tag.
         print(
             f"[CORE] {self.client_id} frames body=FRD reference=NED "
             f"attitude_rad=({attitude.roll_rad:.4f},{attitude.pitch_rad:.4f},{attitude.yaw_rad:.4f})",
@@ -93,15 +90,15 @@ class TakeoffLandCore(CoreBase):
                     and self._angular_velocity() is not None
                 ),
                 float(self.state_timeout_s),
-                MissionAbort("initial OCCID flight state wait timed out"),
+                MissionAbort("initial vehicle state wait timed out"),
             )
             self._validate_frame_contract()
 
             flight = self._flight_control()
             print(
                 f"[CORE] {self.client_id} health home_ok={flight.navigation_validity.home_position_ok} "
-                f"global_ok={flight.navigation_validity.global_position_ok} mode={flight.standard_mode} "
-                f"native_mode={flight.native_mode_name}",
+                f"global_ok={flight.navigation_validity.global_position_ok} "
+                f"mode={flight.heartbeat.standard_mode} native_mode={flight.heartbeat.mode_name}",
                 flush=True,
             )
             home_pos = self._gps_position(self._location())
@@ -123,7 +120,7 @@ class TakeoffLandCore(CoreBase):
             print(f"[CORE] {self.client_id} arm", flush=True)
             self.uav.arm()
             self.wait_until(
-                lambda: self._flight_control() is not None and bool(self._flight_control().armed),
+                lambda: self._flight_control() is not None and bool(self._flight_control().heartbeat.armed),
                 float(self.state_timeout_s),
                 MissionAbort("armed wait timed out"),
             )
@@ -131,7 +128,7 @@ class TakeoffLandCore(CoreBase):
             self.wait_until(
                 lambda: (
                     self._flight_control() is not None
-                    and bool(self._flight_control().armed)
+                    and bool(self._flight_control().heartbeat.armed)
                     and self._flight_control().readiness is not None
                     and bool(self._flight_control().readiness.takeoff_ready)
                 ),
@@ -144,8 +141,7 @@ class TakeoffLandCore(CoreBase):
             self.uav.takeoff()
             self.wait_until(
                 lambda: (
-                    self._flight_control() is not None
-                    and bool(self._flight_control().in_air)
+                    self._in_air()
                     and self._relative_altitude() is not None
                     and float(self._relative_altitude())
                     >= float(self.takeoff_altitude_m) * float(self.takeoff_altitude_ok_fraction)
@@ -167,7 +163,7 @@ class TakeoffLandCore(CoreBase):
                 float(goto_target.lat),
                 float(goto_target.lon),
                 float(self.takeoff_altitude_m),
-                altitude_datum=occid.AltitudeDatum.RELATIVE,
+                altitude_reference="relative",
                 yaw_rad=math.radians(float(self.goto_yaw_deg)),
             )
 
@@ -192,7 +188,7 @@ class TakeoffLandCore(CoreBase):
                 float(goto_target.lat),
                 float(goto_target.lon),
                 float(self.target_altitude_m),
-                altitude_datum=occid.AltitudeDatum.RELATIVE,
+                altitude_reference="relative",
                 yaw_rad=math.radians(float(self.goto_yaw_deg)),
             )
             self.wait_until(
@@ -232,8 +228,7 @@ class TakeoffLandCore(CoreBase):
             self.uav.land()
             self.wait_until(
                 lambda: (
-                    self._flight_control() is not None
-                    and not bool(self._flight_control().in_air)
+                    not self._in_air()
                     and self._relative_altitude() is not None
                     and float(self._relative_altitude()) <= float(self.land_altitude_threshold_m)
                 ),
@@ -241,14 +236,14 @@ class TakeoffLandCore(CoreBase):
                 MissionAbort("landed wait timed out"),
             )
             print(
-                f"[CORE] {self.client_id} landed in_air={self._flight_control().in_air} alt_m={self._relative_altitude()}",
+                f"[CORE] {self.client_id} landed in_air={self._in_air()} alt_m={self._relative_altitude()}",
                 flush=True,
             )
             self.publish_shutdown()
 
         except (MissionAbort, UavCommandError) as exc:
             flight = self._flight_control()
-            if flight is not None and bool(flight.in_air):
+            if flight is not None and bool(flight.heartbeat.armed) and self._in_air():
                 pass  # Airborne abort/recovery policy remains separate work.
             abort_topic = f"DIAG/{self.client_id}/ABORT"
             self.client.publish(
@@ -275,7 +270,11 @@ class TakeoffLandCore(CoreBase):
                 abort_topic,
                 build_envelope(self.client_id, abort_topic, {"event": "ABORT", "reason": "KeyboardInterrupt"}),
             )
-            print(f"[CORE] {self.client_id} keyboard_interrupt in_air={None if flight is None else flight.in_air}", flush=True)
+            print(
+                f"[CORE] {self.client_id} keyboard_interrupt "
+                f"in_air={None if flight is None else self._in_air()}",
+                flush=True,
+            )
             raise
         finally:
             self.stop()

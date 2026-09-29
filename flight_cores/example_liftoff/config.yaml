@@ -1,8 +1,8 @@
 my_name: uav1
 vehicle:
-  autopilot: AutopilotType.CUSTOM
-  airframe: AirframeType.COPTER
-  telem_type: TelemetryType.MANUAL_ENTRY
+  autopilot: Autopilot.CUSTOM
+  airframe: Airframe.COPTER
+  telem_type: Telemetry.MANUAL_ENTRY
 core:
   name: example_liftoff
   cfg:

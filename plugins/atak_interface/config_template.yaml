@@ -1,7 +1,7 @@
 plugin: atak_interface
 cfg:
   id: atak
-  # routing namespace only; bus payloads are OCCID
+  # routing namespace only; bus payloads are Lattice Entity documents
   topic_ns: ATAK
   is_interface: true
   state_intervals:

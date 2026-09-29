@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MAVSDK endpoint adapter: OCCID <-> MAVSDK/PX4/ArduPilot."""
+"""MAVSDK endpoint adapter: MAVLink-shaped records <-> MAVSDK/PX4/ArduPilot."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import queue
 import threading
 import time
 import traceback
+from dataclasses import replace
 from typing import Any, Dict
 
 from grpc import StatusCode
@@ -17,20 +18,21 @@ from mavsdk import System
 from mavsdk.action import ActionError
 from mavsdk.info import InfoError
 from mavsdk.offboard import Attitude, OffboardError
+from pymavlink import mavutil
 
-from interop.mavsdk import (
+from lib.interop_mavsdk import (
     MavsdkPositionFields,
     angular_velocity_from_body_rates,
     attitude_from_euler_degrees,
     attitude_setpoint_to_fields,
     gnss_fix_type_from_native_value,
     goto_command_to_fields,
-    position_to_location_state,
+    position_to_location_record,
     standard_mode_from_native_name,
 )
 from lib.common import apply_cfg, build_envelope, build_request_topic, build_response_topic, build_state_scheduler_topics, build_topic_base
-from lib.occid_bus import decode_occid_command, decode_occid_input, occid, pack_occid
-from lib.occid_topics import (
+from lib.lattice_bus import decode_command, decode_input, pack_record
+from lib.bus_topics import (
     ANGULAR_VELOCITY,
     ATTITUDE,
     CONTROL_OUTPUT,
@@ -44,21 +46,37 @@ from lib.occid_topics import (
 )
 from lib.plugin_base import PluginBase
 from lib.state_scheduler import StateScheduler
+from lib.mavlink_models import (
+    MAV_CMD_COMPONENT_ARM_DISARM,
+    MAV_CMD_NAV_LAND,
+    MAV_CMD_NAV_LOITER_UNLIM,
+    MAV_CMD_NAV_RETURN_TO_LAUNCH,
+    MAV_CMD_NAV_TAKEOFF,
+    MAV_MODE_FLAG_SAFETY_ARMED,
+    Attitude as AttitudeRecord,
+    AttitudeTarget,
+    BatteryStatus,
+    CommandLong,
+    ControlAxes,
+    ControlOverride,
+    DirectControl,
+    FirmwareVersion,
+    GlobalPositionInt,
+    GpsRawInt,
+    Heartbeat,
+    HighresImu,
+    NavigationValidity,
+    ParamSet,
+    Readiness,
+    RepositionCommand,
+    SetMode,
+    VehicleControl,
+)
 from lib.uav_semantics import (
     DIRECT_CONTROL_ATTITUDE,
     DIRECT_CONTROL_MANUAL,
-    PARAM_TAKEOFF_ALTITUDE_M,
-    PROCESS_DIRECT_CONTROL,
-    PROCESS_DIRECT_CONTROL_ATTITUDE,
-    PROCESS_DIRECT_CONTROL_MANUAL,
-    PROCESS_LAND,
-    PROCESS_RETURN_TO_LAUNCH,
-    PROCESS_TAKEOFF,
-    PROPERTY_ARMED,
-    PROPERTY_NATIVE_FLIGHT_MODE_CODE,
-    PROPERTY_NATIVE_FLIGHT_MODE_NAME,
-    PROPERTY_STANDARD_FLIGHT_MODE,
-    metadata_scalar,
+    PARAM_TAKEOFF_ALTITUDE,
+    standard_mode_name,
 )
 
 REQUEST_QUEUE_TIMEOUT_S = 0.05
@@ -103,27 +121,42 @@ class MavsdkInterface(PluginBase):
         self.loop_thread: threading.Thread | None = None
         self.shutdown_requested = False
 
+        mav_type = getattr(mavutil.mavlink, str(self.mav_type), mavutil.mavlink.MAV_TYPE_GENERIC)
+        autopilot = (
+            mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA
+            if self.is_ardupilot
+            else mavutil.mavlink.MAV_AUTOPILOT_PX4
+        )
+        self.heartbeat = Heartbeat(
+            type=int(mav_type),
+            autopilot=int(autopilot),
+            base_mode=0,
+            custom_mode=0,
+            system_status=mavutil.mavlink.MAV_STATE_STANDBY,
+        )
+        self.nav_validity = NavigationValidity()
+        self.readiness = Readiness()
+        self.gnss_state = GpsRawInt(
+            fix_type=mavutil.mavlink.GPS_FIX_TYPE_NO_GPS,
+            satellites_visible=0,
+            latitude_deg=0.0,
+            longitude_deg=0.0,
+            altitude_m=0.0,
+        )
         self.last_abs_alt_m: float | None = None
         self.last_rel_alt_m: float | None = None
-        self.last_attitude: Any | None = None
-        self.location_state: Any | None = None
-        self.gnss_state = occid.GnssSolution()
-        self.nav_validity = occid.NavigationValidity()
-        self.readiness = occid.NavReadinessState(mode_problems=[], health_problems=[])
-        self.flight_control = occid.FlightControlState(
-            navigation_validity=self.nav_validity,
-            readiness=self.readiness,
-        )
+        self.last_attitude: AttitudeRecord | None = None
+        self.location_state: GlobalPositionInt | None = None
 
         initial = dict(self.control_output_initial)
-        self.control_output = occid.ControlAxisSet(
-            roll=float(initial.get("roll", initial.get("Roll", 0.0))),
-            pitch=float(initial.get("pitch", initial.get("Pitch", 0.0))),
-            yaw=float(initial.get("yaw", initial.get("Yaw", 0.0))),
-            throttle=float(initial.get("throttle", initial.get("Throttle", -1.0))),
-            aux=[float(value) for value in initial.get("aux", initial.get("Aux", []))],
+        self.control_output = ControlAxes(
+            roll=float(initial.get("roll", 0.0)),
+            pitch=float(initial.get("pitch", 0.0)),
+            yaw=float(initial.get("yaw", 0.0)),
+            throttle=float(initial.get("throttle", -1.0)),
+            aux=tuple(float(value) for value in initial.get("aux", [])),
         )
-        self.control_override: Any | None = None
+        self.control_override: ControlOverride | None = None
         self.control_override_lock = threading.Lock()
         self.control_override_updated_at = 0.0
         self.direct_control_mode: str | None = None
@@ -136,14 +169,17 @@ class MavsdkInterface(PluginBase):
     def _publish_model(self, key: str, model: Any) -> None:
         if not self._stream_enabled(key):
             return
-        self.state_scheduler.update(key, pack_occid(model))
+        self.state_scheduler.update(key, pack_record(model))
 
-    def _publish_flight_control(self, **updates: Any) -> None:
-        self.flight_control = self.flight_control.model_copy(update=updates)
-        self._publish_model(FLIGHT_CONTROL, self.flight_control)
+    def _vehicle_control(self) -> VehicleControl:
+        return VehicleControl(
+            heartbeat=self.heartbeat,
+            readiness=self.readiness,
+            navigation_validity=self.nav_validity,
+        )
 
-    def _publish_raw_readiness(self) -> None:
-        self._publish_flight_control(readiness=self.readiness, navigation_validity=self.nav_validity)
+    def _publish_flight_control(self) -> None:
+        self._publish_model(FLIGHT_CONTROL, self._vehicle_control())
 
     def _publish_input_rejected(self, model: Any, error: str) -> None:
         topic = f"DIAG/{self.client_id}/INPUT_REJECTED"
@@ -163,18 +199,23 @@ class MavsdkInterface(PluginBase):
 
     @staticmethod
     def _mavsdk_manual_throttle(value: float) -> float:
-        """Map OCCID signed control position [-1, 1] to MAVSDK throttle [0, 1]."""
+        """Map signed control position [-1, 1] to MAVSDK throttle [0, 1]."""
         signed = float(value)
         if signed < -1.0 or signed > 1.0:
-            raise ValueError(f"OCCID throttle {signed} outside [-1, 1]")
+            raise ValueError(f"throttle {signed} outside [-1, 1]")
         return (signed + 1.0) / 2.0
 
-    def _merge_override(self, override: Any) -> Any:
-        update: dict[str, Any] = {}
+    def _merge_override(self, override: ControlOverride) -> ControlAxes:
+        values = {
+            "roll": self.control_output.roll,
+            "pitch": self.control_output.pitch,
+            "yaw": self.control_output.yaw,
+            "throttle": self.control_output.throttle,
+        }
         for name in ("roll", "pitch", "yaw", "throttle"):
             value = getattr(override, name)
             if value is not None:
-                update[name] = float(value)
+                values[name] = float(value)
         aux = list(self.control_output.aux)
         for channel in override.aux:
             index = int(channel.channel_index)
@@ -184,8 +225,13 @@ class MavsdkInterface(PluginBase):
                 aux.append(0.0)
             if channel.value is not None:
                 aux[index] = float(channel.value)
-        update["aux"] = aux
-        return self.control_output.model_copy(update=update)
+        return ControlAxes(
+            roll=values["roll"],
+            pitch=values["pitch"],
+            yaw=values["yaw"],
+            throttle=values["throttle"],
+            aux=tuple(aux),
+        )
 
     def _respond(self, request_id: str, command: Any, ok: bool, data: Dict[str, Any] | None = None, error: str | None = None) -> None:
         payload = {} if data is None else dict(data)
@@ -210,20 +256,20 @@ class MavsdkInterface(PluginBase):
                 await asyncio.sleep(POLL_INTERVAL_S)
                 continue
             try:
-                model = decode_occid_input(payload)
+                model = decode_input(payload)
                 await self._handle_input(model)
             except (UnsupportedCommand, TypeError, ValueError, OffboardError) as exc:
                 rejected = locals().get("model", payload)
                 self._publish_input_rejected(rejected, str(exc))
 
-    async def _set_standard_mode(self, mode: Any, enabled: bool) -> None:
+    async def _set_standard_mode(self, mode_name: str, enabled: bool) -> None:
         if not enabled:
             raise UnsupportedCommand("MAVSDK adapter cannot generically deactivate an arbitrary mode")
-        if mode == occid.StandardFlightMode.POSITION_HOLD:
+        if mode_name == "POSITION_HOLD":
             await self.drone.action.hold()
             return
         raise UnsupportedCommand(
-            f"MAVSDK adapter does not map standard mode {mode}; "
+            f"MAVSDK adapter does not map standard mode {mode_name}; "
             "use dedicated semantic processes for takeoff/land/RTL"
         )
 
@@ -247,107 +293,54 @@ class MavsdkInterface(PluginBase):
         with self.control_override_lock:
             self.control_override = None
             self.control_override_updated_at = 0.0
-        self._publish_flight_control(override_active=False, attitude_setpoint=None)
+        self._publish_flight_control()
 
-    async def _handle_state_change(self, command: Any) -> None:
-        name = command.property_name
-        if name == PROPERTY_ARMED:
-            if command.operation == occid.StateChangeOperation.SET:
-                value = metadata_scalar(command.value)
-                if type(value) is not bool:
-                    raise UnsupportedCommand("armed SET requires MetadataValue.bool")
-                armed = value
-            elif command.operation == occid.StateChangeOperation.ENABLE:
-                armed = True
-            elif command.operation == occid.StateChangeOperation.DISABLE:
-                armed = False
-            else:
-                raise UnsupportedCommand(f"unsupported armed operation {command.operation}")
-            if armed:
+    async def _handle_command_long(self, command: CommandLong) -> None:
+        if command.command == MAV_CMD_COMPONENT_ARM_DISARM:
+            if float(command.params[0]) == 1.0:
                 await self.drone.action.arm()
             else:
                 await self.drone.action.disarm()
             return
-
-        if name == PROPERTY_STANDARD_FLIGHT_MODE:
-            raw = metadata_scalar(command.value)
-            if type(raw) is not str or raw not in occid.StandardFlightMode.__members__:
-                raise UnsupportedCommand("standard_flight_mode requires a StandardFlightMode name")
-            await self._set_standard_mode(
-                occid.StandardFlightMode[raw],
-                command.operation != occid.StateChangeOperation.DISABLE,
-            )
+        if command.command == MAV_CMD_NAV_TAKEOFF:
+            await self.drone.action.takeoff()
             return
-        if name in {PROPERTY_NATIVE_FLIGHT_MODE_NAME, PROPERTY_NATIVE_FLIGHT_MODE_CODE}:
-            raise UnsupportedCommand("MAVSDK adapter does not expose arbitrary native mode selection")
-        raise UnsupportedCommand(f"unsupported MAVSDK state property {name!r}")
-
-    async def _handle_process_control(self, command: Any) -> None:
-        name = str(command.process_name or "")
-        if command.operation == occid.ProcessControlOperation.START:
-            if name == PROCESS_TAKEOFF:
-                await self.drone.action.takeoff()
-                return
-            if name == PROCESS_LAND:
-                await self.drone.action.land()
-                return
-            if name == PROCESS_RETURN_TO_LAUNCH:
-                await self.drone.action.return_to_launch()
-                return
-            if name == PROCESS_DIRECT_CONTROL_ATTITUDE:
-                await self._begin_direct_control(DIRECT_CONTROL_ATTITUDE)
-                return
-            if name == PROCESS_DIRECT_CONTROL_MANUAL:
-                await self._begin_direct_control(DIRECT_CONTROL_MANUAL)
-                return
-        if command.operation == occid.ProcessControlOperation.STOP and name == PROCESS_DIRECT_CONTROL:
-            await self._end_direct_control()
+        if command.command == MAV_CMD_NAV_LAND:
+            await self.drone.action.land()
             return
-        raise UnsupportedCommand(
-            f"unsupported MAVSDK process operation={command.operation.name} process={name!r}"
-        )
-
-    async def _handle_configuration(self, command: Any) -> None:
-        if (
-            command.operation == occid.ConfigurationOperation.SET_PARAMETER
-            and command.parameter_name == PARAM_TAKEOFF_ALTITUDE_M
-        ):
-            value = metadata_scalar(command.value)
-            if type(value) not in {int, float}:
-                raise UnsupportedCommand("takeoff_altitude_m requires numeric MetadataValue")
-            await self.drone.action.set_takeoff_altitude(float(value))
+        if command.command == MAV_CMD_NAV_RETURN_TO_LAUNCH:
+            await self.drone.action.return_to_launch()
             return
-        raise UnsupportedCommand(
-            f"unsupported MAVSDK configuration operation={command.operation.name} "
-            f"parameter={command.parameter_name!r}"
-        )
-
-    async def _handle_motion(self, command: Any) -> None:
-        if command.operation == occid.MotionOperation.MOVE_TO:
-            fields = goto_command_to_fields(
-                command,
-                current_absolute_altitude_m=self.last_abs_alt_m,
-                current_relative_altitude_m=self.last_rel_alt_m,
-                current_yaw_rad=(
-                    None if self.last_attitude is None else float(self.last_attitude.yaw_rad)
-                ),
-            )
-            await self.drone.action.goto_location(
-                fields.latitude_deg,
-                fields.longitude_deg,
-                fields.absolute_altitude_m,
-                fields.yaw_deg,
-            )
-            return
-        if command.operation in {occid.MotionOperation.MAINTAIN, occid.MotionOperation.STOP}:
+        if command.command == MAV_CMD_NAV_LOITER_UNLIM:
             await self.drone.action.hold()
             return
-        raise UnsupportedCommand(f"unsupported MAVSDK motion operation {command.operation.name}")
+        raise UnsupportedCommand(f"unsupported MAV_CMD {command.command} for MAVSDK endpoint")
+
+    async def _handle_set_mode(self, command: SetMode) -> None:
+        if not command.mode_name:
+            raise UnsupportedCommand("MAVSDK adapter does not expose arbitrary native mode selection")
+        await self._set_standard_mode(standard_mode_name(command.mode_name), True)
+
+    async def _handle_reposition(self, command: RepositionCommand) -> None:
+        fields = goto_command_to_fields(
+            command,
+            current_absolute_altitude_m=self.last_abs_alt_m,
+            current_relative_altitude_m=self.last_rel_alt_m,
+            current_yaw_rad=(
+                None if self.last_attitude is None else float(self.last_attitude.yaw_rad)
+            ),
+        )
+        await self.drone.action.goto_location(
+            fields.latitude_deg,
+            fields.longitude_deg,
+            fields.absolute_altitude_m,
+            fields.yaw_deg,
+        )
 
     async def _handle_input(self, model: Any) -> None:
-        if isinstance(model, occid.ControlAttitudeSetpoint):
+        if isinstance(model, AttitudeTarget):
             if self.direct_control_mode != DIRECT_CONTROL_ATTITUDE:
-                raise UnsupportedCommand("ControlAttitudeSetpoint requires active ATTITUDE_THRUST direct-control process")
+                raise UnsupportedCommand("AttitudeTarget requires active ATTITUDE_THRUST direct-control process")
             fields = attitude_setpoint_to_fields(model)
             await self.drone.offboard.set_attitude(
                 Attitude(fields.roll_deg, fields.pitch_deg, fields.yaw_deg, fields.thrust_value)
@@ -355,9 +348,9 @@ class MavsdkInterface(PluginBase):
             if not self.offboard_attitude_started:
                 await self.drone.offboard.start()
                 self.offboard_attitude_started = True
-            self._publish_flight_control(attitude_setpoint=model, override_active=True)
+            self._publish_flight_control()
             return
-        if isinstance(model, occid.ControlOverride):
+        if isinstance(model, ControlOverride):
             if self.direct_control_mode != DIRECT_CONTROL_MANUAL:
                 raise UnsupportedCommand("ControlOverride requires active MANUAL_AXIS direct-control process")
             with self.control_override_lock:
@@ -367,65 +360,83 @@ class MavsdkInterface(PluginBase):
                 control_output = self.control_output
             self._publish_model(CONTROL_OVERRIDE, model)
             self._publish_model(CONTROL_OUTPUT, control_output)
-            self._publish_flight_control(override_active=True)
+            self._publish_flight_control()
             return
         raise UnsupportedCommand(f"unsupported MAVSDK direct input {type(model).__name__}")
 
     async def _handle_command(self, request: Dict[str, Any]) -> None:
-        request_id, command = decode_occid_command(request)
+        request_id, command = decode_command(request)
         try:
-            if isinstance(command, occid.StateChangeCommand):
-                await self._handle_state_change(command)
-            elif isinstance(command, occid.ProcessControlCommand):
-                await self._handle_process_control(command)
-            elif isinstance(command, occid.ConfigurationCommand):
-                await self._handle_configuration(command)
-            elif isinstance(command, occid.MotionCommand):
-                await self._handle_motion(command)
-            elif isinstance(command, (occid.ResourceCommand, occid.ExecutionCommand)):
-                raise UnsupportedCommand(
-                    f"MAVSDK adapter has no mapping for {type(command).__name__} operation={command.operation.name}"
-                )
+            if isinstance(command, CommandLong):
+                await self._handle_command_long(command)
+            elif isinstance(command, SetMode):
+                await self._handle_set_mode(command)
+            elif isinstance(command, ParamSet):
+                if command.param_id != PARAM_TAKEOFF_ALTITUDE:
+                    raise UnsupportedCommand(f"unsupported MAVSDK parameter {command.param_id!r}")
+                await self.drone.action.set_takeoff_altitude(float(command.value))
+            elif isinstance(command, RepositionCommand):
+                await self._handle_reposition(command)
+            elif isinstance(command, DirectControl):
+                if command.enabled:
+                    await self._begin_direct_control(command.mode)
+                else:
+                    await self._end_direct_control()
             else:
-                raise UnsupportedCommand(f"unsupported OCCID UAV command {type(command).__name__}")
+                raise UnsupportedCommand(f"unsupported command record {type(command).__name__} for MAVSDK endpoint")
             self._respond(request_id, command, True)
         except (ActionError, OffboardError, UnsupportedCommand, ValueError, TypeError) as exc:
             self._respond(request_id, command, False, error=str(exc))
 
     async def _watch_in_air(self) -> None:
         async for in_air in self.drone.telemetry.in_air():
-            self._publish_flight_control(in_air=bool(in_air))
+            self._publish_flight_control()
             if self.stop_event.is_set():
                 return
 
     async def _watch_armed(self) -> None:
         async for armed in self.drone.telemetry.armed():
-            self._publish_flight_control(armed=bool(armed))
+            base_mode = self.heartbeat.base_mode
+            if armed:
+                base_mode |= MAV_MODE_FLAG_SAFETY_ARMED
+            else:
+                base_mode &= ~MAV_MODE_FLAG_SAFETY_ARMED
+            self.heartbeat = replace(
+                self.heartbeat,
+                base_mode=base_mode,
+                system_status=(
+                    mavutil.mavlink.MAV_STATE_ACTIVE
+                    if armed
+                    else mavutil.mavlink.MAV_STATE_STANDBY
+                ),
+            )
+            self._publish_flight_control()
             if self.stop_event.is_set():
                 return
 
     async def _watch_health(self) -> None:
         async for health in self.drone.telemetry.health():
-            self.nav_validity = self.nav_validity.model_copy(
-                update={
-                    "local_position_ok": bool(health.is_local_position_ok),
-                    "global_position_ok": bool(health.is_global_position_ok),
-                    "home_position_ok": bool(health.is_home_position_ok),
-                }
+            self.nav_validity = replace(
+                self.nav_validity,
+                local_position_ok=bool(health.is_local_position_ok),
+                global_position_ok=bool(health.is_global_position_ok),
+                home_position_ok=bool(health.is_home_position_ok),
             )
-            self.readiness = self.readiness.model_copy(
-                update={
-                    "gyro_ok": bool(health.is_gyrometer_calibration_ok),
-                    "accel_ok": bool(health.is_accelerometer_calibration_ok),
-                    "mag_ok": bool(health.is_magnetometer_calibration_ok),
-                    "local_position_ok": bool(health.is_local_position_ok),
-                    "global_position_ok": bool(health.is_global_position_ok),
-                    "home_position_ok": bool(health.is_home_position_ok),
-                    "armable": bool(health.is_armable),
-                    "can_arm_or_run": bool(health.is_armable),
-                }
+            problems = [
+                name
+                for name, ok in (
+                    ("gyro", health.is_gyrometer_calibration_ok),
+                    ("accel", health.is_accelerometer_calibration_ok),
+                    ("mag", health.is_magnetometer_calibration_ok),
+                )
+                if not ok
+            ]
+            self.readiness = replace(
+                self.readiness,
+                armable=bool(health.is_armable),
+                problems=tuple(problems),
             )
-            self._publish_raw_readiness()
+            self._publish_flight_control()
             if self.stop_event.is_set():
                 return
 
@@ -435,8 +446,8 @@ class MavsdkInterface(PluginBase):
             if self.is_ardupilot and " is using GPS" in text:
                 if not self.readiness.ekf_using_gps:
                     print(f"[PLUGIN] {self.client_id} ardupilot_status_text text={text}", flush=True)
-                self.readiness = self.readiness.model_copy(update={"ekf_using_gps": True})
-                self._publish_raw_readiness()
+                self.readiness = replace(self.readiness, ekf_using_gps=True)
+                self._publish_flight_control()
             if self.stop_event.is_set():
                 return
 
@@ -444,14 +455,13 @@ class MavsdkInterface(PluginBase):
         async for position in self.drone.telemetry.position():
             self.last_abs_alt_m = float(position.absolute_altitude_m)
             self.last_rel_alt_m = float(position.relative_altitude_m)
-            self.location_state = position_to_location_state(
+            self.location_state = position_to_location_record(
                 MavsdkPositionFields(
                     latitude_deg=float(position.latitude_deg),
                     longitude_deg=float(position.longitude_deg),
                     absolute_altitude_m=self.last_abs_alt_m,
                     relative_altitude_m=self.last_rel_alt_m,
-                ),
-                navigation_validity=self.nav_validity,
+                )
             )
             self._publish_model(LOCATION, self.location_state)
             if self.stop_event.is_set():
@@ -482,11 +492,10 @@ class MavsdkInterface(PluginBase):
     async def _watch_gps_info(self) -> None:
         async for gps_info in self.drone.telemetry.gps_info():
             native_fix = gps_info.fix_type.value if hasattr(gps_info.fix_type, "value") else gps_info.fix_type
-            self.gnss_state = self.gnss_state.model_copy(
-                update={
-                    "fix_type": gnss_fix_type_from_native_value(int(native_fix)),
-                    "satellites_used": int(gps_info.num_satellites),
-                }
+            self.gnss_state = replace(
+                self.gnss_state,
+                fix_type=gnss_fix_type_from_native_value(int(native_fix)),
+                satellites_visible=int(gps_info.num_satellites),
             )
             self._publish_model(GNSS, self.gnss_state)
             if self.stop_event.is_set():
@@ -494,20 +503,15 @@ class MavsdkInterface(PluginBase):
 
     async def _watch_raw_gps(self) -> None:
         async for raw_gps in self.drone.telemetry.raw_gps():
-            self.gnss_state = self.gnss_state.model_copy(
-                update={
-                    "position": occid.GlobalPosition(
-                        lat=float(raw_gps.latitude_deg),
-                        lon=float(raw_gps.longitude_deg),
-                        alt=float(raw_gps.absolute_altitude_m),
-                        alt_frame=occid.AltitudeDatum.SEA_LEVEL,
-                    ),
-                    "hdop": float(raw_gps.hdop),
-                    "vdop": float(raw_gps.vdop),
-                    "ground_speed_ms": float(raw_gps.velocity_m_s),
-                    "ground_course_deg": float(raw_gps.cog_deg),
-                    "yaw_deg": float(raw_gps.yaw_deg),
-                }
+            self.gnss_state = replace(
+                self.gnss_state,
+                latitude_deg=float(raw_gps.latitude_deg),
+                longitude_deg=float(raw_gps.longitude_deg),
+                altitude_m=float(raw_gps.absolute_altitude_m),
+                eph=float(raw_gps.hdop),
+                epv=float(raw_gps.vdop),
+                velocity_m_s=float(raw_gps.velocity_m_s),
+                cog_deg=float(raw_gps.cog_deg),
             )
             self._publish_model(GNSS, self.gnss_state)
             if self.stop_event.is_set():
@@ -516,29 +520,27 @@ class MavsdkInterface(PluginBase):
     async def _watch_battery(self) -> None:
         async for battery in self.drone.telemetry.battery():
             remaining = battery.remaining_percent
-            remaining_pct = None if remaining is None else float(remaining) * 100.0
-            state = occid.ElectricalResourceState(
-                source_uid=None,
-                potential=(
-                    None if battery.voltage_v is None else occid.Volts(root=float(battery.voltage_v))
+            state = BatteryStatus(
+                voltage_v=(
+                    None if battery.voltage_v is None else float(battery.voltage_v)
                 ),
-                current=(
+                current_a=(
                     None
                     if battery.current_battery_a is None
-                    else occid.Amperes(root=float(battery.current_battery_a))
+                    else float(battery.current_battery_a)
                 ),
-                consumed_charge=(
+                remaining_pct=(
+                    None if remaining is None else float(remaining) * 100.0
+                ),
+                consumed_mah=(
                     None
                     if battery.capacity_consumed_ah is None
-                    else occid.AmpereHours(root=float(battery.capacity_consumed_ah))
+                    else float(battery.capacity_consumed_ah) * 1000.0
                 ),
-                remaining_ratio=(
-                    None if remaining_pct is None else occid.NormalizedRatio(root=remaining_pct / 100.0)
-                ),
-                temperature=(
+                temperature_degc=(
                     None
                     if battery.temperature_degc is None
-                    else occid.DegreesCelsius(root=float(battery.temperature_degc))
+                    else float(battery.temperature_degc)
                 ),
             )
             self._publish_model(POWER, state)
@@ -548,25 +550,22 @@ class MavsdkInterface(PluginBase):
     async def _watch_flight_mode(self) -> None:
         async for flight_mode in self.drone.telemetry.flight_mode():
             mode_name = flight_mode.name if hasattr(flight_mode, "name") else str(flight_mode)
-            self.readiness = self.readiness.model_copy(update={"mode_name": mode_name})
-            self._publish_flight_control(
+            self.heartbeat = replace(
+                self.heartbeat,
+                mode_name=mode_name,
                 standard_mode=standard_mode_from_native_name(mode_name),
-                readiness=self.readiness,
             )
+            self._publish_flight_control()
             if self.stop_event.is_set():
                 return
 
     async def _watch_imu(self) -> None:
         async for imu in self.drone.telemetry.imu():
-            state = occid.ImuSample(
-                angular_velocity=angular_velocity_from_body_rates(
-                    float(imu.angular_velocity_frd.forward_rad_s),
-                    float(imu.angular_velocity_frd.right_rad_s),
-                    float(imu.angular_velocity_frd.down_rad_s),
-                ),
-                temperature_deg_c=float(imu.temperature_degc),
-                timestamp_us=int(imu.timestamp_us),
-                frame=occid.BodyReferenceFrame.FRD,
+            state = HighresImu(
+                xgyro=float(imu.angular_velocity_frd.forward_rad_s),
+                ygyro=float(imu.angular_velocity_frd.right_rad_s),
+                zgyro=float(imu.angular_velocity_frd.down_rad_s),
+                temperature_degc=float(imu.temperature_degc),
             )
             self._publish_model(IMU, state)
             if self.stop_event.is_set():
@@ -603,14 +602,13 @@ class MavsdkInterface(PluginBase):
             try:
                 product = await self.drone.info.get_product()
                 version = await self.drone.info.get_version()
-                state = occid.FirmwareInfo(
-                    name=str(product.product_name or product.vendor_name or self.mav_dialect),
-                    version=occid.Version(
-                        major=int(version.flight_sw_major),
-                        minor=int(version.flight_sw_minor),
-                        patch=int(version.flight_sw_patch),
+                state = FirmwareVersion(
+                    firmware=str(product.product_name or product.vendor_name or self.mav_dialect),
+                    version=(
+                        f"{int(version.flight_sw_major)}.{int(version.flight_sw_minor)}."
+                        f"{int(version.flight_sw_patch)}"
                     ),
-                    build=str(version.flight_sw_git_hash),
+                    board=str(version.flight_sw_git_hash),
                 )
                 self._publish_model(FIRMWARE, state)
                 return

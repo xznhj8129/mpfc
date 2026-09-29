@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal OCCID plugin request/response smoke-test endpoint."""
+"""Minimal local plugin request/response smoke-test endpoint."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import traceback
 from typing import Any, Dict
 
 from lib.common import build_request_topic, build_response_topic
-from lib.occid_bus import decode_occid_request, occid, pack_occid
+from lib.lattice_bus import decode_json_request
 from lib.plugin_base import PluginBase
 
 
@@ -24,36 +24,39 @@ class HelloPlugin(PluginBase):
         self.init_bus(self.poll_interval_s)
 
     def _handle_request(self, payload: Dict[str, Any]) -> None:
-        request_id, model = decode_occid_request(payload)
-        if not isinstance(model, occid.ProtocolPayload):
+        request_id, message = decode_json_request(payload)
+        if str(message.get("format", "TEXT")).upper() != "TEXT":
             self.enqueue_response(
                 request_id,
-                type(model).__name__,
+                "Hello",
                 False,
-                {"error": f"expected ProtocolPayload actual={type(model).__name__}"},
+                {"error": f"hello smoke test requires TEXT actual={message.get('format')!r}"},
             )
             return
-        if model.format != occid.ProtocolPayloadFormat.TEXT or model.text is None:
+        text = message.get("text")
+        if not isinstance(text, str):
             self.enqueue_response(
                 request_id,
-                type(model).__name__,
+                "Hello",
                 False,
-                {"error": "hello smoke test requires TEXT ProtocolPayload"},
+                {"error": "hello smoke test requires a text payload"},
             )
             return
-        reply = occid.ProtocolPayload(
-            format=occid.ProtocolPayloadFormat.TEXT,
-            content_type="text/plain",
-            text=f"{model.text} -> pong from {self.client_id}",
-        )
+        reply_text = f"{text} -> pong from {self.client_id}"
         self.enqueue_response(
             request_id,
-            type(model).__name__,
+            "Hello",
             True,
-            {"reply": pack_occid(reply)},
+            {
+                "reply": {
+                    "format": "TEXT",
+                    "content_type": "text/plain",
+                    "text": reply_text,
+                }
+            },
         )
         print(
-            f"[{self.client_id}] request_id={request_id} message={model.text!r} reply={reply.text!r}",
+            f"[{self.client_id}] request_id={request_id} message={text!r} reply={reply_text!r}",
             flush=True,
         )
 

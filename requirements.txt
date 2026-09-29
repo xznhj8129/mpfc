@@ -1,3 +1,4 @@
+anduril-lattice-sdk
 mavsdk
 pymavlink
 hivelink

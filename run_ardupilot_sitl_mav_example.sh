@@ -13,7 +13,7 @@ fi
 cd "$SCRIPT_DIR"
 
 # Hive run settings.
-MAV_MAIN_CONFIG="${MAV_MAIN_CONFIG:-flight_cores/test_takeoff_land/config_ardupilot.yaml}"
+MAV_MAIN_CONFIG="${MAV_MAIN_CONFIG:-flight_cores/test_takeoff_land/config.yaml}"
 MY_NAME="${MY_NAME:-uav1}"
 MAV_PORT="${MAV_PORT:-14550}"
 

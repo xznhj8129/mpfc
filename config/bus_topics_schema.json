@@ -24,22 +24,23 @@
         "value": "value to set"
       }
     },
-    "OCCID/IN": {
+    "LATTICE/IN": {
       "direction": "hivelink_interface -> local consumers",
-      "summary": "Canonical OCCID model received from a remote HiveLink node. Node-local bridge topic only.",
+      "summary": "Lattice document (aliased JSON) received from a remote HiveLink node. Node-local bridge topic only.",
       "data": {
         "source": "HiveLink source node id",
-        "interface": "Local HiveLink bearer that received the model",
+        "interface": "Local HiveLink bearer that received the document",
         "received_at": "Unix epoch seconds",
-        "model": "lib.occid_bus pack_occid() representation"
+        "document": "Lattice document as aliased JSON (ENG-1)"
       }
     },
-    "OCCID/OUT": {
+    "LATTICE/OUT": {
       "direction": "local consumers -> hivelink_interface",
-      "summary": "Canonical OCCID model for delivery to a remote HiveLink node. Node-local bridge topic only.",
+      "summary": "Lattice document for delivery to a remote HiveLink node. Node-local bridge topic only.",
       "data": {
         "dest": "HiveLink destination node id",
-        "model": "lib.occid_bus pack_occid() representation"
+        "document": "Lattice document as aliased JSON (ENG-1)",
+        "payload_b64": "optional opaque byte passthrough instead of document"
       }
     },
     "<client_id>/<topic_ns>/REQUEST": {

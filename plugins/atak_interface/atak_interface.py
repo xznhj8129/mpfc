@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CoT/ATAK endpoint adapter: OCCID <-> Cursor on Target."""
+"""CoT/ATAK endpoint adapter: Lattice Entity/GeoChat <-> Cursor on Target."""
 
 from __future__ import annotations
 
@@ -8,21 +8,19 @@ import socket
 import struct
 import time
 import traceback
-import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable
 
 import frogcot
+from anduril import Aliases, Entity, Location, MilView, Ontology, Provenance
 
 from lib.common import apply_cfg, build_envelope, build_request_topic, build_response_topic, build_state_scheduler_topics, build_topic_base
-from lib.occid_bus import decode_occid_request, occid, pack_occid
-from lib.occid_topics import COT_RAW, ENTITY_STATE
+from lib.lattice_bus import decode_json_request, decode_request, pack_lattice
+from lib.bus_topics import COT_RAW, ENTITY_STATE
 from lib.plugin_base import PluginBase
 from lib.state_scheduler import StateScheduler
-from interop.cot import CotPointFields, cot_point_to_location_state, global_position_to_cot_point, location_state_to_cot_point
-
-
-COT_SUBJECT_PREFIX = "external:cot:"
+from lib.interop_cot import CotPointFields, cot_point_to_location, location_to_cot_point
 
 
 @dataclass(frozen=True)
@@ -290,14 +288,18 @@ class AtakInterface(PluginBase):
         self.tx_count = 0
         self.rx_parse_errors = 0
         self.tcp_client_connected: bool | None = None
-        self._subject_cot_uids: dict[str, str] = {}
 
     def _parse_targets(self, raw_targets: list[Dict[str, Any]]) -> list[Endpoint]:
         return [Endpoint(entry["host"], int(entry["port"])) for entry in raw_targets]
 
     def _publish_model(self, key: str, model: Any) -> None:
-        if key in self.state_scheduler.topics:
-            self.state_scheduler.update(key, pack_occid(model))
+        if key not in self.state_scheduler.topics:
+            return
+        if type(model) is dict:
+            payload = model
+        else:
+            payload = pack_lattice(model)
+        self.state_scheduler.update(key, payload)
 
     def _publish_diag(self, name: str, data: Dict[str, Any]) -> None:
         topic = f"DIAG/{self.client_id}/{name}"
@@ -310,32 +312,7 @@ class AtakInterface(PluginBase):
         self.tcp_client_connected = connected
         print(f"[PLUGIN] {self.client_id} tcp_client_connected={connected}", flush=True)
 
-    @staticmethod
-    def _uid_text(value: Any) -> str:
-        return str(uuid.UUID(bytes=bytes(value.root)))
-
-    def _record_id(self, uid: str, timestamp: float) -> Any:
-        return occid.UID(
-            root=uuid.uuid5(uuid.NAMESPACE_URL, f"record:cot:{uid}:{int(timestamp * 1000)}").bytes
-        )
-
-    def _subject_id(self, uid: str) -> Any:
-        """Create a local OCCID identity for an unresolved external CoT identity."""
-        subject = occid.UID(
-            root=uuid.uuid5(uuid.NAMESPACE_URL, f"{COT_SUBJECT_PREFIX}{uid}").bytes
-        )
-        self._subject_cot_uids[self._uid_text(subject)] = uid
-        return subject
-
-    def _cot_uid_for_subject(self, subject_id: Any) -> str:
-        """Map an OCCID subject to a CoT UID without treating the IDs as aliases."""
-        text = self._uid_text(subject_id)
-        cached = self._subject_cot_uids.get(text)
-        if cached is not None:
-            return cached
-        return f"occid:uid:{text}"
-
-    def _event_to_entity_state(self, event: Any, source: tuple[str, int]) -> Any:
+    def _event_to_entity(self, event: Any, source: tuple[str, int]) -> Entity:
         uid = str(event.unique_id)
         timestamp = event.time.timestamp() if event.time is not None else time.time()
         point = CotPointFields(
@@ -345,21 +322,25 @@ class AtakInterface(PluginBase):
             ce_m=None if event.point.circular_error is None else float(event.point.circular_error),
             le_m=None if event.point.linear_error is None else float(event.point.linear_error),
         )
-        location = cot_point_to_location_state(point)
-        stamp = occid.Timestamp(utime=timestamp, tz=0)
-        return occid.EntityState(
-            record=occid.Record(
-                uid=self._record_id(uid, timestamp),
-                id=occid.IntID(root=0),
-                created_ts=stamp,
-                updated_ts=stamp,
-                origin_system="CoT",
-                provenance=[f"{source[0]}:{source[1]}", str(event.event_type), f"cot_uid:{uid}"],
+        location, uncertainty = cot_point_to_location(point)
+        return Entity(
+            entity_id=uid,
+            is_live=True,
+            expiry_time=datetime.fromtimestamp(
+                timestamp + float(self.translator.stale_seconds), tz=timezone.utc
             ),
-            subject_uid=self._subject_id(uid),
-            timestamp=stamp,
-            position=location,
-            link_states={},
+            aliases=Aliases(name=uid),
+            location=location,
+            location_uncertainty=uncertainty,
+            mil_view=MilView(disposition="DISPOSITION_UNKNOWN", environment="ENVIRONMENT_AIR"),
+            ontology=Ontology(template="TEMPLATE_TRACK"),
+            provenance=Provenance(
+                integration_name="CoT",
+                data_type=str(event.event_type),
+                source_id=f"{source[0]}:{source[1]}",
+                source_update_time=datetime.fromtimestamp(timestamp, tz=timezone.utc),
+                source_description=f"cot_uid:{uid}",
+            ),
         )
 
     def _handle_inbound(self, payload: bytes, source: tuple[str, int]) -> None:
@@ -369,15 +350,15 @@ class AtakInterface(PluginBase):
                 return
             self._publish_model(
                 COT_RAW,
-                occid.ProtocolPayload(
-                    format=occid.ProtocolPayloadFormat.XML,
-                    content_type="application/cot+xml",
-                    text=xml_text,
-                ),
+                {
+                    "format": "XML",
+                    "content_type": "application/cot+xml",
+                    "text": xml_text,
+                },
             )
             event = self.translator.parse_event(xml_text)
-            entity_state = self._event_to_entity_state(event, source)
-            self._publish_model(ENTITY_STATE, entity_state)
+            entity = self._event_to_entity(event, source)
+            self._publish_model(ENTITY_STATE, entity)
             self.rx_count += 1
             print(
                 f"[PLUGIN] {self.client_id} rx uid={event.unique_id} type={event.event_type} "
@@ -401,46 +382,60 @@ class AtakInterface(PluginBase):
         self.tx_count += 1
         return {"target_count": len(targets), "bytes_sent": len(xml_bytes), "tx_count": self.tx_count}
 
-    def _entity_state_xml(self, state: Any) -> bytes:
-        if state.position is None:
-            raise ValueError("EntityState requires position for CoT marker translation")
-        point = location_state_to_cot_point(state.position)
-        uid = self._cot_uid_for_subject(state.subject_id)
+    def _entity_xml(self, entity: Entity) -> bytes:
+        if entity.location is None:
+            raise ValueError("Lattice Entity requires location for CoT marker translation")
+        point = location_to_cot_point(entity.location, entity.location_uncertainty)
+        uid = str(entity.entity_id or "")
+        if not uid:
+            raise ValueError("Lattice Entity requires entity_id for CoT marker translation")
+        callsign = entity.aliases.name if entity.aliases is not None and entity.aliases.name else uid
         return self.translator.marker_xml(
-            callsign=uid,
+            callsign=callsign,
             uid=uid,
             cottype=self.translator.self_cottype,
             point=point,
         )
 
-    def _human_text_xml(self, message: Any) -> bytes:
-        if message.position is None:
-            raise ValueError("HumanTextMessage requires position for ATAK geochat translation")
-        point = global_position_to_cot_point(message.position)
-        destination = message.destination_group
-        if destination is None and message.destination_uid is not None:
-            destination = self._uid_text(message.destination_uid)
-        if destination is None:
-            destination = self._uid_text(message.dst)
-        return self.translator.geochat_xml(message.message, str(destination), point)
+    def _geo_chat_xml(self, payload: Dict[str, Any]) -> bytes:
+        message = payload.get("message")
+        if not isinstance(message, str):
+            raise ValueError("geo chat payload requires message text")
+        destination = payload.get("to_team") or payload.get("destination") or "All Chat Rooms"
+        point = CotPointFields(
+            lat_deg=float(payload["lat"]),
+            lon_deg=float(payload["lon"]),
+            hae_m=float(payload["alt"]),
+            ce_m=None if payload.get("ce") is None else float(payload["ce"]),
+            le_m=None if payload.get("le") is None else float(payload["le"]),
+        )
+        return self.translator.geochat_xml(message, str(destination), point)
 
     def _handle_request(self, request: Dict[str, Any]) -> None:
-        request_id, model = decode_occid_request(request)
+        request_id = str(request.get("request_id", "unknown"))
+        if "model" in request:
+            request_id, model = decode_request(request, Entity)
+            try:
+                xml_bytes = self._entity_xml(model)
+                result = self._send_xml(xml_bytes, self.cot_output_targets)
+                self.enqueue_response(request_id, "Entity", True, result)
+            except (ValueError, TypeError, RuntimeError) as exc:
+                self.enqueue_response(request_id, "Entity", False, {"error": str(exc)})
+            return
+        request_id, payload = decode_json_request(request)
         try:
-            if isinstance(model, occid.EntityState):
-                xml_bytes = self._entity_state_xml(model)
-            elif isinstance(model, occid.HumanTextMessage):
-                xml_bytes = self._human_text_xml(model)
-            elif isinstance(model, occid.ProtocolPayload):
-                if model.format != occid.ProtocolPayloadFormat.XML or model.text is None:
-                    raise ValueError("CoT ProtocolPayload requires XML text")
-                xml_bytes = model.text.encode("utf-8")
+            if "message" in payload:
+                xml_bytes = self._geo_chat_xml(payload)
+                kind = "GeoChat"
+            elif payload.get("format") == "XML" and isinstance(payload.get("text"), str):
+                xml_bytes = payload["text"].encode("utf-8")
+                kind = "CotXml"
             else:
-                raise ValueError(f"unsupported OCCID model for CoT translation {type(model).__name__}")
+                raise ValueError("unsupported local CoT request payload")
             result = self._send_xml(xml_bytes, self.cot_output_targets)
-            self.enqueue_response(request_id, type(model).__name__, True, result)
+            self.enqueue_response(request_id, kind, True, result)
         except (ValueError, TypeError, RuntimeError) as exc:
-            self.enqueue_response(request_id, type(model).__name__, False, {"error": str(exc)})
+            self.enqueue_response(request_id, "CoT", False, {"error": str(exc)})
 
     def _poll_network(self, timeout_s: float) -> None:
         if self.tcp_client is not None:

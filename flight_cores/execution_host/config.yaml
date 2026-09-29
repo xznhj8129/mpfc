@@ -1,8 +1,8 @@
 my_name: uav1
 vehicle:
-  autopilot: AutopilotType.PX4
-  airframe: AirframeType.COPTER
-  telem_type: TelemetryType.MAVLINK
+  autopilot: Autopilot.PX4
+  airframe: Airframe.COPTER
+  telem_type: Telemetry.MAVLINK
 core:
   name: execution_host
   cfg:
@@ -29,12 +29,7 @@ plugins:
   cfg:
     id: execution_ingress
     auto_takeoff_for_move: false
-    executor_id:
-      id_type: DB_ID
-      value: mpfc:<my_name>
-    asset_id:
-      id_type: DB_ID
-      value: <my_name>
+    asset_id: <my_name>
 - plugin: uav_controller
   cfg:
     id: uav_controller

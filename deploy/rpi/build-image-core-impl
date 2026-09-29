@@ -19,7 +19,6 @@ BASE_URL=${DEFAULT_BASE_URL}
 BASE_SHA256=${DEFAULT_BASE_SHA256}
 IMAGE_SIZE=${DEFAULT_IMAGE_SIZE}
 OUTPUT=${DIST_ROOT}/mpfc-rpi-zero2w.img
-OCCID_PATH=$(cd -- "${REPO_ROOT}/.." && pwd)/occid
 HIVELINK_PATH=$(cd -- "${REPO_ROOT}/.." && pwd)/hivelink
 COMPRESS=0
 
@@ -30,7 +29,7 @@ Usage: sudo ${0##*/} [options]
 Build model:
   1. prepare/cache the Raspberry Pi OS + system package layer once;
   2. cross-stage ARM64 Python dependencies on the x86 host;
-  3. install OCCID/HiveLink as normal target-venv packages;
+  3. install HiveLink and the official Lattice SDK as normal target-venv packages;
   4. overlay MPFC and configuration with host rsync;
   5. use QEMU system emulation only for optional ARM runtime acceptance.
 
@@ -38,7 +37,6 @@ Options:
   --base-image PATH     Use an already downloaded .img or .img.xz
   --base-url URL        Override the pinned Raspberry Pi OS Lite URL
   --base-sha256 SHA     Expected SHA256 of the compressed/raw base image
-  --occid-path PATH     OCCID build-input checkout (default: sibling ../occid)
   --hivelink-path PATH  HiveLink build-input checkout (default: sibling ../hivelink)
   --output PATH         Output raw image
   --size SIZE           Final SD image size, default 4G
@@ -52,7 +50,6 @@ while [[ $# -gt 0 ]]; do
         --base-image) BASE_IMAGE=$2; shift 2 ;;
         --base-url) BASE_URL=$2; shift 2 ;;
         --base-sha256) BASE_SHA256=$2; shift 2 ;;
-        --occid-path) OCCID_PATH=$2; shift 2 ;;
         --hivelink-path) HIVELINK_PATH=$2; shift 2 ;;
         --output) OUTPUT=$2; shift 2 ;;
         --size) IMAGE_SIZE=$2; shift 2 ;;
@@ -75,10 +72,9 @@ python3 -m pip --version >/dev/null 2>&1 || {
     exit 1
 }
 
-for path in "${REPO_ROOT}" "${OCCID_PATH}" "${HIVELINK_PATH}"; do
+for path in "${REPO_ROOT}" "${HIVELINK_PATH}"; do
     [[ -d ${path} ]] || { echo "missing source checkout: ${path}" >&2; exit 1; }
 done
-[[ -f ${OCCID_PATH}/occid/__init__.py ]] || { echo "--occid-path does not look like the OCCID repository: ${OCCID_PATH}" >&2; exit 1; }
 [[ -f ${HIVELINK_PATH}/setup.py ]] || { echo "--hivelink-path does not look like the HiveLink repository: ${HIVELINK_PATH}" >&2; exit 1; }
 [[ -f ${REPO_ROOT}/requirements-runtime.txt ]] || { echo "missing MPFC runtime requirements" >&2; exit 1; }
 
@@ -238,8 +234,8 @@ WORK_IMAGE=${WORK_ROOT}/root.img
 cp --reflink=auto --sparse=always "${PREPARED_IMAGE}" "${WORK_IMAGE}"
 mount_image "${WORK_IMAGE}"
 
-# Cheap application/configuration overlay. OCCID and HiveLink are package build
-# inputs and are never copied into runtime source paths.
+# Cheap application/configuration overlay. The Lattice SDK and HiveLink are
+# package build inputs and are never copied into runtime source paths.
 mkdir -p "${ROOT_MNT}/opt/mpfc"
 RSYNC_EXCLUDES=(
     --exclude=.git
@@ -327,15 +323,16 @@ fi
 
 rsync -a --delete --exclude=.complete "${PYTHON_CACHE}/" "${VENV_SITE}/"
 
-# OCCID and HiveLink are pure-Python packages today. Build/install them through
-# normal packaging into the target venv instead of exposing their source trees.
-echo "Installing OCCID and HiveLink packages into target environment..."
+# HiveLink is a pure-Python checkout; the official Lattice SDK is staged with
+# the rest of the cross-built ARM64 dependency layer above, so install only the
+# checkout here and never let host-native resolution overwrite the staged
+# target wheels.
+echo "Installing HiveLink package into target environment..."
 python3 -m pip install \
     --target "${VENV_SITE}" \
     --no-deps \
     --no-compile \
     --upgrade \
-    "${OCCID_PATH}" \
     "${HIVELINK_PATH}"
 
 # Final appliance identity and runtime configuration are host-written and cheap.
@@ -398,11 +395,9 @@ assert_meta /etc/systemd/system/mpfc.service 0:0:644
 assert_meta /etc/systemd/system/mpfc-runtime-config.service 0:0:644
 assert_meta /usr/local/sbin/mpfc-runtime-config 0:0:755
 assert_meta /etc/mpfc/runtime.env 0:0:644
-[[ -d ${VENV_SITE}/occid ]] || { echo "installed OCCID package missing from target environment" >&2; exit 1; }
+[[ -d ${VENV_SITE}/anduril ]] || { echo "installed Lattice SDK missing from target environment" >&2; exit 1; }
 [[ -d ${VENV_SITE}/hivelink ]] || { echo "installed HiveLink package missing from target environment" >&2; exit 1; }
-[[ ! -e ${VENV_SITE}/occid-source.pth ]] || { echo "obsolete OCCID source path registration present" >&2; exit 1; }
 [[ ! -e ${VENV_SITE}/hivelink-source.pth ]] || { echo "obsolete HiveLink source path registration present" >&2; exit 1; }
-[[ ! -e ${ROOT_MNT}/opt/occid ]] || { echo "obsolete /opt/occid source tree present" >&2; exit 1; }
 [[ ! -e ${ROOT_MNT}/opt/hivelink ]] || { echo "obsolete /opt/hivelink source tree present" >&2; exit 1; }
 
 # The same raw image boots real Zero 2 W hardware through Raspberry Pi firmware.
@@ -434,7 +429,7 @@ prepared_cache_key=${prepare_key}
 python_cache_key=${python_key}
 target_python=${PYTHON_VERSION}
 mpfc_revision=$(source_revision "${REPO_ROOT}")
-occid_revision=$(source_revision "${OCCID_PATH}")
+lattice_sdk_revision=$(python3 -c "from importlib.metadata import version; print(version(\"anduril-lattice-sdk\"))" 2>/dev/null || printf unknown)
 hivelink_revision=$(source_revision "${HIVELINK_PATH}")
 control_node=${MPFC_CONTROL_NODE}
 control_ip=${MPFC_PI_CONTROL_IP}

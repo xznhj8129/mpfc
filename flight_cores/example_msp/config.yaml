@@ -1,8 +1,8 @@
 my_name: uav1
 vehicle:
-  autopilot: AutopilotType.INAV
-  airframe: AirframeType.COPTER
-  telem_type: TelemetryType.MSP
+  autopilot: Autopilot.INAV
+  airframe: Airframe.COPTER
+  telem_type: Telemetry.MSP
 core:
   name: example_msp
   cfg:

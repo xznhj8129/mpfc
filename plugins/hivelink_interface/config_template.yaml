@@ -3,8 +3,8 @@ cfg:
   id: hivelink
   rx_poll_interval: 0.05
   bus_poll_interval: 0.05
-  in_topic: OCCID/IN
-  out_topic: OCCID/OUT
+  in_topic: LATTICE/IN
+  out_topic: LATTICE/OUT
   link_config:
     my_id: 0
     udp:

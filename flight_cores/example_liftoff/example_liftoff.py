@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OCCID telemetry snapshot program for the Liftoff simulator backend."""
+"""Telemetry snapshot program for the Liftoff simulator backend."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Any, Dict
 
 from lib.common import apply_cfg
 from lib.core_base import CoreBase
-from lib.occid_bus import occid
-from lib.occid_topics import ATTITUDE, FLIGHT_CONTROL, LOCATION, POWER, RC_TELEMETRY
+from lib.bus_topics import ATTITUDE, FLIGHT_CONTROL, LOCATION, POWER, RC_TELEMETRY
+from lib.mavlink_models import Altitude, Attitude, BatteryStatus, ControlAxes, VehicleControl
 from lib.uav_client import UavClient
 
 
@@ -22,19 +22,19 @@ class ExampleLiftoffCore(CoreBase):
         self.init_bus(float(self.poll_interval_s), self.uav.state_topics(self.state_keys), self.uav.response_topic)
 
     def _print_snapshot(self) -> None:
-        print("\n=== Liftoff/OCCID Snapshot ===", flush=True)
-        print(f"flight_control: {self.uav.state(FLIGHT_CONTROL, occid.FlightControlState)}", flush=True)
-        print(f"location: {self.uav.state(LOCATION, occid.LocationState)}", flush=True)
-        print(f"attitude: {self.uav.state(ATTITUDE, occid.EulerAngles)}", flush=True)
-        print(f"rc_telemetry: {self.uav.state(RC_TELEMETRY, occid.ControlAxisSet)}", flush=True)
-        print(f"power: {self.uav.state(POWER, occid.ElectricalResourceState)}", flush=True)
+        print("\n=== Liftoff Snapshot ===", flush=True)
+        print(f"flight_control: {self.uav.state(FLIGHT_CONTROL, VehicleControl)}", flush=True)
+        print(f"location: {self.uav.state(LOCATION, Altitude)}", flush=True)
+        print(f"attitude: {self.uav.state(ATTITUDE, Attitude)}", flush=True)
+        print(f"rc_telemetry: {self.uav.state(RC_TELEMETRY, ControlAxes)}", flush=True)
+        print(f"power: {self.uav.state(POWER, BatteryStatus)}", flush=True)
 
     def run(self) -> None:
         self.send_online()
         self.wait_until(
             lambda: self.uav.flight_control() is not None,
             float(self.state_timeout_s),
-            RuntimeError("Liftoff OCCID state timeout"),
+            RuntimeError("Liftoff vehicle state timeout"),
         )
         print(f"[CORE] {self.client_id} liftoff_uav_state_online=True", flush=True)
         last_print = 0.0

@@ -1,7 +1,8 @@
-"""Local MQTT routing keys for OCCID state streams.
+"""Local MQTT routing keys for node state streams.
 
-These names identify streams for subscription/rate control only. The OCCID model
-inside each payload defines its semantics.
+These names identify streams for subscription and rate control only; the
+payload carried on each stream defines its semantics (Lattice documents for
+entity/task state, MAVLink-shaped records for vehicle state).
 """
 
 FLIGHT_CONTROL = "flight_control"

@@ -5,22 +5,22 @@ cfg:
   is_interface: true
   supports:
     autopilot:
-    - AutopilotType.PX4
-    - AutopilotType.ARDUPILOT
+    - Autopilot.PX4
+    - Autopilot.ARDUPILOT
     telem_type:
-    - TelemetryType.MAVLINK
+    - Telemetry.MAVLINK
   conn_str: udp://:14550
   mav_dialect: PX4
   mav_type: MAV_TYPE_QUADROTOR
   mav_sysid: 1
   mavsdk_log_debug: false
 
-  # Endpoint adapter reports raw OCCID health/readiness facts. Stabilization and
+  # Endpoint adapter reports raw MAVLink-derived health/readiness facts. Stabilization and
   # vehicle-level arm/takeoff readiness policy belongs to uav_controller.
   consume_control_override: false
   control_override_timeout_s: 0.3
   control_override_send_interval_s: 0.05
-  # OCCID control axes are signed [-1, 1]. The MAVSDK adapter maps signed
+  # Control axes are signed [-1, 1]. The MAVSDK adapter maps signed
   # throttle to MAVSDK's unidirectional [0, 1] manual-control throttle.
   control_output_initial:
     roll: 0.0
@@ -29,7 +29,7 @@ cfg:
     throttle: -1.0
     aux: []
 
-  # Local routing/rate-control stream names. Payload semantics come from OCCID models.
+  # Local routing/rate-control stream names. Payloads are MAVLink-shaped records.
   state_intervals:
     flight_control: 0.1
     location: 0.2

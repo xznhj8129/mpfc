@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""OCCID-native UAV service plugin.
+"""Stable UAV service plugin for MPFC flight cores.
 
-Programs talk to this plugin as the stable UAV API. It applies reusable
-vehicle-level policy, type-gates concrete generic OCCID Command families,
-forwards commands without blocking on endpoint mechanics, and relays high-rate
-OCCID Input samples on a latest-value path.
+Programs talk to this plugin as the stable UAV API.  It applies reusable
+vehicle-level policy, gates MAVLink command records, forwards commands without
+blocking on endpoint mechanics, and relays high-rate control samples on a
+latest-value path.  Vehicle-facing state is MAVLink-shaped (DEC-1).
 """
 
 from __future__ import annotations
 
 import time
 import traceback
+from dataclasses import replace
 from typing import Any, Dict
 
 from lib.common import (
@@ -22,34 +23,41 @@ from lib.common import (
     build_state_topics,
     build_topic_base,
 )
-from lib.occid_bus import (
-    decode_occid_command,
-    decode_occid_input,
-    occid,
-    pack_occid,
-    send_occid_command,
-    send_occid_input,
-    unpack_occid,
+from lib.bus_topics import FLIGHT_CONTROL, LOCATION
+from lib.lattice_bus import (
+    decode_command,
+    decode_input,
+    send_command,
+    send_input,
 )
-from lib.occid_topics import FLIGHT_CONTROL, LOCATION
+from lib.mavlink_models import (
+    AttitudeTarget,
+    CommandLong,
+    ControlOverride,
+    DirectControl,
+    GlobalPositionInt,
+    ParamSet,
+    RepositionCommand,
+    SetMode,
+    VehicleControl,
+    unpack_record,
+)
 from lib.plugin_base import PluginBase
-from lib.provisioning import asset_uid
 
 
 class UavController(PluginBase):
-    """Backend-independent UAV service built on OCCID Commands, Inputs, and State."""
+    """Backend-independent UAV service built on MAVLink command/state records."""
 
     IMMEDIATE_COMMAND_TYPES = (
-        occid.StateChangeCommand,
-        occid.ProcessControlCommand,
-        occid.ConfigurationCommand,
-        occid.MotionCommand,
-        occid.ResourceCommand,
-        occid.ExecutionCommand,
+        CommandLong,
+        RepositionCommand,
+        SetMode,
+        ParamSet,
+        DirectControl,
     )
     DIRECT_INPUT_TYPES = (
-        occid.ControlAttitudeSetpoint,
-        occid.ControlOverride,
+        AttitudeTarget,
+        ControlOverride,
     )
 
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:
@@ -61,15 +69,10 @@ class UavController(PluginBase):
         self.backend = dict(cfg["backend"])
         self.backend_state_keys = list(cfg["backend_state_keys"])
         self.backend_event_keys = list(cfg.get("backend_event_keys", []))
-        raw_target = cfg.get("target_uid")
-        if raw_target is None:
-            raw_target = asset_uid()
-        self.target_uid = (
-            raw_target if isinstance(raw_target, occid.UID) else occid.UID.model_validate(raw_target)
-        )
+        self.target_system = int(cfg.get("target_system", 0))
         self.arm_ready_since: float | None = None
         self.takeoff_ready_since: float | None = None
-        self.backend_flight_control: Any | None = None
+        self.backend_flight_control: VehicleControl | None = None
         self.pending_backend_requests: dict[str, tuple[str, str, float]] = {}
 
         base = build_topic_base(self.client_id, self.topic_ns)
@@ -99,24 +102,20 @@ class UavController(PluginBase):
         self.client.publish(topic, build_envelope(self.client_id, topic, payload))
 
     def _is_ardupilot(self) -> bool:
-        return str(self.vehicle.get("autopilot", "")).upper() == occid.AutopilotType.ARDUPILOT.name
+        return str(self.vehicle.get("autopilot", "")).upper() == "ARDUPILOT"
 
     def _location_available(self) -> bool:
         payload = self.state.get(LOCATION)
         if payload is None:
             return False
         try:
-            return isinstance(unpack_occid(payload), occid.LocationState)
+            return isinstance(unpack_record(payload, GlobalPositionInt), GlobalPositionInt)
         except (TypeError, ValueError, KeyError):
             return False
 
-    def _apply_readiness_policy(self, flight_control: Any) -> Any:
-        readiness = flight_control.readiness
-        if readiness is None:
-            readiness = occid.NavReadinessState(mode_problems=[], health_problems=[])
-        nav = flight_control.navigation_validity
-        if nav is None:
-            nav = occid.NavigationValidity()
+    def _apply_readiness_policy(self, control: VehicleControl) -> VehicleControl:
+        readiness = control.readiness
+        nav = control.navigation_validity
 
         arm_candidate = bool(readiness.armable)
         takeoff_candidate = (
@@ -147,27 +146,26 @@ class UavController(PluginBase):
         else:
             self.takeoff_ready_since = None
 
-        readiness = readiness.model_copy(
-            update={
-                "arm_ready": (
-                    arm_candidate
-                    and self.arm_ready_since is not None
-                    and now - self.arm_ready_since >= arm_hold_s
-                ),
-                "takeoff_ready": (
-                    takeoff_candidate
-                    and self.takeoff_ready_since is not None
-                    and now - self.takeoff_ready_since >= takeoff_hold_s
-                ),
-            }
+        readiness = replace(
+            readiness,
+            arm_ready=(
+                arm_candidate
+                and self.arm_ready_since is not None
+                and now - self.arm_ready_since >= arm_hold_s
+            ),
+            takeoff_ready=(
+                takeoff_candidate
+                and self.takeoff_ready_since is not None
+                and now - self.takeoff_ready_since >= takeoff_hold_s
+            ),
         )
-        return flight_control.model_copy(update={"readiness": readiness, "navigation_validity": nav})
+        return replace(control, readiness=readiness, navigation_validity=nav)
 
     def _publish_controller_flight_control(self) -> None:
         if self.backend_flight_control is None or FLIGHT_CONTROL not in self.state_publish_topics:
             return
-        model = self._apply_readiness_policy(self.backend_flight_control)
-        self._publish_state(FLIGHT_CONTROL, pack_occid(model))
+        control = self._apply_readiness_policy(self.backend_flight_control)
+        self._publish_state(FLIGHT_CONTROL, control.to_bus())
 
     def _forward_backend_response(self, payload: Dict[str, Any]) -> None:
         backend_request_id = str(payload["request_id"])
@@ -206,11 +204,7 @@ class UavController(PluginBase):
             state_key = self.backend_state_topic_to_key[topic]
             state_payload = payload["data"]
             if state_key == FLIGHT_CONTROL:
-                model = unpack_occid(state_payload)
-                if not isinstance(model, occid.FlightControlState):
-                    raise RuntimeError(
-                        f"backend flight_control payload must be FlightControlState actual={type(model).__name__}"
-                    )
+                model = unpack_record(state_payload, VehicleControl)
                 self.backend_flight_control = model
                 self._publish_controller_flight_control()
             else:
@@ -227,20 +221,25 @@ class UavController(PluginBase):
         request_id = str(request.get("request_id", "unknown"))
         command_name = "Command"
         try:
-            request_id, command = decode_occid_command(request)
+            request_id, command = decode_command(request)
             command_name = type(command).__name__
             if type(command) not in self.IMMEDIATE_COMMAND_TYPES:
                 allowed = ", ".join(command_type.__name__ for command_type in self.IMMEDIATE_COMMAND_TYPES)
                 raise TypeError(
-                    f"uav_controller accepts concrete OCCID Command families only "
+                    f"uav_controller accepts MAVLink command records only "
                     f"allowed={allowed} actual={command_name}"
                 )
-            if command.target_uid != self.target_uid:
+            if (
+                self.target_system
+                and isinstance(command, CommandLong)
+                and command.target_system
+                and command.target_system != self.target_system
+            ):
                 raise ValueError(
-                    f"command target_uid does not address this UAV "
-                    f"expected={self.target_uid} actual={command.target_uid}"
+                    f"command target_system does not address this UAV "
+                    f"expected={self.target_system} actual={command.target_system}"
                 )
-            backend_request_id = send_occid_command(self.bus, self.backend_request_topic, command)
+            backend_request_id = send_command(self.bus, self.backend_request_topic, command)
             self.pending_backend_requests[backend_request_id] = (
                 request_id,
                 command_name,
@@ -250,13 +249,13 @@ class UavController(PluginBase):
             self.enqueue_response(request_id, command_name, False, {"error": str(exc)})
 
     def _handle_input(self, payload: Any) -> None:
-        model = decode_occid_input(payload)
+        model = decode_input(payload)
         if not isinstance(model, self.DIRECT_INPUT_TYPES):
             allowed = ", ".join(input_type.__name__ for input_type in self.DIRECT_INPUT_TYPES)
             raise TypeError(
                 f"uav_controller accepts direct UAV input types only allowed={allowed} actual={type(model).__name__}"
             )
-        send_occid_input(self.bus, self.backend_input_topic, model)
+        send_input(self.bus, self.backend_input_topic, model)
 
     def run(self) -> None:
         self.send_online()

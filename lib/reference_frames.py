@@ -2,16 +2,13 @@
 """
 Reference-frame conversion helpers.
 
-MPFC keeps these compatibility names for existing callers, but the canonical
-representation conversion lives in the OCCID SDK interop layer.
+MPFC keeps these helper names for existing callers; the conversion math lives
+in :mod:`lib.interop_common`.
 """
 
 from typing import Any, Dict
 
-# Importing occid_bus resolves OCCID_PATH / the sibling OCCID checkout before
-# importing SDK interop modules, so these helpers also work outside main.py.
-from lib.occid_bus import occid as _occid  # noqa: F401
-from interop.common import fru_to_frd_vector as _occid_fru_to_frd_vector
+from lib.interop_common import fru_to_frd_vector as _fru_to_frd_vector
 
 FRAME_FRD = "FRD"
 
@@ -29,7 +26,7 @@ def ned_down_to_up(value: float | None) -> float | None:
 
 
 def fru_to_frd_vector(x: float, y: float, z_up: float) -> tuple[float, float, float]:
-    return _occid_fru_to_frd_vector(x, y, z_up)
+    return _fru_to_frd_vector(x, y, z_up)
 
 
 def rc_dict_to_aetr(values: Dict[str, Any]) -> list[Any]:

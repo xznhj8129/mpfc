@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Bridge canonical OCCID models between MPFC's private bus and HiveLink.
+"""Bridge Lattice documents between MPFC's private bus and HiveLink.
 
-This plugin is deliberately semantically dumb. It does not know about
-``execution_ingress``, UAV control, or any other MPFC plugin. Remote OCCID
-models arrive on ``OCCID/IN``; local components send OCCID models to remote
-nodes through ``OCCID/OUT``. MPFC's MQTT topic structure remains private to the
-node and never becomes the network API.
+This plugin is deliberately semantically dumb.  It does not know about
+``execution_ingress``, UAV control, or any other MPFC plugin.  Lattice
+documents cross the field link as aliased JSON bytes inside the existing
+HiveLink frame (ENG-1); the frame and addressing layer is unchanged.  MPFC's
+MQTT topic structure remains private to the node and never becomes the network
+API.
 """
 
 from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import queue
 import threading
 import time
@@ -22,11 +24,10 @@ from typing import Any, Dict
 from hivelink.datalinks import DatalinkInterface
 
 from lib.common import build_envelope, load_config
-from lib.occid_bus import pack_occid, unpack_occid
 from lib.plugin_base import PluginBase
 
-OCCID_OUT_TOPIC = "OCCID/OUT"
-OCCID_IN_TOPIC = "OCCID/IN"
+LATTICE_OUT_TOPIC = "LATTICE/OUT"
+LATTICE_IN_TOPIC = "LATTICE/IN"
 START_TIMEOUT = 5.0
 
 
@@ -37,8 +38,8 @@ class HiveLinkPlugin(PluginBase):
         self.bus_config = bus_config
         self.bus_poll_interval = float(cfg.get("bus_poll_interval", 0.1))
         self.rx_poll_interval = float(cfg.get("rx_poll_interval", 0.05))
-        self.out_topic = str(cfg.get("out_topic", OCCID_OUT_TOPIC))
-        self.in_topic = str(cfg.get("in_topic", OCCID_IN_TOPIC))
+        self.out_topic = str(cfg.get("out_topic", LATTICE_OUT_TOPIC))
+        self.in_topic = str(cfg.get("in_topic", LATTICE_IN_TOPIC))
 
         self.loop: asyncio.AbstractEventLoop | None = None
         self.loop_thread: threading.Thread | None = None
@@ -97,7 +98,7 @@ class HiveLinkPlugin(PluginBase):
                 self.datalink.start()
                 self.datalink_ready.set()
                 while not self.loop_stop_event.is_set():
-                    for msg in self.datalink.receive_models():
+                    for msg in self.datalink.receive():
                         self.inbound_queue.put(msg)
                     await asyncio.sleep(self.rx_poll_interval)
 
@@ -126,65 +127,63 @@ class HiveLinkPlugin(PluginBase):
                 msg = self.inbound_queue.get_nowait()
             except queue.Empty:
                 return
-            model = msg["model"]
+            raw = msg["data"]
             source = str(msg["from"])
             interface = str(msg["intf"])
             received_at = float(msg.get("time", time.time()))
+            try:
+                document = json.loads(bytes(raw).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                print(
+                    f"[HIVELINK_RX_DROPPED] source={source} interface={interface} "
+                    f"error={exc}",
+                    flush=True,
+                )
+                continue
             data = {
                 "source": source,
                 "interface": interface,
                 "received_at": received_at,
-                "model": pack_occid(model),
+                "document": document,
             }
             self.client.publish(
                 self.in_topic,
                 build_envelope(self.client_id, self.in_topic, data),
             )
+            kind = document.get("kind") if isinstance(document, dict) else type(document).__name__
             print(
-                f"[HIVELINK_RX] source={source} interface={interface} "
-                f"model={type(model).__name__}",
+                f"[HIVELINK_RX] source={source} interface={interface} kind={kind}",
                 flush=True,
             )
 
     def _send_outbound(self, envelope: Dict[str, Any]) -> None:
         data = envelope["data"]
         if type(data) is not dict:
-            raise ValueError("OCCID/OUT data must be an object")
+            raise ValueError("LATTICE/OUT data must be an object")
         dest = str(data["dest"])
         if not dest:
-            raise ValueError("OCCID/OUT requires dest")
+            raise ValueError("LATTICE/OUT requires dest")
         datalink = self.datalink
         if datalink is None:
             raise RuntimeError("HiveLink datalink is not started")
 
-        if "sdk_payload" in data:
-            # Sigma SDK messages travel as opaque bytes; HiveLink is delivery.
-            payload = base64.b64decode(str(data["sdk_payload"]))
-            sent = datalink.send(
-                payload,
-                dest,
-                udp=bool(data.get("udp", self.default_udp)),
-                meshtastic=bool(data.get("meshtastic", self.default_mesh)),
-                multicast=bool(data.get("multicast", self.default_multicast)),
-            )
-            if not sent:
-                raise RuntimeError(f"HiveLink could not send SDK payload dest={dest}")
-            print(f"[HIVELINK_TX] dest={dest} sdk_payload={len(payload)}B", flush=True)
-            return
-
-        model = unpack_occid(data["model"])
-        sent = datalink.send_model(
-            model,
+        if "payload_b64" in data:
+            # Opaque byte passthrough for non-document payloads.
+            payload = base64.b64decode(str(data["payload_b64"]))
+        else:
+            if "document" not in data:
+                raise ValueError("LATTICE/OUT requires document or payload_b64")
+            payload = json.dumps(data["document"], separators=(",", ":")).encode("utf-8")
+        sent = datalink.send(
+            payload,
             dest,
             udp=bool(data.get("udp", self.default_udp)),
             meshtastic=bool(data.get("meshtastic", self.default_mesh)),
             multicast=bool(data.get("multicast", self.default_multicast)),
         )
         if not sent:
-            raise RuntimeError(
-                f"HiveLink could not send model={type(model).__name__} dest={dest}"
-            )
-        print(f"[HIVELINK_TX] dest={dest} model={type(model).__name__}", flush=True)
+            raise RuntimeError(f"HiveLink could not send document dest={dest}")
+        print(f"[HIVELINK_TX] dest={dest} bytes={len(payload)}", flush=True)
 
     def run(self) -> None:
         self.loop_stop_event.clear()

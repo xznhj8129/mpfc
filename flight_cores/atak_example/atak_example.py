@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Program example that monitors CoT-derived OCCID entity state."""
+"""Program example that monitors CoT-derived Lattice entity state."""
 
 from __future__ import annotations
 
 from typing import Any, Dict
 
+from anduril import Entity
+
 from lib.common import build_state_topics, build_topic_base
 from lib.core_base import CoreBase
-from lib.occid_bus import get_occid_state, occid
-from lib.occid_topics import ENTITY_STATE
+from lib.lattice_bus import get_lattice_state
+from lib.bus_topics import ENTITY_STATE
 
 
 class AtakExampleCore(CoreBase):
@@ -28,8 +30,8 @@ class AtakExampleCore(CoreBase):
                 topic, _payload = self._pump_once()
                 if topic != self.entity_state_topic:
                     continue
-                state = get_occid_state(self.state, ENTITY_STATE, occid.EntityState)
-                print(f"[CORE] {self.client_id} entity_state={state}", flush=True)
+                entity = get_lattice_state(self.state, ENTITY_STATE, Entity)
+                print(f"[CORE] {self.client_id} entity_state={entity}", flush=True)
         except KeyboardInterrupt:
             pass
         finally:

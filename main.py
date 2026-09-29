@@ -18,23 +18,31 @@ import signal
 from pathlib import Path
 from typing import Any, Dict, List
 
-# Python 3.14 defaults to the multiprocessing forkserver on POSIX.  The child
-# re-imports this file with the parent's mutated sys.path, where OCCID_PATH may
-# precede MPFC and expose OCCID's unrelated ``lib`` package.  Keep MPFC's own
-# modules authoritative before importing ``lib.common``.
 REPO_ROOT = Path(__file__).resolve().parent
-repo_root_text = str(REPO_ROOT)
-if sys.path[0] != repo_root_text:
-    if repo_root_text in sys.path:
-        sys.path.remove(repo_root_text)
-    sys.path.insert(0, repo_root_text)
 
 from lib.common import CONTROL_SHUTDOWN_TOPIC, build_envelope, connect_bus_client, load_config
 from lib.mqtt_bus_client import MqttPublishError
-from lib.occid_bus import occid
 
 CONFIG_ENV = "MAIN_CONFIG"
 PLACEHOLDER_RE = re.compile(r"<([A-Za-z0-9_]+)>")
+
+# Local vehicle classification (N1-N3).  Tokens are MPFC-local routing values;
+# the MAVLink mapping is the classification used on the wire where one exists.
+AUTOPILOT_TOKENS = {
+    "BETAFLIGHT": "MAV_AUTOPILOT_GENERIC",
+    "INAV": "MAV_AUTOPILOT_GENERIC",
+    "ARDUPILOT": "MAV_AUTOPILOT_ARDUPILOTMEGA",
+    "PX4": "MAV_AUTOPILOT_PX4",
+    "CUSTOM": "MAV_AUTOPILOT_GENERIC",
+}
+AIRFRAME_TOKENS = {
+    "FIXED_WING": "MAV_TYPE_FIXED_WING",
+    "COPTER": "MAV_TYPE_QUADROTOR",
+    "VTOL": "MAV_TYPE_VTOL_QUADROTOR",
+    "TAILSITTER": "MAV_TYPE_VTOL_TAILSITTER_QUADROTOR",
+    "FLYING_WING": "MAV_TYPE_FIXED_WING",
+}
+TELEMETRY_TOKENS = ("NONE", "MSP", "MAVLINK", "CRSF", "MANUAL_ENTRY")
 
 
 def parse_runtime_overrides(argv: list[str]) -> Dict[str, str]:
@@ -140,33 +148,36 @@ def apply_plugin_config_templates(config: Dict[str, Any], repo_root: Path) -> No
     config["plugins"] = merged_plugins
 
 
-def resolve_enum_value(raw_value: Any, enum_type: Any) -> str:
+def _resolve_token(raw_value: Any, tokens: Any, kind: str) -> str:
     if type(raw_value) is not str:
         raise RuntimeError(
-            f"invalid enum value type enum={enum_type.__name__} "
-            f"type={type(raw_value).__name__}"
+            f"invalid {kind} value type type={type(raw_value).__name__}"
         )
     token = raw_value.strip()
     if "." in token:
-        enum_name, token = token.rsplit(".", 1)
-        if enum_name != enum_type.__name__:
+        prefix, token = token.rsplit(".", 1)
+        if prefix != kind:
             raise RuntimeError(
-                f"wrong OCCID enum type expected={enum_type.__name__} value={raw_value}"
+                f"wrong {kind} prefix expected={kind} value={raw_value}"
             )
-    if token not in enum_type.__members__:
+    table = tokens if isinstance(tokens, dict) else {name: name for name in tokens}
+    if token not in table:
         raise RuntimeError(
-            f"unknown OCCID enum value enum={enum_type.__name__} value={raw_value}"
+            f"unknown {kind} value value={raw_value}"
         )
     return token
 
 
-def resolve_enum_list(raw_values: Any, enum_type: Any) -> list[str]:
+def resolve_enum_value(raw_value: Any, tokens: Any, kind: str) -> str:
+    return _resolve_token(raw_value, tokens, kind)
+
+
+def resolve_enum_list(raw_values: Any, tokens: Any, kind: str) -> list[str]:
     if type(raw_values) is not list:
         raise RuntimeError(
-            f"invalid enum list type enum={enum_type.__name__} "
-            f"type={type(raw_values).__name__}"
+            f"invalid {kind} list type type={type(raw_values).__name__}"
         )
-    return [resolve_enum_value(raw_value, enum_type) for raw_value in raw_values]
+    return [_resolve_token(raw_value, tokens, kind) for raw_value in raw_values]
 
 
 def resolve_vehicle_config(config: Dict[str, Any]) -> Dict[str, str] | None:
@@ -175,11 +186,11 @@ def resolve_vehicle_config(config: Dict[str, Any]) -> Dict[str, str] | None:
         return None
     if type(vehicle) is not dict:
         raise RuntimeError(f"invalid vehicle config type {type(vehicle).__name__}")
-    vehicle["autopilot"] = resolve_enum_value(vehicle["autopilot"], occid.AutopilotType)
+    vehicle["autopilot"] = resolve_enum_value(vehicle["autopilot"], AUTOPILOT_TOKENS, "Autopilot")
     if "airframe" not in vehicle:
         raise RuntimeError("vehicle config missing airframe")
-    vehicle["airframe"] = resolve_enum_value(vehicle["airframe"], occid.AirframeType)
-    vehicle["telem_type"] = resolve_enum_value(vehicle["telem_type"], occid.TelemetryType)
+    vehicle["airframe"] = resolve_enum_value(vehicle["airframe"], AIRFRAME_TOKENS, "Airframe")
+    vehicle["telem_type"] = resolve_enum_value(vehicle["telem_type"], TELEMETRY_TOKENS, "Telemetry")
     return vehicle
 
 
@@ -194,8 +205,8 @@ def resolve_plugin_supports(config: Dict[str, Any]) -> None:
                 f"invalid supports config type plugin={plugin_entry['plugin']} "
                 f"type={type(supports).__name__}"
             )
-        supports["autopilot"] = resolve_enum_list(supports["autopilot"], occid.AutopilotType)
-        supports["telem_type"] = resolve_enum_list(supports["telem_type"], occid.TelemetryType)
+        supports["autopilot"] = resolve_enum_list(supports["autopilot"], AUTOPILOT_TOKENS, "Autopilot")
+        supports["telem_type"] = resolve_enum_list(supports["telem_type"], TELEMETRY_TOKENS, "Telemetry")
 
 
 def plugin_supports_vehicle(plugin_cfg: Dict[str, Any], vehicle: Dict[str, str]) -> bool:

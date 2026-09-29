@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Liftoff simulator endpoint adapter publishing OCCID UAV state."""
+"""Liftoff simulator endpoint adapter publishing MAVLink-shaped UAV state."""
 
 from __future__ import annotations
 
@@ -9,11 +9,24 @@ import struct
 import threading
 import time
 import traceback
+from dataclasses import replace
 from typing import Any, Dict
 
+from pymavlink import mavutil
+
 from lib.common import apply_cfg, build_request_topic, build_response_topic, build_state_scheduler_topics, build_topic_base
-from lib.occid_bus import decode_occid_command, occid, pack_occid
-from lib.occid_topics import ATTITUDE, FLIGHT_CONTROL, LOCATION, POWER, RC_TELEMETRY
+from lib.lattice_bus import decode_command, pack_record
+from lib.bus_topics import ATTITUDE, FLIGHT_CONTROL, LOCATION, POWER, RC_TELEMETRY
+from lib.mavlink_models import (
+    Altitude,
+    Attitude as AttitudeRecord,
+    BatteryStatus,
+    ControlAxes,
+    Heartbeat,
+    NavigationValidity,
+    Readiness,
+    VehicleControl,
+)
 from lib.plugin_base import PluginBase
 from lib.state_scheduler import StateScheduler
 
@@ -65,35 +78,40 @@ class LiftoffInterface(PluginBase):
 
     def _publish_model(self, key: str, model: Any) -> None:
         if key in self.state_scheduler.topics:
-            self.state_scheduler.update(key, pack_occid(model))
+            self.state_scheduler.update(key, pack_record(model))
 
     def _publish_flight_state(self, in_air: bool) -> None:
-        nav = occid.NavigationValidity(
+        del in_air  # in-air derives from the published relative altitude
+        nav = NavigationValidity(
             local_position_ok=self.fc_connected,
             global_position_ok=False,
             home_position_ok=False,
         )
-        readiness = occid.NavReadinessState(
-            local_position_ok=nav.local_position_ok,
-            global_position_ok=False,
-            home_position_ok=False,
+        readiness = Readiness(
             armable=False,
-            mode_name="LIFTOFF_SIM",
-            mode_problems=[],
-            health_problems=[],
+            arm_ready=False,
+            takeoff_ready=False,
+            problems=("LIFTOFF_SIM",),
         )
         self._publish_model(
             FLIGHT_CONTROL,
-            occid.FlightControlState(
-                in_air=bool(in_air),
-                standard_mode=occid.StandardFlightMode.NON_STANDARD,
-                navigation_validity=nav,
+            VehicleControl(
+                heartbeat=Heartbeat(
+                    type=mavutil.mavlink.MAV_TYPE_GENERIC,
+                    autopilot=mavutil.mavlink.MAV_AUTOPILOT_GENERIC,
+                    base_mode=0,
+                    custom_mode=0,
+                    system_status=mavutil.mavlink.MAV_STATE_STANDBY,
+                    mode_name="LIFTOFF_SIM",
+                    standard_mode="NON_STANDARD",
+                ),
                 readiness=readiness,
+                navigation_validity=nav,
             ),
         )
 
     def _handle_command(self, request: Dict[str, Any]) -> None:
-        request_id, command = decode_occid_command(request)
+        request_id, command = decode_command(request)
         self.enqueue_response(
             request_id,
             type(command).__name__,
@@ -152,38 +170,34 @@ class LiftoffInterface(PluginBase):
                 self._publish_flight_state(in_air)
                 self._publish_model(
                     LOCATION,
-                    occid.LocationState(
-                        inertial_frame=occid.InertialReferenceFrame.NED,
-                        body_frame=occid.BodyReferenceFrame.FRD,
-                        altitude=occid.AltitudeState(
-                            relative_m=altitude_up_m,
-                            relative_datum=occid.AltitudeDatum.RELATIVE,
-                        ),
-                    ),
+                    Altitude(altitude_relative=altitude_up_m),
                 )
                 self._publish_model(
                     ATTITUDE,
-                    occid.EulerAngles(
+                    AttitudeRecord(
                         roll_rad=roll,
                         pitch_rad=pitch,
                         yaw_rad=yaw,
-                        body_frame=occid.BodyReferenceFrame.FRD,
-                        reference_frame=occid.InertialReferenceFrame.NED,
+                        rollspeed_rad_s=0.0,
+                        pitchspeed_rad_s=0.0,
+                        yawspeed_rad_s=0.0,
                     ),
                 )
                 self._publish_model(
                     RC_TELEMETRY,
-                    occid.ControlAxisSet(
+                    ControlAxes(
                         roll=roll_input,
                         pitch=pitch_input,
                         yaw=yaw_input,
                         throttle=throttle_input,
-                        aux=[],
+                        aux=(),
                     ),
                 )
+                if battery_remaining is not None and battery_remaining <= 1.0:
+                    battery_remaining *= 100.0
                 self._publish_model(
                     POWER,
-                    occid.ElectricalResourceState(
+                    BatteryStatus(
                         voltage_v=battery_voltage,
                         remaining_pct=battery_remaining,
                     ),

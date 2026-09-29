@@ -5,9 +5,9 @@ cfg:
   is_interface: true
   supports:
     autopilot:
-    - AutopilotType.CUSTOM
+    - Autopilot.CUSTOM
     telem_type:
-    - TelemetryType.MANUAL_ENTRY
+    - Telemetry.MANUAL_ENTRY
   telemetry_host: 0.0.0.0
   telemetry_port: 9001
   socket_timeout_s: 0.2

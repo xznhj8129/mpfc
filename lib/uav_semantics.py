@@ -1,41 +1,36 @@
-"""MPFC-local mapping names for generic OCCID UAV Commands.
+"""Endpoint command semantics that stay local to MPFC.
 
-These are adapter routing conventions, not a second semantic model. OCCID owns
-the Command families; MPFC maps their typed operations and operands to endpoint
-mechanics.
+Command identity comes from MAVLink (``MAV_CMD_*`` in
+:mod:`lib.mavlink_models`, sourced from pymavlink).  This module holds the
+small routing vocabulary MPFC still needs on top of MAVLink: direct-control
+process names, the takeoff-altitude parameter id, and the standard flight-mode
+words the adapters translate into vehicle-native modes.  None of it is a
+shared model; it is endpoint mechanics (LOCAL).
 """
 from __future__ import annotations
-
-from typing import Any
-
-
-PROPERTY_ARMED = "armed"
-PROPERTY_STANDARD_FLIGHT_MODE = "standard_flight_mode"
-PROPERTY_NATIVE_FLIGHT_MODE_NAME = "native_flight_mode_name"
-PROPERTY_NATIVE_FLIGHT_MODE_CODE = "native_flight_mode_code"
-
-PARAM_TAKEOFF_ALTITUDE_M = "takeoff_altitude_m"
-
-PROCESS_TAKEOFF = "takeoff"
-PROCESS_LAND = "land"
-PROCESS_RETURN_TO_LAUNCH = "return_to_launch"
-PROCESS_DIRECT_CONTROL = "direct_control"
-PROCESS_DIRECT_CONTROL_ATTITUDE = "direct_control.attitude_thrust"
-PROCESS_DIRECT_CONTROL_MANUAL = "direct_control.manual_axis"
 
 DIRECT_CONTROL_ATTITUDE = "ATTITUDE_THRUST"
 DIRECT_CONTROL_MANUAL = "MANUAL_AXIS"
 
+# Standard autopilot parameter for takeoff altitude (ArduPilot/PX4 name).
+PARAM_TAKEOFF_ALTITUDE = "MIS_TAKEOFF_ALT"
 
-def metadata_scalar(value: Any) -> Any:
-    """Return the one populated scalar from an OCCID MetadataValue."""
-    if value is None:
-        return None
-    populated = [
-        getattr(value, name)
-        for name in ("str", "int", "float", "bool")
-        if getattr(value, name) is not None
-    ]
-    if len(populated) != 1:
-        raise ValueError("MetadataValue must contain exactly one scalar value")
-    return populated[0]
+STANDARD_MODES = (
+    "POSITION_HOLD",
+    "MISSION",
+    "ALTITUDE_HOLD",
+    "CRUISE",
+    "SAFE_RECOVERY",
+    "LAND",
+    "TAKEOFF",
+    "ORBIT",
+    "EXTERNAL_CONTROL",
+    "NON_STANDARD",
+)
+
+
+def standard_mode_name(value: object) -> str:
+    name = str(getattr(value, "name", value)).strip().upper()
+    if name not in STANDARD_MODES:
+        raise ValueError(f"unknown standard flight mode {value!r}")
+    return name

@@ -6,9 +6,9 @@ my_name: uav1
 runtime_mode: resident
 
 vehicle:
-  autopilot: AutopilotType.PX4
-  airframe: AirframeType.COPTER
-  telem_type: TelemetryType.MAVLINK
+  autopilot: Autopilot.PX4
+  airframe: Airframe.COPTER
+  telem_type: Telemetry.MAVLINK
 
 core:
   name: execution_host
@@ -30,8 +30,8 @@ plugins:
     id: hivelink
     rx_poll_interval: 0.05
     bus_poll_interval: 0.05
-    in_topic: OCCID/IN
-    out_topic: OCCID/OUT
+    in_topic: LATTICE/IN
+    out_topic: LATTICE/OUT
     link_config:
       my_name: uav1
       my_id: 0
