@@ -1,0 +1,14 @@
+[image]
+hostname=mpfc
+target=pi-zero-2w
+
+[components]
+wfb-ng=no
+
+[wfb-ng]
+driver=rtl8812eu
+wifi_channel=161
+wifi_region=CA
+
+[provisioning]
+directory=

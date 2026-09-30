@@ -1,0 +1,456 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd -- "${SCRIPT_DIR}/../.." && pwd)
+# shellcheck source=defaults.env
+source "${SCRIPT_DIR}/defaults.env"
+WORK_ROOT=${SCRIPT_DIR}/.build
+CACHE_ROOT=${MPFC_BUILD_CACHE:-${SCRIPT_DIR}/.cache}
+DIST_ROOT=${SCRIPT_DIR}/dist
+
+# Pinned Raspberry Pi OS Lite 64-bit release, 18 Jun 2026.
+DEFAULT_BASE_URL=https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-06-19/2026-06-18-raspios-trixie-arm64-lite.img.xz
+DEFAULT_BASE_SHA256=acff736ca7945e3b305f07cda4abdb870910e12634991da69783611756e381b3
+DEFAULT_IMAGE_SIZE=4G
+
+BASE_IMAGE=
+BASE_URL=${DEFAULT_BASE_URL}
+BASE_SHA256=${DEFAULT_BASE_SHA256}
+IMAGE_SIZE=${DEFAULT_IMAGE_SIZE}
+OUTPUT=${DIST_ROOT}/mpfc-rpi-zero2w.img
+HIVELINK_PATH=$(cd -- "${REPO_ROOT}/.." && pwd)/hivelink
+COMPRESS=0
+
+usage() {
+    cat <<EOF_USAGE
+Usage: sudo ${0##*/} [options]
+
+Build model:
+  1. prepare/cache the Raspberry Pi OS + system package layer once;
+  2. cross-stage ARM64 Python dependencies on the x86 host;
+  3. install HiveLink and the official Lattice SDK as normal target-venv packages;
+  4. overlay MPFC and configuration with host rsync;
+  5. use QEMU system emulation only for optional ARM runtime acceptance.
+
+Options:
+  --base-image PATH     Use an already downloaded .img or .img.xz
+  --base-url URL        Override the pinned Raspberry Pi OS Lite URL
+  --base-sha256 SHA     Expected SHA256 of the compressed/raw base image
+  --hivelink-path PATH  HiveLink build-input checkout (default: sibling ../hivelink)
+  --output PATH         Output raw image
+  --size SIZE           Final SD image size, default 4G
+  --compress            Also create OUTPUT.xz
+  -h, --help            Show this help
+EOF_USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --base-image) BASE_IMAGE=$2; shift 2 ;;
+        --base-url) BASE_URL=$2; shift 2 ;;
+        --base-sha256) BASE_SHA256=$2; shift 2 ;;
+        --hivelink-path) HIVELINK_PATH=$2; shift 2 ;;
+        --output) OUTPUT=$2; shift 2 ;;
+        --size) IMAGE_SIZE=$2; shift 2 ;;
+        --compress) COMPRESS=1; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+if [[ ${EUID} -ne 0 ]]; then
+    echo "build-image needs root for loop-mounted raw images" >&2
+    exit 1
+fi
+
+for cmd in curl xz sha256sum losetup mount umount mountpoint rsync truncate realpath git parted e2fsck resize2fs openssl python3 awk sed find cp sync stat chown chmod; do
+    command -v "${cmd}" >/dev/null || { echo "missing host command: ${cmd}" >&2; exit 1; }
+done
+python3 -m pip --version >/dev/null 2>&1 || {
+    echo "host python3-pip is required for ARM64 wheel staging and local package installation" >&2
+    exit 1
+}
+
+for path in "${REPO_ROOT}" "${HIVELINK_PATH}"; do
+    [[ -d ${path} ]] || { echo "missing source checkout: ${path}" >&2; exit 1; }
+done
+[[ -f ${HIVELINK_PATH}/setup.py ]] || { echo "--hivelink-path does not look like the HiveLink repository: ${HIVELINK_PATH}" >&2; exit 1; }
+[[ -f ${REPO_ROOT}/requirements-runtime.txt ]] || { echo "missing MPFC runtime requirements" >&2; exit 1; }
+
+mkdir -p "${WORK_ROOT}" "${CACHE_ROOT}" "${DIST_ROOT}" "$(dirname -- "${OUTPUT}")"
+rm -rf "${WORK_ROOT:?}"/*
+
+if [[ -z ${BASE_IMAGE} ]]; then
+    BASE_IMAGE=${CACHE_ROOT}/$(basename -- "${BASE_URL}")
+    if [[ ! -f ${BASE_IMAGE} ]]; then
+        echo "Downloading pinned Raspberry Pi OS Lite image..."
+        curl -fL --retry 3 -o "${BASE_IMAGE}.part" "${BASE_URL}"
+        mv "${BASE_IMAGE}.part" "${BASE_IMAGE}"
+    fi
+fi
+
+actual_sha=$(sha256sum "${BASE_IMAGE}" | awk '{print $1}')
+if [[ -n ${BASE_SHA256} && ${actual_sha} != ${BASE_SHA256} ]]; then
+    echo "base image SHA256 mismatch" >&2
+    echo "expected: ${BASE_SHA256}" >&2
+    echo "actual:   ${actual_sha}" >&2
+    exit 1
+fi
+
+LOOP=
+ROOT_MNT=${WORK_ROOT}/root
+BOOT_MNT=${ROOT_MNT}/boot/firmware
+cleanup_mounts() {
+    set +e
+    mountpoint -q "${ROOT_MNT}/dev/pts" && umount "${ROOT_MNT}/dev/pts"
+    mountpoint -q "${ROOT_MNT}/dev" && umount "${ROOT_MNT}/dev"
+    mountpoint -q "${ROOT_MNT}/proc" && umount "${ROOT_MNT}/proc"
+    mountpoint -q "${ROOT_MNT}/sys" && umount "${ROOT_MNT}/sys"
+    mountpoint -q "${BOOT_MNT}" && umount "${BOOT_MNT}"
+    mountpoint -q "${ROOT_MNT}" && umount "${ROOT_MNT}"
+    [[ -n ${LOOP} ]] && losetup -d "${LOOP}" 2>/dev/null || true
+    LOOP=
+}
+
+return_host_ownership() {
+    set +e
+    if [[ -n ${SUDO_UID:-} && -n ${SUDO_GID:-} && ${SUDO_UID} != 0 ]]; then
+        chown -R "${SUDO_UID}:${SUDO_GID}" "${WORK_ROOT}" "${CACHE_ROOT}" "${DIST_ROOT}" 2>/dev/null || true
+    fi
+}
+
+cleanup_all() {
+    cleanup_mounts
+    return_host_ownership
+}
+trap cleanup_all EXIT INT TERM
+
+mount_image() {
+    local image=$1
+    mkdir -p "${ROOT_MNT}"
+    LOOP=$(losetup --find --show --partscan "${image}")
+    for _ in {1..20}; do
+        [[ -b ${LOOP}p1 && -b ${LOOP}p2 ]] && break
+        sleep 0.1
+    done
+    [[ -b ${LOOP}p1 && -b ${LOOP}p2 ]] || { echo "image partitions did not appear" >&2; exit 1; }
+    mount "${LOOP}p2" "${ROOT_MNT}"
+    mkdir -p "${BOOT_MNT}"
+    mount "${LOOP}p1" "${BOOT_MNT}"
+}
+
+assert_meta() {
+    local path=$1
+    local expected=$2
+    local actual
+    actual=$(stat -c '%u:%g:%a' "${ROOT_MNT}${path}")
+    [[ ${actual} == "${expected}" ]] || {
+        echo "invalid appliance metadata: ${path} expected=${expected} actual=${actual}" >&2
+        exit 1
+    }
+}
+
+prepare_key=$(
+    {
+        printf 'base_sha256=%s\n' "${actual_sha}"
+        printf 'image_size=%s\n' "${IMAGE_SIZE}"
+        sha256sum "${SCRIPT_DIR}/install-rootfs"
+    } | sha256sum | awk '{print $1}'
+)
+PREPARED_IMAGE=${CACHE_ROOT}/prepared-${prepare_key}.img
+
+if [[ ! -f ${PREPARED_IMAGE} ]]; then
+    echo "Preparing Raspberry Pi OS system dependency layer (one-time cache miss)..."
+    command -v chroot >/dev/null || { echo "missing host command: chroot" >&2; exit 1; }
+    [[ -x /usr/bin/qemu-aarch64-static ]] || {
+        echo "system-layer cache miss requires qemu-aarch64-static" >&2
+        echo "install: sudo apt install qemu-user-static binfmt-support" >&2
+        exit 1
+    }
+    [[ -r /proc/sys/fs/binfmt_misc/qemu-aarch64 ]] || {
+        echo "qemu-aarch64 binfmt handler is not registered" >&2
+        echo "enable: sudo systemctl restart systemd-binfmt" >&2
+        exit 1
+    }
+
+    PREP_WORK=${WORK_ROOT}/prepared.img
+    case "${BASE_IMAGE}" in
+        *.xz) xz -dc "${BASE_IMAGE}" > "${PREP_WORK}" ;;
+        *) cp --reflink=auto --sparse=always "${BASE_IMAGE}" "${PREP_WORK}" ;;
+    esac
+
+    truncate -s "${IMAGE_SIZE}" "${PREP_WORK}"
+    parted -s "${PREP_WORK}" resizepart 2 100%
+    LOOP=$(losetup --find --show --partscan "${PREP_WORK}")
+    for _ in {1..20}; do
+        [[ -b ${LOOP}p1 && -b ${LOOP}p2 ]] && break
+        sleep 0.1
+    done
+    [[ -b ${LOOP}p1 && -b ${LOOP}p2 ]] || { echo "base image partitions did not appear" >&2; exit 1; }
+    set +e
+    e2fsck -f -y "${LOOP}p2"
+    fsck_status=$?
+    set -e
+    (( fsck_status <= 1 )) || { echo "e2fsck failed with status ${fsck_status}" >&2; exit "${fsck_status}"; }
+    resize2fs "${LOOP}p2"
+    losetup -d "${LOOP}"
+    LOOP=
+
+    mount_image "${PREP_WORK}"
+    cp /usr/bin/qemu-aarch64-static "${ROOT_MNT}/usr/bin/qemu-aarch64-static"
+    cp "${SCRIPT_DIR}/install-rootfs" "${ROOT_MNT}/tmp/mpfc-install-rootfs"
+    chmod 0755 "${ROOT_MNT}/tmp/mpfc-install-rootfs"
+
+    RESOLV_BACKUP=${WORK_ROOT}/resolv.conf.image
+    rm -f "${RESOLV_BACKUP}"
+    cp -a "${ROOT_MNT}/etc/resolv.conf" "${RESOLV_BACKUP}" 2>/dev/null || true
+    rm -f "${ROOT_MNT}/etc/resolv.conf"
+    cp -L /etc/resolv.conf "${ROOT_MNT}/etc/resolv.conf"
+    mount --bind /dev "${ROOT_MNT}/dev"
+    mount --bind /dev/pts "${ROOT_MNT}/dev/pts"
+    mount -t proc proc "${ROOT_MNT}/proc"
+    mount -t sysfs sys "${ROOT_MNT}/sys"
+
+    chroot "${ROOT_MNT}" /bin/bash -c 'MPFC_PI_PASSWORD=mpfc /tmp/mpfc-install-rootfs'
+
+    rm -f "${ROOT_MNT}/tmp/mpfc-install-rootfs"
+    rm -f "${ROOT_MNT}/usr/bin/qemu-aarch64-static"
+    rm -f "${ROOT_MNT}/etc/resolv.conf"
+    if [[ -e ${RESOLV_BACKUP} || -L ${RESOLV_BACKUP} ]]; then
+        cp -a "${RESOLV_BACKUP}" "${ROOT_MNT}/etc/resolv.conf"
+    fi
+    sync
+    cleanup_mounts
+
+    mv "${PREP_WORK}" "${PREPARED_IMAGE}.tmp"
+    mv "${PREPARED_IMAGE}.tmp" "${PREPARED_IMAGE}"
+    echo "Cached prepared system layer: ${PREPARED_IMAGE}"
+else
+    echo "Reusing cached Raspberry Pi OS system dependency layer."
+fi
+
+WORK_IMAGE=${WORK_ROOT}/root.img
+cp --reflink=auto --sparse=always "${PREPARED_IMAGE}" "${WORK_IMAGE}"
+mount_image "${WORK_IMAGE}"
+
+# Cheap application/configuration overlay. The Lattice SDK and HiveLink are
+# package build inputs and are never copied into runtime source paths.
+mkdir -p "${ROOT_MNT}/opt/mpfc"
+RSYNC_EXCLUDES=(
+    --exclude=.git
+    --exclude='__pycache__'
+    --exclude='*.pyc'
+    --exclude='.venv'
+    --exclude='deploy/rpi/.build'
+    --exclude='deploy/rpi/.cache'
+    --exclude='deploy/rpi/dist'
+    --exclude='deploy/rpi/.vm'
+)
+rsync -a --delete "${RSYNC_EXCLUDES[@]}" "${REPO_ROOT}/" "${ROOT_MNT}/opt/mpfc/"
+
+# Repository rootfs overlays are system files. Never preserve the host checkout
+# uid/gid or writable mode bits here: doing so can make sudo reject
+# /etc/sudoers.d and can leave SSH or systemd configuration unsafe or invalid.
+# Normalize the whole overlay, then restore the small set of intentional
+# executable/restricted modes below.
+rsync -a --chown=0:0 --chmod=D0755,F0644 \
+    "${REPO_ROOT}/deploy/rpi/rootfs/" "${ROOT_MNT}/"
+
+# Remove Raspberry Pi OS interactive first-user state in the cheap final layer.
+# The mpfc account is already provisioned in the prepared system layer.
+rm -f "${ROOT_MNT}/etc/ssh/sshd_config.d/rename_user.conf"
+rm -f "${ROOT_MNT}/etc/sudoers.d/010_wiz-nopasswd"
+rm -rf "${ROOT_MNT}/var/lib/userconf-pi"
+
+# These services are irrelevant to the Zero 2 W companion appliance. Masking
+# them here avoids invalidating the cached apt/system layer.
+for unit in rpi-eeprom-update.service avahi-daemon.service udisks2.service sshswitch.service; do
+    ln -sfn /dev/null "${ROOT_MNT}/etc/systemd/system/${unit}"
+done
+
+chmod 0755 "${ROOT_MNT}/opt/mpfc/deploy/rpi/run-mpfc" "${ROOT_MNT}/opt/mpfc/deploy/rpi/configure-fc"
+chmod 0755 "${ROOT_MNT}/usr/local/sbin/mpfc-runtime-config"
+chmod 0755 "${ROOT_MNT}/etc/sudoers.d"
+chmod 0440 "${ROOT_MNT}/etc/sudoers.d/mpfc"
+chown root:root \
+    "${ROOT_MNT}/etc/sudoers.d" \
+    "${ROOT_MNT}/etc/sudoers.d/mpfc" \
+    "${ROOT_MNT}/etc/ssh/sshd_config.d/00-mpfc.conf" \
+    "${ROOT_MNT}/etc/systemd/system/mpfc.service" \
+    "${ROOT_MNT}/etc/systemd/system/mpfc-runtime-config.service" \
+    "${ROOT_MNT}/usr/local/sbin/mpfc-runtime-config"
+
+# Build the complete Python requirement input. crcmod is deliberately supplied
+# by Debian's ARM64 python3-crcmod package in the cached system layer because it
+# contains a target-native extension; all wheel-backed dependencies are staged
+# by host pip without running ARM Python.
+COMBINED_REQUIREMENTS=${WORK_ROOT}/python-requirements.txt
+cat "${REPO_ROOT}/requirements-runtime.txt" > "${COMBINED_REQUIREMENTS}"
+if [[ -f ${HIVELINK_PATH}/requirements.txt ]]; then
+    awk '
+        /^[[:space:]]*($|#)/ { next }
+        /^[[:space:]]*crcmod([[:space:]<>=!~].*)?$/ { next }
+        { print }
+    ' "${HIVELINK_PATH}/requirements.txt" >> "${COMBINED_REQUIREMENTS}"
+fi
+
+VENV_SITE=$(find "${ROOT_MNT}/opt/mpfc/.venv/lib" -mindepth 2 -maxdepth 2 -type d -name site-packages | head -n 1)
+[[ -n ${VENV_SITE} ]] || { echo "prepared image is missing MPFC venv site-packages" >&2; exit 1; }
+PYTHON_DIR=$(basename -- "$(dirname -- "${VENV_SITE}")")
+PYTHON_VERSION=${PYTHON_DIR#python}
+[[ ${PYTHON_VERSION} =~ ^3\.[0-9]+$ ]] || { echo "unable to derive target Python version from ${VENV_SITE}" >&2; exit 1; }
+
+python_key=$(
+    {
+        printf 'python_version=%s\n' "${PYTHON_VERSION}"
+        printf 'platform=manylinux2014_aarch64\n'
+        cat "${COMBINED_REQUIREMENTS}"
+        sha256sum "${SCRIPT_DIR}/stage-python"
+    } | sha256sum | awk '{print $1}'
+)
+PYTHON_CACHE=${CACHE_ROOT}/python-${python_key}
+if [[ ! -f ${PYTHON_CACHE}/.complete ]]; then
+    echo "Cross-staging ARM64 Python dependencies on host..."
+    rm -rf "${PYTHON_CACHE}.tmp"
+    bash "${SCRIPT_DIR}/stage-python" "${COMBINED_REQUIREMENTS}" "${PYTHON_CACHE}.tmp" "${PYTHON_VERSION}"
+    touch "${PYTHON_CACHE}.tmp/.complete"
+    rm -rf "${PYTHON_CACHE}"
+    mv "${PYTHON_CACHE}.tmp" "${PYTHON_CACHE}"
+else
+    echo "Reusing cached ARM64 Python dependency layer."
+fi
+
+rsync -a --delete --exclude=.complete "${PYTHON_CACHE}/" "${VENV_SITE}/"
+
+# HiveLink is a pure-Python checkout; the official Lattice SDK is staged with
+# the rest of the cross-built ARM64 dependency layer above, so install only the
+# checkout here and never let host-native resolution overwrite the staged
+# target wheels.
+echo "Installing HiveLink package into target environment..."
+python3 -m pip install \
+    --target "${VENV_SITE}" \
+    --no-deps \
+    --no-compile \
+    --upgrade \
+    "${HIVELINK_PATH}"
+
+# Final appliance identity and runtime configuration are host-written and cheap.
+MPFC_UID=$(awk -F: '$1 == "mpfc" {print $3; exit}' "${ROOT_MNT}/etc/passwd")
+MPFC_GID=$(awk -F: '$1 == "mpfc" {print $4; exit}' "${ROOT_MNT}/etc/passwd")
+[[ -n ${MPFC_UID} && -n ${MPFC_GID} ]] || { echo "prepared image is missing mpfc account" >&2; exit 1; }
+PASSWORD_HASH=$(openssl passwd -6 "${MPFC_PI_PASSWORD}")
+sed -i -E "s#^mpfc:[^:]*:#mpfc:${PASSWORD_HASH}:#" "${ROOT_MNT}/etc/shadow"
+
+install -d -o root -g root -m 0755 "${ROOT_MNT}/etc/mpfc"
+cat > "${ROOT_MNT}/etc/mpfc/runtime.env" <<EOF_RUNTIME
+MPFC_CONFIG=/opt/mpfc/flight_cores/execution_host/config_appliance.yaml
+MPFC_NODE_NAME=${MPFC_NODE_NAME}
+MPFC_CONTROL_NODE=${MPFC_CONTROL_NODE}
+MPFC_CONTROL_HOST=${MPFC_PI_CONTROL_IP}
+MPFC_HIVELINK_PORT=${MPFC_HIVELINK_PORT}
+MPFC_MAVLINK_CONNECTION=${MPFC_PI_PHYSICAL_MAVLINK_CONNECTION}
+PYTHONUNBUFFERED=1
+EOF_RUNTIME
+chown root:root "${ROOT_MNT}/etc/mpfc/runtime.env"
+chmod 0644 "${ROOT_MNT}/etc/mpfc/runtime.env"
+
+install -d -o root -g root -m 0700 "${ROOT_MNT}/etc/NetworkManager/system-connections"
+cat > "${ROOT_MNT}/etc/NetworkManager/system-connections/mpfc-qemu.nmconnection" <<EOF_NETWORK
+[connection]
+id=mpfc-qemu
+type=ethernet
+autoconnect=true
+
+[ethernet]
+
+[ipv4]
+method=manual
+address1=${MPFC_PI_GUEST_IP}/${MPFC_PI_PREFIX}
+never-default=true
+
+[ipv6]
+method=disabled
+
+[proxy]
+EOF_NETWORK
+chown root:root "${ROOT_MNT}/etc/NetworkManager/system-connections/mpfc-qemu.nmconnection"
+chmod 0600 "${ROOT_MNT}/etc/NetworkManager/system-connections/mpfc-qemu.nmconnection"
+
+if ! grep -Eq '^enable_uart=1$' "${BOOT_MNT}/config.txt"; then
+    printf '\nenable_uart=1\n' >> "${BOOT_MNT}/config.txt"
+fi
+
+install -d -o root -g root -m 0755 "${ROOT_MNT}/etc/systemd/system/multi-user.target.wants"
+ln -sfn ../mpfc-runtime-config.service "${ROOT_MNT}/etc/systemd/system/multi-user.target.wants/mpfc-runtime-config.service"
+ln -sfn ../mpfc.service "${ROOT_MNT}/etc/systemd/system/multi-user.target.wants/mpfc.service"
+chown -R "${MPFC_UID}:${MPFC_GID}" "${ROOT_MNT}/opt/mpfc"
+
+# Refuse to emit an image with broken privilege/config metadata or obsolete
+# runtime source-path shims.
+assert_meta /etc/sudoers.d 0:0:755
+assert_meta /etc/sudoers.d/mpfc 0:0:440
+assert_meta /etc/ssh/sshd_config.d/00-mpfc.conf 0:0:644
+assert_meta /etc/systemd/system/mpfc.service 0:0:644
+assert_meta /etc/systemd/system/mpfc-runtime-config.service 0:0:644
+assert_meta /usr/local/sbin/mpfc-runtime-config 0:0:755
+assert_meta /etc/mpfc/runtime.env 0:0:644
+[[ -d ${VENV_SITE}/anduril ]] || { echo "installed Lattice SDK missing from target environment" >&2; exit 1; }
+[[ -d ${VENV_SITE}/hivelink ]] || { echo "installed HiveLink package missing from target environment" >&2; exit 1; }
+[[ ! -e ${VENV_SITE}/hivelink-source.pth ]] || { echo "obsolete HiveLink source path registration present" >&2; exit 1; }
+[[ ! -e ${ROOT_MNT}/opt/hivelink ]] || { echo "obsolete /opt/hivelink source tree present" >&2; exit 1; }
+
+# The same raw image boots real Zero 2 W hardware through Raspberry Pi firmware.
+# QEMU direct-boots the Pi 3 family kernel/DTB copied beside it.
+[[ -f ${BOOT_MNT}/kernel8.img ]] || { echo "kernel8.img missing from Raspberry Pi OS image" >&2; exit 1; }
+[[ -f ${BOOT_MNT}/bcm2710-rpi-3-b-plus.dtb ]] || { echo "Pi 3B+ DTB missing from Raspberry Pi OS image" >&2; exit 1; }
+OUTPUT=$(realpath -m "${OUTPUT}")
+mkdir -p "$(dirname -- "${OUTPUT}")"
+cp "${BOOT_MNT}/kernel8.img" "${OUTPUT}.kernel8.img"
+cp "${BOOT_MNT}/bcm2710-rpi-3-b-plus.dtb" "${OUTPUT}.raspi3ap.dtb"
+
+sync
+cleanup_mounts
+
+mv "${WORK_IMAGE}" "${OUTPUT}"
+
+source_revision() {
+    local path=$1
+    git -C "${path}" rev-parse HEAD 2>/dev/null || printf 'unknown'
+}
+
+cat > "${OUTPUT}.manifest" <<EOF_MANIFEST
+artifact=$(basename -- "${OUTPUT}")
+built_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+base_url=${BASE_URL}
+base_sha256=${actual_sha}
+image_size=${IMAGE_SIZE}
+prepared_cache_key=${prepare_key}
+python_cache_key=${python_key}
+target_python=${PYTHON_VERSION}
+mpfc_revision=$(source_revision "${REPO_ROOT}")
+lattice_sdk_revision=$(python3 -c "from importlib.metadata import version; print(version(\"anduril-lattice-sdk\"))" 2>/dev/null || printf unknown)
+hivelink_revision=$(source_revision "${HIVELINK_PATH}")
+control_node=${MPFC_CONTROL_NODE}
+control_ip=${MPFC_PI_CONTROL_IP}
+mpfc_node=${MPFC_NODE_NAME}
+mpfc_ip=${MPFC_PI_GUEST_IP}
+network_prefix=${MPFC_PI_PREFIX}
+hivelink_port=${MPFC_HIVELINK_PORT}
+physical_mavlink_default=${MPFC_PI_PHYSICAL_MAVLINK_CONNECTION}
+vm_mavlink_default=${MPFC_PI_VM_MAVLINK_CONNECTION}
+login_user=mpfc
+login_auth=password
+EOF_MANIFEST
+sha256sum "${OUTPUT}" > "${OUTPUT}.sha256"
+
+if [[ ${COMPRESS} -eq 1 ]]; then
+    xz -T0 -c "${OUTPUT}" > "${OUTPUT}.xz"
+    sha256sum "${OUTPUT}.xz" > "${OUTPUT}.xz.sha256"
+fi
+
+echo "Built: ${OUTPUT}"
+echo "System layer: ${PREPARED_IMAGE}"
+echo "Python layer: ${PYTHON_CACHE}"
+echo "Login: mpfc / ${MPFC_PI_PASSWORD}"
+echo "VM: ${SCRIPT_DIR}/pi-vm up --image ${OUTPUT}"

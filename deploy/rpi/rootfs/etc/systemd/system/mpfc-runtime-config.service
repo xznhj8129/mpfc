@@ -1,0 +1,13 @@
+[Unit]
+Description=Load MPFC removable runtime overrides
+DefaultDependencies=no
+After=systemd-udev-trigger.service local-fs.target
+Before=mpfc.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mpfc-runtime-config
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

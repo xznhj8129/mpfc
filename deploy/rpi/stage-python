@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 3 ]]; then
+    echo "usage: ${0##*/} REQUIREMENTS TARGET_DIR PYTHON_VERSION" >&2
+    exit 2
+fi
+
+REQUIREMENTS=$1
+TARGET_DIR=$2
+PYTHON_VERSION=$3
+PYTHON_ABI="cp${PYTHON_VERSION/./}"
+
+[[ -f ${REQUIREMENTS} ]] || { echo "requirements file not found: ${REQUIREMENTS}" >&2; exit 1; }
+command -v python3 >/dev/null || { echo "missing host python3" >&2; exit 1; }
+
+rm -rf "${TARGET_DIR}"
+mkdir -p "${TARGET_DIR}"
+
+# Resolve for the Raspberry Pi ARM64 interpreter while executing pip on the
+# x86 build host. Binary-only is intentional: packages without ARM64 wheels
+# must be handled explicitly as distro/native artifacts instead of silently
+# falling back to an emulated target build.
+python3 -m pip install \
+    --target "${TARGET_DIR}" \
+    --platform manylinux2014_aarch64 \
+    --platform manylinux_2_17_aarch64 \
+    --platform linux_aarch64 \
+    --platform any \
+    --python-version "${PYTHON_VERSION}" \
+    --implementation cp \
+    --abi "${PYTHON_ABI}" \
+    --abi abi3 \
+    --abi none \
+    --only-binary=:all: \
+    --no-compile \
+    --upgrade \
+    -r "${REQUIREMENTS}"

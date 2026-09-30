@@ -1,0 +1,323 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=defaults.env
+source "${SCRIPT_DIR}/defaults.env"
+VM_DIR=${SCRIPT_DIR}/.vm
+DEFAULT_IMAGE=${SCRIPT_DIR}/dist/mpfc-rpi-zero2w.img
+IMAGE=${MPFC_PI_IMAGE:-${DEFAULT_IMAGE}}
+CONTROL_IP=${MPFC_PI_CONTROL_IP}
+GUEST_IP=${MPFC_PI_GUEST_IP}
+GUEST_PREFIX=${MPFC_PI_PREFIX}
+BRIDGE=${MPFC_PI_BRIDGE}
+TAP=${MPFC_PI_TAP}
+
+usage() {
+    cat <<EOF_USAGE
+Usage: ${0##*/} <command> [options]
+
+Configured network:
+  control host  ${CONTROL_IP}/32 (host-only VM route)
+  MPFC guest    ${GUEST_IP}/${GUEST_PREFIX}
+
+Commands:
+  up       Run a disposable Pi VM in the foreground
+  start    Run it in the background
+  stop     Stop a background VM and remove its bridge/tap
+  console  Follow the background VM serial console
+  ssh      SSH directly to ${GUEST_IP} as mpfc
+  logs     Follow mpfc.service logs
+  deploy   Rsync MPFC application source into the guest and restart MPFC
+
+Options used by up/start:
+  --image PATH         Appliance raw image, default ${DEFAULT_IMAGE}
+  --bridge NAME        Linux bridge, default ${BRIDGE}
+  --tap NAME           QEMU tap device, default ${TAP}
+
+Login:
+  user                 mpfc
+  password             MPFC_PI_PASSWORD (default: mpfc)
+EOF_USAGE
+}
+
+[[ $# -gt 0 ]] || { usage >&2; exit 2; }
+COMMAND=$1
+shift
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --image) IMAGE=$2; shift 2 ;;
+        --bridge) BRIDGE=$2; shift 2 ;;
+        --tap) TAP=$2; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+mkdir -p "${VM_DIR}"
+PID_FILE=${VM_DIR}/qemu.pid
+CFG_IMAGE=${VM_DIR}/mpfc-config.img
+CONSOLE_LOG=${VM_DIR}/console.log
+QEMU_DTB=${VM_DIR}/raspi3ap-qemu.dtb
+
+sudo_cmd() {
+    if [[ ${EUID} -eq 0 ]]; then
+        "$@"
+    else
+        command -v sudo >/dev/null || { echo "sudo is required to create the QEMU bridge/tap" >&2; exit 1; }
+        sudo "$@"
+    fi
+}
+
+export SSHPASS=${MPFC_PI_PASSWORD}
+ssh_base=(
+    sshpass -e ssh
+    -o StrictHostKeyChecking=no
+    -o UserKnownHostsFile=/dev/null
+    -o ConnectTimeout=5
+    -o PubkeyAuthentication=no
+    -o PreferredAuthentications=password
+    "mpfc@${GUEST_IP}"
+)
+
+require_sshpass() {
+    command -v sshpass >/dev/null || {
+        echo "missing host command: sshpass" >&2
+        echo "install: sudo apt install sshpass" >&2
+        exit 1
+    }
+}
+
+require_vm_files() {
+    [[ -f ${IMAGE} ]] || {
+        echo "image not found: ${IMAGE}" >&2
+        echo "build it with: sudo ${SCRIPT_DIR}/build-image" >&2
+        exit 1
+    }
+    [[ -f ${IMAGE}.kernel8.img ]] || { echo "QEMU kernel sidecar missing: ${IMAGE}.kernel8.img" >&2; exit 1; }
+    [[ -f ${IMAGE}.raspi3ap.dtb ]] || { echo "QEMU DTB sidecar missing: ${IMAGE}.raspi3ap.dtb" >&2; exit 1; }
+}
+
+ensure_network() {
+    command -v ip >/dev/null || { echo "missing host command: ip" >&2; exit 1; }
+
+    if ! ip link show "${BRIDGE}" >/dev/null 2>&1; then
+        sudo_cmd ip link add name "${BRIDGE}" type bridge
+    fi
+
+    # The host bridge owns one address and one guest route only. It must never
+    # claim the physical LAN prefix used by the real appliance deployment.
+    sudo_cmd ip addr flush dev "${BRIDGE}" scope global
+    sudo_cmd ip addr add "${CONTROL_IP}/32" dev "${BRIDGE}"
+    sudo_cmd ip link set "${BRIDGE}" up
+
+    if ip link show "${TAP}" >/dev/null 2>&1; then
+        sudo_cmd ip link del "${TAP}"
+    fi
+    sudo_cmd ip tuntap add dev "${TAP}" mode tap user "$(id -un)"
+    sudo_cmd ip link set "${TAP}" master "${BRIDGE}"
+    sudo_cmd ip link set "${TAP}" up
+    sudo_cmd ip route replace "${GUEST_IP}/32" dev "${BRIDGE}" src "${CONTROL_IP}"
+}
+
+cleanup_network() {
+    if ip link show "${TAP}" >/dev/null 2>&1; then
+        sudo_cmd ip link del "${TAP}" || true
+    fi
+    if ip link show "${BRIDGE}" >/dev/null 2>&1; then
+        sudo_cmd ip link del "${BRIDGE}" || true
+    fi
+}
+
+make_config_disk() {
+    for cmd in truncate mkfs.vfat mcopy; do
+        command -v "${cmd}" >/dev/null || {
+            echo "missing host command: ${cmd}" >&2
+            echo "install: sudo apt install dosfstools mtools" >&2
+            exit 1
+        }
+    done
+    rm -f "${CFG_IMAGE}"
+    truncate -s 16M "${CFG_IMAGE}"
+    mkfs.vfat -n MPFC_CONFIG "${CFG_IMAGE}" >/dev/null
+    cat > "${VM_DIR}/runtime.env" <<EOF_ENV
+MPFC_NODE_NAME=${MPFC_NODE_NAME}
+MPFC_CONTROL_NODE=${MPFC_CONTROL_NODE}
+MPFC_CONTROL_HOST=${CONTROL_IP}
+MPFC_HIVELINK_PORT=${MPFC_HIVELINK_PORT}
+MPFC_MAVLINK_CONNECTION=${MPFC_PI_VM_MAVLINK_CONNECTION}
+EOF_ENV
+    mcopy -o -i "${CFG_IMAGE}" "${VM_DIR}/runtime.env" ::runtime.env
+}
+
+make_qemu_dtb() {
+    local cmd node compatible
+    local found=0
+
+    for cmd in fdtget fdtput; do
+        command -v "${cmd}" >/dev/null || {
+            echo "missing host command: ${cmd}" >&2
+            echo "install: sudo apt install device-tree-compiler" >&2
+            exit 1
+        }
+    done
+
+    # Modern Raspberry Pi kernels probe the real BCM2835 PM/ASB block that the
+    # QEMU raspi3 model does not faithfully implement. Patch only the QEMU DTB
+    # copy; the physical image and original DTB remain untouched.
+    cp "${IMAGE}.raspi3ap.dtb" "${QEMU_DTB}"
+    while IFS= read -r node; do
+        [[ -n ${node} ]] || continue
+        compatible=$(fdtget -t s "${QEMU_DTB}" "/soc/${node}" compatible 2>/dev/null || true)
+        case " ${compatible} " in
+            *" brcm,bcm2835-pm "*|*" brcm,bcm2835-pm-wdt "*)
+                fdtput -t s "${QEMU_DTB}" "/soc/${node}" status disabled
+                echo "QEMU DTB: disabled unsupported /soc/${node} (${compatible})"
+                found=1
+                break
+                ;;
+        esac
+    done < <(fdtget -l "${QEMU_DTB}" /soc)
+
+    [[ ${found} -eq 1 ]] || { echo "unable to find BCM2835 PM/watchdog node in QEMU DTB" >&2; exit 1; }
+}
+
+qemu_args() {
+    cat <<EOF_ARGS
+-M
+raspi3ap
+-cpu
+cortex-a53
+-smp
+4
+-m
+512M
+-kernel
+${IMAGE}.kernel8.img
+-dtb
+${QEMU_DTB}
+-append
+rw earlyprintk loglevel=8 console=ttyAMA1,115200 dwc_otg.lpm_enable=0 root=/dev/mmcblk0p2 rootfstype=ext4 rootdelay=1 rootwait fsck.repair=yes net.ifnames=0 mpfc.vm=1 systemd.mask=wpa_supplicant.service
+-drive
+file=${IMAGE},format=raw,if=sd,index=0,snapshot=on
+-usb
+-drive
+if=none,id=mpfccfg,format=raw,file=${CFG_IMAGE},readonly=on
+-device
+usb-storage,drive=mpfccfg
+-netdev
+tap,id=net0,ifname=${TAP},script=no,downscript=no
+-device
+usb-net,netdev=net0
+-nographic
+-serial
+mon:stdio
+EOF_ARGS
+}
+
+run_qemu() {
+    local daemonize=$1
+    require_vm_files
+    command -v qemu-system-aarch64 >/dev/null || {
+        echo "missing qemu-system-aarch64" >&2
+        echo "install: sudo apt install qemu-system-arm" >&2
+        exit 1
+    }
+    make_config_disk
+    make_qemu_dtb
+    ensure_network
+    mapfile -t args < <(qemu_args)
+
+    if [[ ${daemonize} == 1 ]]; then
+        local daemon_args=()
+        local i=0
+        while (( i < ${#args[@]} )); do
+            if [[ ${args[i]} == -nographic ]]; then
+                ((i += 1))
+                continue
+            fi
+            if [[ ${args[i]} == -serial ]]; then
+                ((i += 2))
+                continue
+            fi
+            daemon_args+=("${args[i]}")
+            ((i += 1))
+        done
+        rm -f "${CONSOLE_LOG}"
+        qemu-system-aarch64 "${daemon_args[@]}" \
+            -display none -serial "file:${CONSOLE_LOG}" -monitor none \
+            -daemonize -pidfile "${PID_FILE}"
+        echo "MPFC Pi VM started: control ${CONTROL_IP} <-> guest ${GUEST_IP}"
+        echo "Serial console: ${CONSOLE_LOG}"
+        return
+    fi
+
+    echo "MPFC Pi VM: control ${CONTROL_IP} <-> guest ${GUEST_IP} on ${BRIDGE}"
+    trap cleanup_network EXIT INT TERM
+    qemu-system-aarch64 "${args[@]}"
+}
+
+case "${COMMAND}" in
+    up)
+        run_qemu 0
+        ;;
+    start)
+        if [[ -f ${PID_FILE} ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+            echo "VM already running: pid $(cat "${PID_FILE}")" >&2
+            exit 1
+        fi
+        run_qemu 1
+        ;;
+    stop)
+        if [[ -f ${PID_FILE} ]]; then
+            pid=$(cat "${PID_FILE}")
+            if kill -0 "${pid}" 2>/dev/null; then
+                kill "${pid}"
+                for _ in {1..50}; do
+                    kill -0 "${pid}" 2>/dev/null || break
+                    sleep 0.1
+                done
+            fi
+            rm -f "${PID_FILE}"
+        fi
+        cleanup_network
+        ;;
+    console)
+        touch "${CONSOLE_LOG}"
+        exec tail -n 200 -F "${CONSOLE_LOG}"
+        ;;
+    ssh)
+        require_sshpass
+        exec "${ssh_base[@]}"
+        ;;
+    logs)
+        require_sshpass
+        exec "${ssh_base[@]}" journalctl -fu mpfc.service
+        ;;
+    deploy)
+        command -v rsync >/dev/null || { echo "missing rsync" >&2; exit 1; }
+        require_sshpass
+        REPO_ROOT=$(cd -- "${SCRIPT_DIR}/../.." && pwd)
+        RSYNC_SSH="sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o PreferredAuthentications=password"
+        common_excludes=(
+            --exclude=.git
+            --exclude='__pycache__'
+            --exclude='*.pyc'
+            --exclude='.venv'
+            --exclude='deploy/rpi/.build'
+            --exclude='deploy/rpi/.cache'
+            --exclude='deploy/rpi/dist'
+            --exclude='deploy/rpi/.vm'
+        )
+        rsync -az --delete "${common_excludes[@]}" -e "${RSYNC_SSH}" \
+            "${REPO_ROOT}/" "mpfc@${GUEST_IP}:/opt/mpfc/"
+        "${ssh_base[@]}" /opt/mpfc/.venv/bin/python -c "from importlib.metadata import version; print('anduril-lattice-sdk', version('anduril-lattice-sdk'))"
+        "${ssh_base[@]}" sudo -n /usr/bin/systemctl restart mpfc.service
+        ;;
+    *)
+        echo "unknown command: ${COMMAND}" >&2
+        usage >&2
+        exit 2
+        ;;
+esac

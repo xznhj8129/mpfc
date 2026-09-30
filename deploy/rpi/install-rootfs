@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ ${EUID} -ne 0 ]]; then
+    echo "install-rootfs must run as root inside the image chroot" >&2
+    exit 1
+fi
+
+: "${MPFC_PI_PASSWORD:=mpfc}"
+export DEBIAN_FRONTEND=noninteractive
+
+cat > /usr/sbin/policy-rc.d <<'EOF_POLICY'
+#!/bin/sh
+exit 101
+EOF_POLICY
+chmod +x /usr/sbin/policy-rc.d
+trap 'rm -f /usr/sbin/policy-rc.d' EXIT
+
+apt-get update
+apt-get install -y --no-install-recommends \
+    ca-certificates curl git jq rsync tmux htop \
+    iproute2 iputils-ping netcat-openbsd socat tcpdump \
+    python3 python3-venv python3-crcmod \
+    mosquitto mosquitto-clients openssh-server sudo
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+
+if ! id mpfc >/dev/null 2>&1; then
+    useradd --create-home --home-dir /home/mpfc --shell /bin/bash mpfc
+fi
+printf 'mpfc:%s\n' "${MPFC_PI_PASSWORD}" | chpasswd
+usermod -a -G dialout,systemd-journal mpfc
+
+install -d -o mpfc -g mpfc -m 0755 /var/log/mpfc /run/mpfc
+install -d -m 0755 /opt/mpfc
+
+# Create only the target interpreter environment here. Python application
+# dependencies are cross-resolved and staged by the x86 host builder later;
+# ARM pip is deliberately not part of the appliance build path.
+rm -rf /opt/mpfc/.venv
+python3 -m venv --without-pip --system-site-packages /opt/mpfc/.venv
+
+# Raspberry Pi OS first-boot UI and networkd wait logic are not appliance
+# services. The appliance is fully provisioned before it ever boots.
+systemctl mask userconfig.service >/dev/null 2>&1 || true
+systemctl mask systemd-networkd-wait-online.service >/dev/null 2>&1 || true
+systemctl enable ssh.service mosquitto.service >/dev/null
+
+rm -f /usr/sbin/policy-rc.d
+trap - EXIT

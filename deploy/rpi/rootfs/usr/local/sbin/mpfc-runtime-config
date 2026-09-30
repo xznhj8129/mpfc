@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RUN_DIR=/run/mpfc
+MOUNT_DIR=${RUN_DIR}/config-media
+LABEL_PATH=/dev/disk/by-label/MPFC_CONFIG
+VM_MODE=0
+
+if grep -qw 'mpfc.vm=1' /proc/cmdline; then
+    VM_MODE=1
+fi
+
+# /run is a tmpfs and is recreated on every boot. The launcher runs as mpfc and
+# writes /run/mpfc/config.yaml, so restore ownership before the service starts.
+install -d -o mpfc -g mpfc -m 0755 "${RUN_DIR}"
+rm -f "${RUN_DIR}/runtime.env"
+
+if (( VM_MODE )); then
+    # The VM contract requires the removable MPFC_CONFIG volume. QEMU/udev can
+    # be slow under TCG, so wait long enough for it and fail loudly instead of
+    # silently falling back to the physical serial endpoint.
+    for _ in {1..300}; do
+        [[ -e ${LABEL_PATH} ]] && break
+        sleep 0.1
+    done
+    if [[ ! -e ${LABEL_PATH} ]]; then
+        echo "MPFC VM config volume did not appear: ${LABEL_PATH}" >&2
+        exit 1
+    fi
+else
+    # A physical Pi normally has no MPFC_CONFIG volume and should immediately
+    # continue with /etc/mpfc/runtime.env defaults.
+    [[ -e ${LABEL_PATH} ]] || exit 0
+fi
+
+install -d -m 0755 "${MOUNT_DIR}"
+mount -o ro "${LABEL_PATH}" "${MOUNT_DIR}"
+trap 'umount "${MOUNT_DIR}" 2>/dev/null || true' EXIT
+
+if [[ ! -f ${MOUNT_DIR}/runtime.env ]]; then
+    if (( VM_MODE )); then
+        echo "MPFC VM config volume is missing runtime.env" >&2
+        exit 1
+    fi
+    exit 0
+fi
+
+install -o root -g root -m 0644 "${MOUNT_DIR}/runtime.env" "${RUN_DIR}/runtime.env"
+
+if (( VM_MODE )); then
+    grep -q '^MPFC_MAVLINK_CONNECTION=' "${RUN_DIR}/runtime.env" || {
+        echo "MPFC VM runtime.env is missing MPFC_MAVLINK_CONNECTION" >&2
+        exit 1
+    }
+fi

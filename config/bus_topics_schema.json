@@ -24,6 +24,25 @@
         "value": "value to set"
       }
     },
+    "LATTICE/IN": {
+      "direction": "hivelink_interface -> local consumers",
+      "summary": "Lattice document (aliased JSON) received from a remote HiveLink node. Node-local bridge topic only.",
+      "data": {
+        "source": "HiveLink source node id",
+        "interface": "Local HiveLink bearer that received the document",
+        "received_at": "Unix epoch seconds",
+        "document": "Lattice document as aliased JSON (ENG-1)"
+      }
+    },
+    "LATTICE/OUT": {
+      "direction": "local consumers -> hivelink_interface",
+      "summary": "Lattice document for delivery to a remote HiveLink node. Node-local bridge topic only.",
+      "data": {
+        "dest": "HiveLink destination node id",
+        "document": "Lattice document as aliased JSON (ENG-1)",
+        "payload_b64": "optional opaque byte passthrough instead of document"
+      }
+    },
     "<client_id>/<topic_ns>/REQUEST": {
       "direction": "any -> interface",
       "summary": "Requests for interface actions (actual runtime topic)",

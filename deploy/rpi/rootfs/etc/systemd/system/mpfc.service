@@ -1,0 +1,27 @@
+[Unit]
+Description=MPFC companion runtime
+After=mosquitto.service mpfc-runtime-config.service
+Requires=mosquitto.service mpfc-runtime-config.service
+
+[Service]
+Type=simple
+User=mpfc
+Group=mpfc
+SupplementaryGroups=dialout systemd-journal
+WorkingDirectory=/opt/mpfc
+EnvironmentFile=-/etc/mpfc/runtime.env
+EnvironmentFile=-/run/mpfc/runtime.env
+ExecStart=/opt/mpfc/.venv/bin/python /opt/mpfc/deploy/rpi/run-mpfc
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=10
+KillMode=mixed
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/run/mpfc /var/log/mpfc /opt/mpfc /home/mpfc
+
+[Install]
+WantedBy=multi-user.target

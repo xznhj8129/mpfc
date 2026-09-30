@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+: "${MPFC_IMAGE_CONFIG:?MPFC_IMAGE_CONFIG is required}"
+
+WFB_APT_CHANNEL=master
+WFB_SOURCE_REPO=https://github.com/svpcom/wfb-ng.git
+WFB_SOURCE_COMMIT=3504a3870189fdc4bb1f7e2a2f141a740973a185
+RTL8812AU_REPO=https://github.com/svpcom/rtl8812au.git
+RTL8812AU_COMMIT=6e75916416de1dce5ecd37f824896bebf96aaf8f
+RTL8812EU_REPO=https://github.com/svpcom/rtl8812eu.git
+RTL8812EU_COMMIT=48e6e449e089fa954e4e15079bd864039e2960da
+
+mapfile -t CFG < <(python3 - "${MPFC_IMAGE_CONFIG}" <<'PY'
+import configparser, sys
+cfg = configparser.ConfigParser()
+with open(sys.argv[1], encoding="utf-8") as f:
+    cfg.read_file(f)
+section = "wfb-ng"
+print(cfg.get(section, "driver", fallback=""))
+print(cfg.get(section, "wifi_channel", fallback="161"))
+print(cfg.get(section, "wifi_region", fallback="CA"))
+PY
+)
+DRIVER=${CFG[0]}
+WIFI_CHANNEL=${CFG[1]}
+WIFI_REGION=${CFG[2]}
+case "${DRIVER}" in
+    rtl8812au|rtl8812eu) ;;
+    *) echo "wfb-ng requires driver=rtl8812au or rtl8812eu" >&2; exit 1 ;;
+esac
+[[ ${WIFI_CHANNEL} =~ ^[0-9]+$ ]] || { echo "invalid WFB-NG wifi_channel: ${WIFI_CHANNEL}" >&2; exit 1; }
+[[ ${WIFI_REGION} =~ ^[A-Za-z]{2}$ ]] || { echo "invalid WFB-NG wifi_region: ${WIFI_REGION}" >&2; exit 1; }
+WIFI_REGION=${WIFI_REGION^^}
+
+export DEBIAN_FRONTEND=noninteractive
+cat > /usr/sbin/policy-rc.d <<'EOF_POLICY'
+#!/bin/sh
+exit 101
+EOF_POLICY
+chmod +x /usr/sbin/policy-rc.d
+trap 'rm -f /usr/sbin/policy-rc.d' EXIT
+
+apt-get update
+apt-get install -y --no-install-recommends \
+    ca-certificates curl gnupg git lsb-release build-essential bc libelf-dev \
+    iw socat ethtool rfkill dkms linux-image-rpi-v8 linux-headers-rpi-v8
+
+curl -fsSL https://apt.wfb-ng.org/public.asc | gpg --dearmor --yes -o /usr/share/keyrings/wfb-ng.gpg
+printf 'deb [signed-by=/usr/share/keyrings/wfb-ng.gpg] https://apt.wfb-ng.org/ %s %s\n' \
+    "$(lsb_release -cs)" "${WFB_APT_CHANNEL}" > /etc/apt/sources.list.d/wfb-ng.list
+if ! apt-get update; then
+    echo "WFB-NG apt repository update failed; falling back to source build" >&2
+    rm -f /etc/apt/sources.list.d/wfb-ng.list /usr/share/keyrings/wfb-ng.gpg
+    apt-get update
+fi
+
+WFB_INSTALL_SOURCE="apt.wfb-ng.org/${WFB_APT_CHANNEL}"
+if ! apt-get install -y --no-install-recommends wfb-ng; then
+    echo "WFB-NG apt package unavailable; falling back to pinned source build" >&2
+    apt-get install -y --no-install-recommends \
+        python3-all python3-all-dev python3-venv libpcap-dev libsodium-dev libevent-dev \
+        python3-pip python3-pyroute2 python3-msgpack python3-twisted python3-serial \
+        python3-jinja2 debhelper dh-python fakeroot libgstrtspserver-1.0-dev \
+        libcatch2-dev
+
+    rm -rf /tmp/wfb-ng-source
+    GIT_TERMINAL_PROMPT=0 git clone --quiet "${WFB_SOURCE_REPO}" /tmp/wfb-ng-source
+    git -C /tmp/wfb-ng-source checkout --quiet "${WFB_SOURCE_COMMIT}"
+    (
+        cd /tmp/wfb-ng-source
+        make deb
+    )
+    apt-get install -y --no-install-recommends /tmp/wfb-ng-source/deb_dist/*.deb
+    WFB_INSTALL_SOURCE="github.com/svpcom/wfb-ng@${WFB_SOURCE_COMMIT}"
+fi
+
+case "${DRIVER}" in
+    rtl8812au)
+        DRIVER_REPO=${RTL8812AU_REPO}
+        DRIVER_COMMIT=${RTL8812AU_COMMIT}
+        DKMS_NAME=rtl8812au
+        DKMS_VERSION=5.2.20.2
+        cat > /etc/modprobe.d/wfb.conf <<'EOF_MODPROBE'
+blacklist 88XXau
+blacklist 8812au
+blacklist rtl8812au
+blacklist rtl88x2bs
+EOF_MODPROBE
+        ;;
+    rtl8812eu)
+        DRIVER_REPO=${RTL8812EU_REPO}
+        DRIVER_COMMIT=${RTL8812EU_COMMIT}
+        DKMS_NAME=rtl88x2eu
+        DKMS_VERSION=5.15.0.1
+        cat > /etc/modprobe.d/wfb.conf <<'EOF_MODPROBE'
+options 8812eu rtw_tx_pwr_by_rate=0 rtw_tx_pwr_lmt_enable=0
+EOF_MODPROBE
+        ;;
+esac
+
+rm -rf /tmp/wfb-driver
+GIT_TERMINAL_PROMPT=0 git clone --quiet "${DRIVER_REPO}" /tmp/wfb-driver
+git -C /tmp/wfb-driver checkout --quiet "${DRIVER_COMMIT}"
+sed -i \
+    -e 's/^CONFIG_PLATFORM_I386_PC = y$/CONFIG_PLATFORM_I386_PC = n/' \
+    -e 's/^CONFIG_PLATFORM_ARM64_RPI = n$/CONFIG_PLATFORM_ARM64_RPI = y/' \
+    /tmp/wfb-driver/Makefile
+rm -rf "/usr/src/${DKMS_NAME}-${DKMS_VERSION}"
+cp -a /tmp/wfb-driver "/usr/src/${DKMS_NAME}-${DKMS_VERSION}"
+dkms add -m "${DKMS_NAME}" -v "${DKMS_VERSION}"
+
+KERNEL_VERSION=$(find /lib/modules -mindepth 1 -maxdepth 1 -type d -name '*rpi-v8' -printf '%f\n' | sort -V | tail -n 1)
+[[ -n ${KERNEL_VERSION} && -e /lib/modules/${KERNEL_VERSION}/build ]] || {
+    echo "unable to find target Raspberry Pi v8 kernel headers" >&2
+    exit 1
+}
+dkms build -m "${DKMS_NAME}" -v "${DKMS_VERSION}" -k "${KERNEL_VERSION}"
+dkms install -m "${DKMS_NAME}" -v "${DKMS_VERSION}" -k "${KERNEL_VERSION}"
+update-initramfs -k all -u
+
+cat > /etc/wifibroadcast.cfg <<EOF_WFB
+[common]
+wifi_channel = ${WIFI_CHANNEL}
+wifi_region = '${WIFI_REGION}'
+
+[drone_mavlink]
+peer = 'listen://127.0.0.1:14550'
+
+[drone_video]
+peer = 'listen://0.0.0.0:5602'
+EOF_WFB
+
+ln -sfn /home/mpfc/keys/drone.key /etc/drone.key
+systemctl enable wifibroadcast@drone.service >/dev/null
+
+install -d -m 0755 /etc/mpfc/components
+WFB_VERSION=$(dpkg-query -W -f='${Version}' wfb-ng 2>/dev/null || printf unknown)
+cat > /etc/mpfc/components/wfb-ng.manifest <<EOF_MANIFEST
+wfb_ng_version=${WFB_VERSION}
+wfb_ng_source=${WFB_INSTALL_SOURCE}
+wfb_driver=${DRIVER}
+wfb_driver_revision=${DRIVER_COMMIT}
+wfb_kernel=${KERNEL_VERSION}
+wfb_wifi_channel=${WIFI_CHANNEL}
+wfb_wifi_region=${WIFI_REGION}
+EOF_MANIFEST
+
+rm -rf /tmp/wfb-driver /tmp/wfb-ng-source
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+rm -f /usr/sbin/policy-rc.d
+trap - EXIT

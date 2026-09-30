@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd -- "${SCRIPT_DIR}/../.." && pwd)
+CORE_IMPL=${SCRIPT_DIR}/build-image-core-impl
+CACHE_ROOT=${MPFC_BUILD_CACHE:-${SCRIPT_DIR}/.cache}
+
+HIVELINK_PATH=$(cd -- "${REPO_ROOT}/.." && pwd)/hivelink
+ARGS=("$@")
+
+for ((i=0; i<${#ARGS[@]}; i++)); do
+    case "${ARGS[$i]}" in
+        --hivelink-path)
+            ((i + 1 < ${#ARGS[@]})) || { echo "--hivelink-path requires a value" >&2; exit 2; }
+            HIVELINK_PATH=${ARGS[$((i + 1))]}
+            ((i += 1))
+            ;;
+    esac
+done
+
+[[ -x ${CORE_IMPL} ]] || { echo "missing core builder implementation: ${CORE_IMPL}" >&2; exit 1; }
+command -v rsync >/dev/null || { echo "missing host command: rsync" >&2; exit 1; }
+command -v realpath >/dev/null || { echo "missing host command: realpath" >&2; exit 1; }
+
+HIVELINK_PATH=$(realpath "${HIVELINK_PATH}")
+[[ -d ${HIVELINK_PATH} ]] || { echo "missing HiveLink build input: ${HIVELINK_PATH}" >&2; exit 1; }
+
+mkdir -p "${CACHE_ROOT}"
+STAGE_ROOT=${CACHE_ROOT}/package-inputs.$$
+cleanup() {
+    rm -rf -- "${STAGE_ROOT}"
+}
+trap cleanup EXIT INT TERM
+
+stage_source() {
+    local source=$1 destination=$2
+    mkdir -p "${destination}"
+    rsync -a --delete \
+        --exclude=build \
+        --exclude='*.egg-info' \
+        --exclude='__pycache__' \
+        --exclude='*.pyc' \
+        "${source}/" "${destination}/"
+}
+
+echo "Staging HiveLink package inputs..."
+stage_source "${HIVELINK_PATH}" "${STAGE_ROOT}/hivelink"
+
+"${CORE_IMPL}" "${ARGS[@]}" \
+    --hivelink-path "${STAGE_ROOT}/hivelink"

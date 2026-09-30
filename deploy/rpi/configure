@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+CONFIG=${1:-${SCRIPT_DIR}/image.conf}
+
+ask_default() {
+    local prompt=$1 default=$2 value
+    read -r -p "${prompt} [${default}]: " value
+    printf '%s' "${value:-${default}}"
+}
+
+ask_yes_no() {
+    local prompt=$1 default=${2:-n} value suffix='y/N'
+    [[ ${default} == y ]] && suffix='Y/n'
+    read -r -p "${prompt} [${suffix}]: " value
+    value=${value:-${default}}
+    [[ ${value,,} == y || ${value,,} == yes ]]
+}
+
+hostname=$(ask_default 'Hostname' mpfc)
+provisioning=$(ask_default 'Provisioning directory (blank disables)' '')
+
+wfb_ng=no
+wfb_driver=
+wfb_channel=161
+wfb_region=CA
+if ask_yes_no 'Include WFB-NG' n; then
+    wfb_ng=yes
+    echo 'WFB-NG radio driver:'
+    echo '  1) RTL8812AU'
+    echo '  2) RTL8812EU'
+    while :; do
+        read -r -p 'Driver [2]: ' choice
+        case "${choice:-2}" in
+            1) wfb_driver=rtl8812au; break ;;
+            2) wfb_driver=rtl8812eu; break ;;
+            *) echo 'Choose 1 or 2.' >&2 ;;
+        esac
+    done
+    wfb_channel=$(ask_default 'WiFi channel' 161)
+    wfb_region=$(ask_default 'Regulatory region (ISO alpha-2)' CA)
+fi
+
+mkdir -p "$(dirname -- "${CONFIG}")"
+tmp=${CONFIG}.tmp
+cat > "${tmp}" <<EOF_CONFIG
+[image]
+hostname=${hostname}
+target=pi-zero-2w
+
+[components]
+wfb-ng=${wfb_ng}
+
+[wfb-ng]
+driver=${wfb_driver}
+wifi_channel=${wfb_channel}
+wifi_region=${wfb_region}
+
+[provisioning]
+directory=${provisioning}
+EOF_CONFIG
+mv "${tmp}" "${CONFIG}"
+
+echo
+echo "Wrote ${CONFIG}"
+echo "Build with: sudo ${SCRIPT_DIR}/build-image --config ${CONFIG}"
+if ask_yes_no 'Build now' n; then
+    exec sudo "${SCRIPT_DIR}/build-image" --config "${CONFIG}"
+fi

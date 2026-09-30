@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""Render the deployment-specific MPFC appliance config, then launch MPFC."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import yaml
+
+DEFAULT_CONFIG = Path("/opt/mpfc/flight_cores/execution_host/config_appliance.yaml")
+RUNTIME_CONFIG = Path("/run/mpfc/config.yaml")
+
+
+def required_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise SystemExit(f"required appliance setting is missing: {name}")
+    return value
+
+
+def main() -> None:
+    source = Path(os.environ.get("MPFC_CONFIG", str(DEFAULT_CONFIG)))
+    connection = required_env("MPFC_MAVLINK_CONNECTION")
+    node_name = required_env("MPFC_NODE_NAME")
+    control_node = required_env("MPFC_CONTROL_NODE")
+    control_host = required_env("MPFC_CONTROL_HOST")
+    hivelink_port_raw = required_env("MPFC_HIVELINK_PORT")
+
+    if "://" not in connection:
+        raise SystemExit(f"MPFC_MAVLINK_CONNECTION must be a MAVSDK URL, got {connection!r}")
+    try:
+        hivelink_port = int(hivelink_port_raw)
+    except ValueError as exc:
+        raise SystemExit(f"MPFC_HIVELINK_PORT must be an integer, got {hivelink_port_raw!r}") from exc
+
+    with source.open("r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle)
+    if not isinstance(config, dict):
+        raise SystemExit(f"MPFC appliance config must be a mapping: {source}")
+
+    config["my_name"] = node_name
+    hivelink_found = False
+    mavsdk_found = False
+
+    for entry in config.get("plugins", []):
+        plugin = entry.get("plugin")
+        plugin_cfg = entry.setdefault("cfg", {})
+
+        if plugin == "hivelink_interface":
+            link_cfg = plugin_cfg.setdefault("link_config", {})
+            link_cfg["my_name"] = node_name
+            udp_cfg = link_cfg.setdefault("udp", {})
+            udp_cfg["use"] = True
+            udp_cfg["host"] = "0.0.0.0"
+            udp_cfg["port"] = hivelink_port
+            link_cfg["nodemap"] = {
+                control_node: {"ip": [control_host, hivelink_port]},
+            }
+            hivelink_found = True
+
+        if plugin == "mavsdk_interface":
+            plugin_cfg["conn_str"] = connection
+            mavsdk_found = True
+
+    if not hivelink_found:
+        raise SystemExit(f"hivelink_interface not found in {source}")
+    if not mavsdk_found:
+        raise SystemExit(f"mavsdk_interface not found in {source}")
+
+    RUNTIME_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    with RUNTIME_CONFIG.open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(config, handle, sort_keys=False)
+
+    env = os.environ.copy()
+    env["MAIN_CONFIG"] = str(RUNTIME_CONFIG)
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    os.chdir("/opt/mpfc")
+    os.execve("/opt/mpfc/.venv/bin/python", ["python", "/opt/mpfc/main.py"], env)
+
+
+if __name__ == "__main__":
+    main()

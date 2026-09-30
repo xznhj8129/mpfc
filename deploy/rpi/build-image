@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+CORE_BUILDER=${SCRIPT_DIR}/build-image-core
+DEFAULT_CONFIG=${SCRIPT_DIR}/image.conf
+DIST_ROOT=${SCRIPT_DIR}/dist
+WORK_ROOT=${SCRIPT_DIR}/.build-compose
+
+CONFIG=
+PROVISION_OVERRIDE=
+OUTPUT=${DIST_ROOT}/mpfc-rpi-zero2w.img
+COMPRESS=0
+CORE_ARGS=()
+
+usage() {
+    cat <<EOF_USAGE
+Usage: sudo ${0##*/} [options]
+
+Build the core MPFC Raspberry Pi appliance, then compose selected optional
+components and deployment provisioning into the final image.
+
+Composition options:
+  --config PATH         INI image configuration (default: deploy/rpi/image.conf if present)
+  --provision PATH      Provisioning directory override
+  --output PATH         Output raw image
+  --compress            Also create OUTPUT.xz
+
+Core image options are passed through unchanged:
+  --base-image PATH
+  --base-url URL
+  --base-sha256 SHA
+  --hivelink-path PATH
+  --size SIZE
+
+Run ./deploy/rpi/configure to create image.conf interactively.
+EOF_USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --config) CONFIG=$2; shift 2 ;;
+        --provision) PROVISION_OVERRIDE=$2; shift 2 ;;
+        --output) OUTPUT=$2; shift 2 ;;
+        --compress) COMPRESS=1; shift ;;
+        --base-image|--base-url|--base-sha256|--hivelink-path|--size)
+            CORE_ARGS+=("$1" "$2")
+            shift 2
+            ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+if [[ ${EUID} -ne 0 ]]; then
+    echo "build-image needs root for loop-mounted raw images" >&2
+    exit 1
+fi
+[[ -x ${CORE_BUILDER} ]] || { echo "missing executable core builder: ${CORE_BUILDER}" >&2; exit 1; }
+
+if [[ -z ${CONFIG} && -f ${DEFAULT_CONFIG} ]]; then
+    CONFIG=${DEFAULT_CONFIG}
+fi
+if [[ -n ${CONFIG} ]]; then
+    CONFIG=$(realpath "${CONFIG}")
+    [[ -f ${CONFIG} ]] || { echo "configuration file not found: ${CONFIG}" >&2; exit 1; }
+fi
+OUTPUT=$(realpath -m "${OUTPUT}")
+mkdir -p "$(dirname -- "${OUTPUT}")" "${WORK_ROOT}"
+
+conf_get() {
+    local section=$1 key=$2 default=${3-}
+    if [[ -z ${CONFIG} ]]; then
+        printf '%s' "${default}"
+        return
+    fi
+    python3 - "${CONFIG}" "${section}" "${key}" "${default}" <<'PY'
+import configparser, sys
+path, section, key, default = sys.argv[1:]
+cfg = configparser.ConfigParser()
+with open(path, encoding="utf-8") as f:
+    cfg.read_file(f)
+print(cfg.get(section, key, fallback=default), end="")
+PY
+}
+
+enabled_components() {
+    [[ -n ${CONFIG} ]] || return 0
+    python3 - "${CONFIG}" <<'PY'
+import configparser, sys
+cfg = configparser.ConfigParser()
+with open(sys.argv[1], encoding="utf-8") as f:
+    cfg.read_file(f)
+if cfg.has_section("components"):
+    for name, value in cfg.items("components"):
+        if value.strip().lower() in {"1", "yes", "true", "on"}:
+            print(name)
+PY
+}
+
+HOSTNAME=$(conf_get image hostname mpfc)
+TARGET=$(conf_get image target pi-zero-2w)
+[[ ${HOSTNAME} =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || { echo "invalid image hostname: ${HOSTNAME}" >&2; exit 1; }
+[[ ${TARGET} == pi-zero-2w ]] || { echo "unsupported image target: ${TARGET}" >&2; exit 1; }
+
+PROVISION=${PROVISION_OVERRIDE:-$(conf_get provisioning directory '')}
+if [[ -n ${PROVISION} ]]; then
+    PROVISION=$(realpath "${PROVISION}")
+    [[ -d ${PROVISION} ]] || { echo "provisioning directory not found: ${PROVISION}" >&2; exit 1; }
+fi
+
+mapfile -t ENABLED_COMPONENTS < <(enabled_components)
+for component in "${ENABLED_COMPONENTS[@]}"; do
+    [[ ${component} =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "invalid component name: ${component}" >&2; exit 1; }
+    [[ -x ${SCRIPT_DIR}/components/${component}/install-rootfs ]] || {
+        echo "component is enabled but has no installer: ${component}" >&2
+        exit 1
+    }
+done
+
+CORE_IMAGE=${WORK_ROOT}/core.img
+rm -f "${CORE_IMAGE}" "${CORE_IMAGE}".*
+"${CORE_BUILDER}" "${CORE_ARGS[@]}" --output "${CORE_IMAGE}"
+
+LOOP=
+ROOT_MNT=${WORK_ROOT}/root
+BOOT_MNT=${ROOT_MNT}/boot/firmware
+RESOLV_BACKUP=${WORK_ROOT}/resolv.conf.image
+MOUNTS_BOUND=0
+
+cleanup() {
+    set +e
+    if (( MOUNTS_BOUND )); then
+        mountpoint -q "${ROOT_MNT}/dev/pts" && umount "${ROOT_MNT}/dev/pts"
+        mountpoint -q "${ROOT_MNT}/dev" && umount "${ROOT_MNT}/dev"
+        mountpoint -q "${ROOT_MNT}/proc" && umount "${ROOT_MNT}/proc"
+        mountpoint -q "${ROOT_MNT}/sys" && umount "${ROOT_MNT}/sys"
+    fi
+    mountpoint -q "${BOOT_MNT}" && umount "${BOOT_MNT}"
+    mountpoint -q "${ROOT_MNT}" && umount "${ROOT_MNT}"
+    [[ -n ${LOOP} ]] && losetup -d "${LOOP}" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+mkdir -p "${ROOT_MNT}"
+LOOP=$(losetup --find --show --partscan "${CORE_IMAGE}")
+for _ in {1..20}; do
+    [[ -b ${LOOP}p1 && -b ${LOOP}p2 ]] && break
+    sleep 0.1
+done
+[[ -b ${LOOP}p1 && -b ${LOOP}p2 ]] || { echo "image partitions did not appear" >&2; exit 1; }
+mount "${LOOP}p2" "${ROOT_MNT}"
+mkdir -p "${BOOT_MNT}"
+mount "${LOOP}p1" "${BOOT_MNT}"
+
+printf '%s\n' "${HOSTNAME}" > "${ROOT_MNT}/etc/hostname"
+if grep -qE '^127\.0\.1\.1[[:space:]]+' "${ROOT_MNT}/etc/hosts"; then
+    sed -i -E "s/^127\.0\.1\.1[[:space:]]+.*/127.0.1.1\t${HOSTNAME}/" "${ROOT_MNT}/etc/hosts"
+else
+    printf '127.0.1.1\t%s\n' "${HOSTNAME}" >> "${ROOT_MNT}/etc/hosts"
+fi
+
+MPFC_UID=$(awk -F: '$1 == "mpfc" {print $3; exit}' "${ROOT_MNT}/etc/passwd")
+MPFC_GID=$(awk -F: '$1 == "mpfc" {print $4; exit}' "${ROOT_MNT}/etc/passwd")
+[[ -n ${MPFC_UID} && -n ${MPFC_GID} ]] || { echo "image is missing mpfc account" >&2; exit 1; }
+
+KEYS_DIR=${ROOT_MNT}/home/mpfc/keys
+rm -rf "${KEYS_DIR}"
+install -d -o "${MPFC_UID}" -g "${MPFC_GID}" -m 0700 "${KEYS_DIR}"
+PROVISIONING_FILES=
+PROVISIONING_HASH=
+if [[ -n ${PROVISION} ]]; then
+    rsync -a "${PROVISION}/" "${KEYS_DIR}/"
+    chown -R "${MPFC_UID}:${MPFC_GID}" "${KEYS_DIR}"
+    find "${KEYS_DIR}" -type d -exec chmod 0700 {} +
+    find "${KEYS_DIR}" -type f -exec chmod 0600 {} +
+    PROVISIONING_FILES=$(cd "${PROVISION}" && find . -type f -printf '%P\n' | LC_ALL=C sort | paste -sd, -)
+    PROVISIONING_HASH=$(python3 - "${PROVISION}" <<'PY'
+from hashlib import sha256
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+h = sha256()
+for path in sorted(root.rglob('*'), key=lambda p: p.relative_to(root).as_posix()):
+    rel = path.relative_to(root).as_posix().encode()
+    if path.is_symlink():
+        h.update(b'L\0' + rel + b'\0' + path.readlink().as_posix().encode() + b'\0')
+    elif path.is_file():
+        h.update(b'F\0' + rel + b'\0')
+        with path.open('rb') as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                h.update(chunk)
+        h.update(b'\0')
+    elif path.is_dir():
+        h.update(b'D\0' + rel + b'\0')
+print(h.hexdigest(), end='')
+PY
+)
+fi
+
+rm -rf "${ROOT_MNT}/opt/mpfc/deploy/rpi/components"
+
+if ((${#ENABLED_COMPONENTS[@]})); then
+    [[ -x /usr/bin/qemu-aarch64-static ]] || {
+        echo "optional ARM components require qemu-aarch64-static" >&2
+        echo "install: sudo apt install qemu-user-static binfmt-support" >&2
+        exit 1
+    }
+    cp /usr/bin/qemu-aarch64-static "${ROOT_MNT}/usr/bin/qemu-aarch64-static"
+    rm -f "${RESOLV_BACKUP}"
+    cp -a "${ROOT_MNT}/etc/resolv.conf" "${RESOLV_BACKUP}" 2>/dev/null || true
+    rm -f "${ROOT_MNT}/etc/resolv.conf"
+    cp -L /etc/resolv.conf "${ROOT_MNT}/etc/resolv.conf"
+    mount --bind /dev "${ROOT_MNT}/dev"
+    mount --bind /dev/pts "${ROOT_MNT}/dev/pts"
+    mount -t proc proc "${ROOT_MNT}/proc"
+    mount -t sysfs sys "${ROOT_MNT}/sys"
+    MOUNTS_BOUND=1
+
+    if [[ -n ${CONFIG} ]]; then
+        cp "${CONFIG}" "${ROOT_MNT}/tmp/mpfc-image.conf"
+    else
+        : > "${ROOT_MNT}/tmp/mpfc-image.conf"
+    fi
+
+    for component in "${ENABLED_COMPONENTS[@]}"; do
+        echo "Installing Pi image component: ${component}"
+        cp "${SCRIPT_DIR}/components/${component}/install-rootfs" "${ROOT_MNT}/tmp/mpfc-component-install"
+        chmod 0755 "${ROOT_MNT}/tmp/mpfc-component-install"
+        chroot "${ROOT_MNT}" /usr/bin/env MPFC_IMAGE_CONFIG=/tmp/mpfc-image.conf /bin/bash /tmp/mpfc-component-install
+        rm -f "${ROOT_MNT}/tmp/mpfc-component-install"
+    done
+    rm -f "${ROOT_MNT}/tmp/mpfc-image.conf"
+
+    mountpoint -q "${ROOT_MNT}/dev/pts" && umount "${ROOT_MNT}/dev/pts"
+    mountpoint -q "${ROOT_MNT}/dev" && umount "${ROOT_MNT}/dev"
+    mountpoint -q "${ROOT_MNT}/proc" && umount "${ROOT_MNT}/proc"
+    mountpoint -q "${ROOT_MNT}/sys" && umount "${ROOT_MNT}/sys"
+    MOUNTS_BOUND=0
+    rm -f "${ROOT_MNT}/usr/bin/qemu-aarch64-static"
+    rm -f "${ROOT_MNT}/etc/resolv.conf"
+    if [[ -e ${RESOLV_BACKUP} || -L ${RESOLV_BACKUP} ]]; then
+        cp -a "${RESOLV_BACKUP}" "${ROOT_MNT}/etc/resolv.conf"
+    fi
+fi
+
+[[ -f ${BOOT_MNT}/kernel8.img ]] || { echo "kernel8.img missing after composition" >&2; exit 1; }
+[[ -f ${BOOT_MNT}/bcm2710-rpi-3-b-plus.dtb ]] || { echo "Pi 3B+ DTB missing after composition" >&2; exit 1; }
+cp "${BOOT_MNT}/kernel8.img" "${OUTPUT}.kernel8.img"
+cp "${BOOT_MNT}/bcm2710-rpi-3-b-plus.dtb" "${OUTPUT}.raspi3ap.dtb"
+
+COMPONENT_MANIFEST=${WORK_ROOT}/components.manifest
+: > "${COMPONENT_MANIFEST}"
+if [[ -d ${SCRIPT_DIR}/components ]]; then
+    while IFS= read -r component; do
+        key=${component//-/_}
+        if printf '%s\n' "${ENABLED_COMPONENTS[@]}" | grep -Fxq "${component}"; then
+            printf 'component_%s=yes\n' "${key}" >> "${COMPONENT_MANIFEST}"
+            if [[ -f ${ROOT_MNT}/etc/mpfc/components/${component}.manifest ]]; then
+                cat "${ROOT_MNT}/etc/mpfc/components/${component}.manifest" >> "${COMPONENT_MANIFEST}"
+            fi
+        else
+            printf 'component_%s=no\n' "${key}" >> "${COMPONENT_MANIFEST}"
+        fi
+    done < <(find "${SCRIPT_DIR}/components" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | LC_ALL=C sort)
+fi
+
+sync
+cleanup
+trap - EXIT INT TERM
+
+mv "${CORE_IMAGE}" "${OUTPUT}"
+cp "${CORE_IMAGE}.manifest" "${OUTPUT}.manifest"
+rm -f "${CORE_IMAGE}.sha256" "${CORE_IMAGE}.kernel8.img" "${CORE_IMAGE}.raspi3ap.dtb"
+
+{
+    printf 'target=%s\n' "${TARGET}"
+    printf 'hostname=%s\n' "${HOSTNAME}"
+    if [[ -n ${CONFIG} ]]; then
+        printf 'image_config_sha256=%s\n' "$(sha256sum "${CONFIG}" | awk '{print $1}')"
+    else
+        printf 'image_config_sha256=none\n'
+    fi
+    if [[ -n ${PROVISION} ]]; then
+        printf 'provisioning=yes\n'
+        printf 'provisioning_files=%s\n' "${PROVISIONING_FILES}"
+        printf 'provisioning_hash=%s\n' "${PROVISIONING_HASH}"
+    else
+        printf 'provisioning=no\n'
+        printf 'provisioning_files=\n'
+        printf 'provisioning_hash=\n'
+    fi
+    cat "${COMPONENT_MANIFEST}"
+} >> "${OUTPUT}.manifest"
+
+sha256sum "${OUTPUT}" > "${OUTPUT}.sha256"
+if (( COMPRESS )); then
+    xz -T0 -c "${OUTPUT}" > "${OUTPUT}.xz"
+    sha256sum "${OUTPUT}.xz" > "${OUTPUT}.xz.sha256"
+fi
+
+if [[ -n ${SUDO_UID:-} && -n ${SUDO_GID:-} && ${SUDO_UID} != 0 ]]; then
+    chown "${SUDO_UID}:${SUDO_GID}" "${OUTPUT}" "${OUTPUT}.manifest" "${OUTPUT}.sha256" \
+        "${OUTPUT}.kernel8.img" "${OUTPUT}.raspi3ap.dtb" 2>/dev/null || true
+    if (( COMPRESS )); then
+        chown "${SUDO_UID}:${SUDO_GID}" "${OUTPUT}.xz" "${OUTPUT}.xz.sha256" 2>/dev/null || true
+    fi
+fi
+
+echo "Built composed image: ${OUTPUT}"
+echo "Configuration: ${CONFIG:-defaults only}"
+echo "Components: ${ENABLED_COMPONENTS[*]:-none}"
+echo "Provisioning: ${PROVISION:-none}"

@@ -1,0 +1,2 @@
+mpfc ALL=(ALL:ALL) ALL
+mpfc ALL=(root) NOPASSWD: /usr/bin/systemctl start mpfc.service, /usr/bin/systemctl stop mpfc.service, /usr/bin/systemctl restart mpfc.service
