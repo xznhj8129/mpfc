@@ -38,6 +38,19 @@ POLL_INTERVAL_S = 0.1
 UAV = load_protocol_namespace("uav")
 
 
+def global_target_params(params: Dict[str, Any]) -> Dict[str, Any]:  # GoTo params -> MSPApi.set_global_target kwargs.
+    """Translate a protocol GoTo command into the INAV global target command.
+
+    MSPApi.set_global_target defaults to the takeoff (home/arming) altitude
+    datum, which is the same home-relative datum the protocol carries.
+    """
+    return {
+        "latitude_deg": float(params["Latitude"]),
+        "longitude_deg": float(params["Longitude"]),
+        "altitude_m": float(params["AltitudeM"]),
+    }
+
+
 class MspInterface(PluginBase):
     def __init__(self, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:  # Configure MSP interface plugin.
         super().__init__(cfg, bus_config)
@@ -102,7 +115,6 @@ class MspInterface(PluginBase):
             self.mode_channels[entry["mode"]] = {"channel": channel_name, "pwm": active_pwm}
         self.mode_ranges = mode_ranges
 
-        self.arm_mode_name = "ARM"
         self.override_mode_name = "MSP RC OVERRIDE"
         self.takeoff_altitude_m: float | None = None
 
@@ -173,10 +185,6 @@ class MspInterface(PluginBase):
         with self.api_lock:
             self.api.set_rc_channels({channel: pwm})
 
-    def _set_throttle(self, value: int) -> None:  # Set throttle channel output.
-        with self.api_lock:
-            self.api.set_rc_channels({"throttle": value})
-
     def _build_rc_telemetry(self, rc_channels: Any) -> Dict[str, Any]:  # Convert observed FC RC channels into normalized semantic fields.
         if type(rc_channels) is dict:
             control = build_control_fields(
@@ -241,6 +249,7 @@ class MspInterface(PluginBase):
             gps_statistics = self.api.get_gps_statistics()
             waypoint_info = self.api.get_waypoint_info()
             nav_status = self.api.get_nav_status()
+            nav_target = self.api.get_nav_target()
             attitude = self.api.get_attitude()
             imu = self.api.get_imu()
             rc_channels = self.api.get_rc_channels()
@@ -329,6 +338,13 @@ class MspInterface(PluginBase):
             control_override = dict(self.control_override)
         control_output = merge_control_fields(rc_telemetry, control_override) if self._override_is_fresh() else rc_telemetry
         flight_mode = {"FlightMode": active_mode_names[0] if active_mode_names else "NONE"}
+        target_state = {
+            "LatDeg": nav_target["latitude"],
+            "LonDeg": nav_target["longitude"],
+            "AltitudeM": nav_target["altitude_m"],
+            "HeadingDeg": nav_target["heading_deg"],
+            "ClimbRateMS": nav_target["climb_rate_ms"],
+        }
         new_state = {
             UAV.State.Flight.IsInAir: is_in_air,
             UAV.State.Flight.IsArmed: is_armed,
@@ -339,6 +355,7 @@ class MspInterface(PluginBase):
             UAV.State.Navigation.FixType: gps["fixType"],
             UAV.State.Navigation.NumSat: gps["numSat"],
             UAV.State.Navigation.NavState: nav_status.get("navState"),
+            UAV.State.Navigation.Target: target_state,
             UAV.State.Attitude.AttitudeRad: attitude_rad,
             UAV.State.Attitude.AngVelRadS: ang_vel_rad_s,
             UAV.State.Sensor.Imu: imu_summary,
@@ -421,15 +438,9 @@ class MspInterface(PluginBase):
             self.enqueue_response(request_id, action, True, dict(params))
             return
         if action == UAV.Action.Flight.Rtl:
-            rtl_mode_name = None
-            for candidate in ("RTH", "NAV RTH", "NAV_RTH"):
-                if candidate in self.mode_channels:
-                    rtl_mode_name = candidate
-                    break
-            if rtl_mode_name is None:
-                raise RuntimeError("rtl mode not configured")
-            self._apply_mode(rtl_mode_name)
-            self.enqueue_response(request_id, action, True, {"Mode": rtl_mode_name, "Enabled": True})
+            with self.api_lock:
+                self.api.activate_rth()
+            self.enqueue_response(request_id, action, True, {"NavMode": "NAV RTH"})
             return
         if action == UAV.Action.Flight.SetMode:
             mode_name = str(params["Mode"])
@@ -441,52 +452,44 @@ class MspInterface(PluginBase):
             self.enqueue_response(request_id, action, True, {"Mode": mode_name, "Enabled": enabled})
             return
         if action == UAV.Action.Flight.Arm:
-            self._activate_override()
-            self._apply_mode(self.arm_mode_name)
-            self._set_throttle(self.rx_config["rxMinUsec"])
-            self.enqueue_response(request_id, action, True, {})
+            if self.latest_state.get(UAV.State.Flight.IsArmed):
+                # Already armed: idempotent success. INAV's arm command runs its
+                # arming-status checks even when armed, so never disturb a live
+                # vehicle with a redundant command.
+                self.enqueue_response(request_id, action, True, {"Armed": True})
+                return
+            with self.api_lock:
+                self.api.set_armed(True)
+            self.enqueue_response(request_id, action, True, {"Armed": True})
             return
         if action == UAV.Action.Flight.Takeoff:
-            self._takeoff()
+            # INAV launch is owned outside this MSP link: the bench hands the
+            # vehicle over already airborne in NAV POSHOLD + GCS NAV, so the
+            # command contract is satisfied by holding the current target.
+            print(
+                f"[MSP] takeoff mapped to hold: platform handed over airborne "
+                f"alt_target_m={self.takeoff_altitude_m}",
+                flush=True,
+            )
             self.enqueue_response(request_id, action, True, {})
             return
         if action == UAV.Action.Flight.Land:
-            self._land()
-            self.enqueue_response(request_id, action, True, {})
+            with self.api_lock:
+                self.api.activate_landing()
+            self.enqueue_response(request_id, action, True, {"NavMode": "NAV LAND"})
             return
         if action == UAV.Action.Navigation.GoTo:
-            waypoint_index = int(self.go_to_waypoint["WaypointIndex"])
-            action_value = int(self.go_to_waypoint["Action"])
-            action_enum = InavEnums.navWaypointActions_e(action_value)
-            latitude = float(params["Latitude"])
-            longitude = float(params["Longitude"])
-            altitude_m = float(params["AltitudeM"])
-            param1 = int(self.go_to_waypoint["Param1"])
-            param2 = int(self.go_to_waypoint["Param2"])
-            param3 = int(self.go_to_waypoint["Param3"])
-            flag = int(self.go_to_waypoint["Flag"])
+            target = global_target_params(params)
             with self.api_lock:
-                self.api.set_waypoint(
-                    waypointIndex=waypoint_index,
-                    action=action_enum,
-                    latitude=latitude,
-                    longitude=longitude,
-                    altitude=altitude_m,
-                    param1=param1,
-                    param2=param2,
-                    param3=param3,
-                    flag=flag,
-                )
+                self.api.set_global_target(**target)
             self.enqueue_response(
                 request_id,
                 action,
                 True,
                 {
-                    "WaypointIndex": waypoint_index,
-                    "Action": int(action_enum),
-                    "Latitude": latitude,
-                    "Longitude": longitude,
-                    "AltitudeM": altitude_m,
+                    "Latitude": target["latitude_deg"],
+                    "Longitude": target["longitude_deg"],
+                    "AltitudeM": target["altitude_m"],
                 },
             )
             return
@@ -538,42 +541,6 @@ class MspInterface(PluginBase):
                 self._handle_action(request)
         except BaseException as exc:
             self._capture_loop_error("process_requests", exc)
-
-    def _takeoff(self) -> None:  # Execute takeoff sequence.
-        if self.takeoff_altitude_m is None:
-            raise RuntimeError("takeoff altitude not set")
-        self._activate_override()
-        self._apply_mode(self.arm_mode_name)
-        start = time.monotonic()
-        while not self.stop_event.is_set():
-            self._set_throttle(self.takeoff_throttle)
-            snapshot = self._state_snapshot()
-            altitude_m = snapshot[UAV.State.Navigation.AltitudeM]
-            if altitude_m is not None and altitude_m >= self.takeoff_altitude_m:
-                self._set_throttle(self.hover_throttle)
-                return
-            if time.monotonic() - start > self.takeoff_timeout_s:
-                raise RuntimeError("takeoff timeout")
-            time.sleep(self.state_poll_interval_s)
-
-    def _land(self) -> None:  # Execute landing sequence.
-        start = time.monotonic()
-        self._activate_override()
-        self._apply_mode(self.arm_mode_name)
-        while not self.stop_event.is_set():
-            self._set_throttle(self.landing_throttle)
-            snapshot = self._state_snapshot()
-            altitude_m = snapshot[UAV.State.Navigation.AltitudeM]
-            if altitude_m is not None and altitude_m <= self.in_air_alt_threshold:
-                self._set_throttle(self.rx_config["rxMinUsec"])
-                if self.arm_mode_name in self.mode_channels:
-                    channel = self.mode_channels[self.arm_mode_name]["channel"]
-                    with self.api_lock:
-                        self.api.set_rc_channels({channel: self.rx_config["rxMinUsec"]})
-                return
-            if time.monotonic() - start > self.landing_timeout_s:
-                raise RuntimeError("landing timeout")
-            time.sleep(self.state_poll_interval_s)
 
     def _state_snapshot(self) -> Dict[str, Any]:  # Fetch latest state snapshot.
         return self.state_scheduler.snapshot()

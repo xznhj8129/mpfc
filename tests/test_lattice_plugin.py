@@ -9,10 +9,13 @@ import pytest
 from anduril import Lattice
 from anduril.core.api_error import ApiError
 
+from lib.lattice_specs import ORBIT_SPECIFICATION_URL, TRANSIT_SPECIFICATION_URL
 from plugins.lattice.lattice import (
     LatticeConfig,
     LatticeConnection,
     LatticeConnectionError,
+    TaskDecoder,
+    TaskStatusVersions,
 )
 from protocols.namespace_loader import load_protocol_namespace
 
@@ -59,10 +62,184 @@ def test_protocol_contract_tokens() -> None:
     assert lattice.State.Link.Connected == "Connected"
     assert lattice.State.Auth.TokenValid == "TokenValid"
     assert lattice.State.System.LastErrorOperation == "LastErrorOperation"
+    assert lattice.State.Task.PendingCount == "PendingCount"
+    assert lattice.State.Task.LastTask == "LastTask"
+    assert lattice.State.Entity.AltitudeHaeM == "AltitudeHaeM"
     assert lattice.Action.Connection.Connect == "Connect"
     assert lattice.Action.Connection.Status == "Status"
+    assert lattice.Action.Task.Fetch == "Fetch"
+    assert lattice.Action.Task.Report == "Report"
     assert lattice.Event.Auth.TokenAcquired == "TokenAcquired"
+    assert lattice.Event.Task.CancelRequested == "CancelRequested"
+    assert lattice.Event.Task.StatusUpdated == "StatusUpdated"
     assert lattice.Event.System.Error == "Error"
+
+
+TRANSIT_SPEC = {
+    "type": TRANSIT_SPECIFICATION_URL,
+    "plan": {
+        "route": {
+            "path": [
+                {
+                    "waypoint": {
+                        "llaPoint": {
+                            "lat": 36.530440,
+                            "lon": -83.216383,
+                            "alt": 500.0,
+                            "altitudeReference": "ALTITUDE_REFERENCE_HEIGHT_ABOVE_WGS84",
+                        }
+                    }
+                }
+            ]
+        }
+    },
+}
+
+ORBIT_SPEC = {
+    "type": ORBIT_SPECIFICATION_URL,
+    "objective": {
+        "lla": {"latitudeDegrees": 36.52, "longitudeDegrees": -83.22, "altitudeHaeM": 450.0}
+    },
+    "orbitRadius": 100.0,
+    "orbitHeight": 60.0,
+    "orbitDirection": "ORBIT_CLOCKWISE",
+}
+
+
+def make_task(specification, task_id="task-1", status_version=1):
+    return {
+        "version": {"task_id": task_id, "status_version": status_version},
+        "specification": specification,
+        "display_name": None,
+    }
+
+
+def test_decode_transit_task_into_protocol_shape() -> None:
+    decoded = TaskDecoder().decode(make_task(TRANSIT_SPEC))
+    payload = decoded.payload()
+    assert payload["TaskId"] == "task-1"
+    assert payload["SpecificationType"] == TRANSIT_SPECIFICATION_URL
+    assert payload["LatitudeDeg"] == pytest.approx(36.530440)
+    assert payload["LongitudeDeg"] == pytest.approx(-83.216383)
+    assert payload["AltitudeM"] == pytest.approx(500.0)
+    assert payload["AltitudeReference"] == "Hae"
+    assert payload["OrbitRadiusM"] is None
+    assert payload["OrbitHeightM"] is None
+
+
+def test_decode_orbit_task_into_protocol_shape() -> None:
+    decoded = TaskDecoder().decode(make_task(ORBIT_SPEC, task_id="task-orbit"))
+    payload = decoded.payload()
+    assert payload["TaskId"] == "task-orbit"
+    assert payload["AltitudeM"] == pytest.approx(450.0)
+    assert payload["AltitudeReference"] == "Hae"
+    assert payload["OrbitRadiusM"] == pytest.approx(100.0)
+    assert payload["OrbitHeightM"] == pytest.approx(60.0)
+    assert payload["OrbitDirection"] == "ORBIT_CLOCKWISE"
+
+
+def test_decode_entity_objective_uses_resolver() -> None:
+    spec = {
+        "type": ORBIT_SPECIFICATION_URL,
+        "objective": {"entityId": "target-1"},
+        "orbitRadius": 100.0,
+        "orbitHeight": 60.0,
+        "orbitDirection": "ORBIT_CLOCKWISE",
+    }
+    entity = {
+        "location": {
+            "position": {
+                "latitude_degrees": 36.53,
+                "longitude_degrees": -83.21,
+                "altitude_agl_meters": 30.0,
+            }
+        }
+    }
+    resolved = []
+
+    def resolve(entity_id: str):
+        resolved.append(entity_id)
+        return entity
+
+    decoded = TaskDecoder(resolve_entity=resolve).decode(make_task(spec))
+    assert resolved == ["target-1"]
+    assert decoded.altitude_reference == "Agl"
+    assert decoded.altitude_m == pytest.approx(30.0)
+
+
+def test_decode_entity_objective_without_altitude_uses_home_datum() -> None:
+    spec = {
+        "type": ORBIT_SPECIFICATION_URL,
+        "objective": {"entityId": "target-1"},
+        "orbitRadius": 100.0,
+        "orbitHeight": 60.0,
+        "orbitDirection": "ORBIT_CLOCKWISE",
+    }
+    entity = {
+        "location": {
+            "position": {
+                "latitude_degrees": 36.53,
+                "longitude_degrees": -83.21,
+            }
+        }
+    }
+    decoder = TaskDecoder(resolve_entity=lambda entity_id: entity, resolve_home_hae=lambda: 38.0)
+    decoded = decoder.decode(make_task(spec))
+    assert decoded.altitude_reference == "Hae"
+    assert decoded.altitude_m == pytest.approx(38.0)
+
+
+def test_decode_entity_objective_without_datum_is_rejected() -> None:
+    spec = {
+        "type": ORBIT_SPECIFICATION_URL,
+        "objective": {"entityId": "target-1"},
+        "orbitRadius": 100.0,
+        "orbitHeight": 60.0,
+        "orbitDirection": "ORBIT_CLOCKWISE",
+    }
+    entity = {
+        "location": {
+            "position": {
+                "latitude_degrees": 36.53,
+                "longitude_degrees": -83.21,
+            }
+        }
+    }
+    decoder = TaskDecoder(resolve_entity=lambda entity_id: entity, resolve_home_hae=lambda: None)
+    with pytest.raises(ValueError):
+        decoder.decode(make_task(spec))
+
+
+def test_decode_rejects_unsupported_specification() -> None:
+    with pytest.raises(ValueError):
+        TaskDecoder().decode(make_task({"type": "type.googleapis.com/unknown.Task"}))
+
+
+def test_decode_rejects_missing_altitude() -> None:
+    spec = {
+        "type": TRANSIT_SPECIFICATION_URL,
+        "plan": {
+            "route": {
+                "path": [{"waypoint": {"llaPoint": {"lat": 36.53, "lon": -83.21}}}]
+            }
+        },
+    }
+    with pytest.raises(ValueError):
+        TaskDecoder().decode(make_task(spec))
+
+
+def test_status_versions_seed_adopt_and_next() -> None:
+    versions = TaskStatusVersions()
+    assert versions.get("t") is None
+    assert versions.next_version("t") is None
+    assert versions.seed("t", 4) is True
+    assert versions.seed("t", 4) is False
+    assert versions.seed("t", 3) is False
+    assert versions.next_version("t") == 5
+    versions.adopt("t", 9)
+    assert versions.get("t") == 9
+    assert versions.next_version("t") == 10
+    assert versions.seed("t", 5) is False
 
 
 def test_config_url_and_token_endpoint() -> None:

@@ -34,16 +34,6 @@ cfg:
   in_air_alt_threshold: 0.5
   # required minimum satellites for home/global ok
   home_min_satellites: 6
-  # required PWM microseconds for takeoff throttle
-  takeoff_throttle: 1700
-  # required PWM microseconds for hover throttle after takeoff
-  hover_throttle: 1500
-  # required PWM microseconds for landing descent
-  landing_throttle: 1300
-  # required timeout seconds for takeoff action
-  takeoff_timeout_s: 45.0
-  # required timeout seconds for landing action
-  landing_timeout_s: 45.0
   # required override send interval seconds
   override_send_interval: 0.04
   # required seconds before a sparse control override expires automatically
@@ -54,14 +44,6 @@ cfg:
     pitch: pitch
     yaw: yaw
     throt: throttle
-  # required default waypoint metadata used by GO_TO conversion
-  go_to_waypoint:
-    WaypointIndex: 255
-    Action: 1
-    Param1: 0
-    Param2: 0
-    Param3: 0
-    Flag: 0
   # required publish intervals in seconds keyed by state field name
   state_intervals:
     IsInAir: 0.5
@@ -73,6 +55,7 @@ cfg:
     FixType: 0.5
     NumSat: 0.5
     NavState: 0.5
+    Target: 0.5
     AttitudeRad: 0.2
     AngVelRadS: 0.2
     RcTelemetry: 0.2

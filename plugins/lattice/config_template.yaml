@@ -21,12 +21,43 @@ cfg:
   max_retries: 2
   # delay before a failed connection is retried
   reconnect_secs: 5.0
+  # required Lattice asset identity used by the agent selector and published entity
+  asset_id: mpfc-uav
+  # required vehicle state interface consumed for entity publishing
+  interface:
+    id: uav_controller
+    topic_ns: UAV
+  # required vehicle state fields used to encode the published entity
+  vehicle_state_keys:
+  - Position
+  - AttitudeRad
+  - Battery
+  # Lattice entity refresh interval and expiry
+  state_publish_interval_s: 1.0
+  entity_expiry_s: 15.0
+  # agent listen long-poll timeout, bounded call retries
+  listen_timeout_s: 300.0
+  lattice_attempts: 3
+  lattice_retry_delay_s: 1.0
   # required publish intervals in seconds keyed by LATTICE.State field name
   state_intervals:
     Connected: 0.1
     Endpoint: 0.5
     ConnectAttempts: 0.5
+    LastOkAgeS: 0.5
     TokenValid: 0.5
+    PendingCount: 0.5
+    LastTask: 0.5
+    LatitudeDeg: 1.0
+    LongitudeDeg: 1.0
+    AltitudeAglM: 1.0
+    AltitudeHaeM: 1.0
+    AttitudeEnuW: 1.0
+    AttitudeEnuX: 1.0
+    AttitudeEnuY: 1.0
+    AttitudeEnuZ: 1.0
+    PublishCount: 1.0
+    LastPublishAtMs: 1.0
     LastError: 0.5
     LastErrorOperation: 0.5
     LastErrorEndpoint: 0.5

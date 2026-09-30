@@ -1,16 +1,37 @@
-# Lattice API interface contract for the MPFC bus.
+# Lattice agent interface contract for the MPFC bus.
 #
 # Bus topics follow the generic runtime patterns:
 #   <id>/LATTICE/REQUEST | <id>/LATTICE/RESPONSE
 #   <id>/LATTICE/STATE/<field> | <id>/LATTICE/EVENT/<event>
 #
-# This contract covers the API connection and token lifecycle only;
-# task and entity semantics are not part of it.
+# The interface owns the Lattice API connection, the agent listen, task
+# decoding into these shapes, versioned status reporting, and Lattice
+# entity publishing.  Vehicle commands and mission policy are not part of
+# this contract.
 
 version: 1
 
 name: LATTICE
-desc: "Lattice API connection, authentication, and link state contract."
+desc: "Lattice API connection, agent task translation, and entity state contract."
+
+enums:
+  LatticeTaskStatus:
+    - Ack
+    - Executing
+    - CancelRequested
+    - DoneOk
+    - DoneNotOk
+
+  LatticeTaskErrorCode:
+    - Rejected
+    - Cancelled
+    - Failed
+
+  LatticeAltitudeReference:
+    - Hae
+    - Agl
+    - Relative
+    - Asl
 
 structs:
   LATTICE:
@@ -24,6 +45,8 @@ structs:
     variants:
       - StateLink
       - StateAuth
+      - StateTask
+      - StateEntity
       - StateSystem
 
   StateLink:
@@ -47,6 +70,12 @@ structs:
         fields:
           ConnectAttempts: int
 
+      LastOkAgeS:
+        desc: Seconds since the last successful Lattice exchange.
+        key: LATTICE.State.Link.LastOkAgeS
+        fields:
+          LastOkAgeS: float
+
   StateAuth:
     parent: State
     variants:
@@ -56,11 +85,99 @@ structs:
         fields:
           TokenValid: bool
 
+  StateTask:
+    parent: State
+    variants:
+      PendingCount:
+        desc: Decoded agent tasks waiting to be fetched by a core.
+        key: LATTICE.State.Task.PendingCount
+        fields:
+          PendingCount: int
+
+      LastTask:
+        desc: Last decoded agent task delivered to the bus.
+        key: LATTICE.State.Task.LastTask
+        fields:
+          TaskId: string
+          SpecificationType: string
+          DisplayName: string
+          LatitudeDeg: optional float
+          LongitudeDeg: optional float
+          AltitudeM: optional float
+          AltitudeReference: optional string
+          OrbitRadiusM: optional float
+          OrbitHeightM: optional float
+          OrbitDirection: optional string
+          ReceivedAtMs: int
+
+  StateEntity:
+    parent: State
+    variants:
+      LatitudeDeg:
+        desc: Last published entity latitude.
+        key: LATTICE.State.Entity.LatitudeDeg
+        fields:
+          LatitudeDeg: float
+
+      LongitudeDeg:
+        desc: Last published entity longitude.
+        key: LATTICE.State.Entity.LongitudeDeg
+        fields:
+          LongitudeDeg: float
+
+      AltitudeAglM:
+        desc: Last published entity altitude above ground level.
+        key: LATTICE.State.Entity.AltitudeAglM
+        fields:
+          AltitudeAglM: float
+
+      AltitudeHaeM:
+        desc: Last published entity altitude above the WGS84 ellipsoid.
+        key: LATTICE.State.Entity.AltitudeHaeM
+        fields:
+          AltitudeHaeM: float
+
+      AttitudeEnuW:
+        desc: Last published entity attitude ENU quaternion scalar part.
+        key: LATTICE.State.Entity.AttitudeEnuW
+        fields:
+          AttitudeEnuW: float
+
+      AttitudeEnuX:
+        desc: Last published entity attitude ENU quaternion x component.
+        key: LATTICE.State.Entity.AttitudeEnuX
+        fields:
+          AttitudeEnuX: float
+
+      AttitudeEnuY:
+        desc: Last published entity attitude ENU quaternion y component.
+        key: LATTICE.State.Entity.AttitudeEnuY
+        fields:
+          AttitudeEnuY: float
+
+      AttitudeEnuZ:
+        desc: Last published entity attitude ENU quaternion z component.
+        key: LATTICE.State.Entity.AttitudeEnuZ
+        fields:
+          AttitudeEnuZ: float
+
+      PublishCount:
+        desc: Lattice entity publishes completed by the interface.
+        key: LATTICE.State.Entity.PublishCount
+        fields:
+          PublishCount: int
+
+      LastPublishAtMs:
+        desc: Unix epoch milliseconds of the last completed entity publish.
+        key: LATTICE.State.Entity.LastPublishAtMs
+        fields:
+          LastPublishAtMs: int
+
   StateSystem:
     parent: State
     variants:
       LastError:
-        desc: Last connection or token error detail.
+        desc: Last connection, task, or token error detail.
         key: LATTICE.State.System.LastError
         fields:
           LastError: string
@@ -81,6 +198,7 @@ structs:
     parent: LATTICE
     variants:
       - ActionConnection
+      - ActionTask
 
   ActionConnection:
     parent: Action
@@ -100,11 +218,30 @@ structs:
         key: LATTICE.Action.Connection.Status
         fields: {}
 
+  ActionTask:
+    parent: Action
+    variants:
+      Fetch:
+        desc: Fetch the oldest decoded agent task that has not been delivered yet.
+        key: LATTICE.Action.Task.Fetch
+        fields: {}
+
+      Report:
+        desc: Report one versioned task status transition to the Lattice endpoint.
+        key: LATTICE.Action.Task.Report
+        fields:
+          TaskId: string
+          Status: string
+          Progress: optional float
+          ErrorCode: optional string
+          ErrorMessage: optional string
+
   Event:
     parent: LATTICE
     variants:
       - EventLink
       - EventAuth
+      - EventTask
       - EventSystem
 
   EventLink:
@@ -131,11 +268,57 @@ structs:
         fields:
           ExpiresAtMs: int
 
+  EventTask:
+    parent: Event
+    variants:
+      Received:
+        desc: Agent execute request decoded and waiting for a core to fetch.
+        key: LATTICE.Event.Task.Received
+        fields:
+          TaskId: string
+          SpecificationType: string
+          DisplayName: string
+          LatitudeDeg: optional float
+          LongitudeDeg: optional float
+          AltitudeM: optional float
+          AltitudeReference: optional string
+          OrbitRadiusM: optional float
+          OrbitHeightM: optional float
+          OrbitDirection: optional string
+          ReceivedAtMs: int
+
+      DuplicateRejected:
+        desc: Redelivered agent task id rejected; it is never fetched twice.
+        key: LATTICE.Event.Task.DuplicateRejected
+        fields:
+          TaskId: string
+
+      CancelRequested:
+        desc: Lattice cancel request received for a task.
+        key: LATTICE.Event.Task.CancelRequested
+        fields:
+          TaskId: string
+
+      CompleteRequested:
+        desc: Lattice complete request received for a task.
+        key: LATTICE.Event.Task.CompleteRequested
+        fields:
+          TaskId: string
+
+      StatusUpdated:
+        desc: A task status transition was accepted by the Lattice endpoint.
+        key: LATTICE.Event.Task.StatusUpdated
+        fields:
+          TaskId: string
+          Status: string
+          ErrorCode: optional string
+          Version: int
+
   EventSystem:
     parent: Event
     variants:
       Error:
-        desc: Connection or token error with operation and endpoint context.
+        desc: Connection, task, or token error with operation and endpoint context.
         key: LATTICE.Event.System.Error
         fields:
           Operation: string

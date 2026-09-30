@@ -1,0 +1,99 @@
+my_name: uav1
+
+vehicle:
+  autopilot: FCAutopilotType.INAV
+  uav_type: UAVType.Copter
+  telem_type: TelemType.MSPV2
+
+core:
+  name: lattice_demo
+  cfg:
+    id: lattice_core
+    poll_interval_s: 0.2
+
+    lattice:
+      id: lattice
+      topic_ns: LATTICE
+    mission:
+      id: mission
+      topic_ns: MISSION
+
+    state_keys:
+    - IsHomePositionOk
+    - IsGlobalPositionOk
+    - IsArmed
+    - IsInAir
+    - AltitudeM
+    - Position
+    - SensorConfig
+    - ActiveModeNames
+    lattice_state_keys:
+    - LastOkAgeS
+
+    state_logging:
+      keys:
+      - IsInAir
+      - IsArmed
+      - AltitudeM
+      interval_s: 0.5
+      prefix: CORE
+
+    # demo mission policy; INAV POSHOLD hold accuracy sets the arrival radii
+    policy:
+      takeoff_altitude_m: 10.0
+      takeoff_altitude_ok_fraction: 0.8
+      post_takeoff_wait_s: 1.0
+      arrival_radius_m: 6.0
+      arrival_altitude_tolerance_m: 3.0
+      execution_timeout_s: 240.0
+      progress_interval_s: 1.0
+      fetch_interval_s: 0.5
+      state_timeout_s: 60.0
+      response_timeout_s: 20.0
+      link_loss_timeout_s: 60.0
+      failsafe_action: rtl
+      # null derives the home HAE datum from live telemetry
+      home_altitude_hae_m: null
+
+bus_config:
+  schema_path: ../../config/bus_topics_schema.json
+  log_file: hivebus.log
+  endpoint:
+    type: mqtt
+    host: 127.0.0.1
+    port: 1883
+
+plugins:
+- plugin: lattice
+  cfg:
+    id: lattice
+    topic_ns: LATTICE
+    # Lattice asset identity used for the agent selector and entity id
+    asset_id: mpfc-uav
+    base_url: https://127.0.0.1:8443
+    client_id: mpfc
+    client_secret: mpfc
+    # vehicle state consumed for entity publishing
+    interface:
+      id: uav_controller
+      topic_ns: UAV
+
+- plugin: mission
+  cfg:
+    id: mission
+    topic_ns: MISSION
+
+- plugin: uav_controller
+  cfg:
+    id: uav_controller
+    topic_ns: UAV
+    poll_interval_s: 0.1
+    response_timeout_s: 20.0
+
+- plugin: msp_interface
+  cfg:
+    id: mspapi
+    topic_ns: UAV
+    conn_type: tcp
+    # INAV JSBSim bench GCS MSP port (UART2 of the SITL)
+    conn_str: 127.0.0.1:5761

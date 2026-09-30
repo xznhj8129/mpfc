@@ -144,6 +144,16 @@ structs:
         fields:
           NavState: int
 
+      Target:
+        desc: Active navigation target reported by the flight controller.
+        key: UAV.State.Navigation.Target
+        fields:
+          LatDeg: float
+          LonDeg: float
+          AltitudeM: float
+          HeadingDeg: float
+          ClimbRateMS: float
+
       GpsInfo:
         desc: Extended GNSS status.
         key: UAV.State.Navigation.GpsInfo

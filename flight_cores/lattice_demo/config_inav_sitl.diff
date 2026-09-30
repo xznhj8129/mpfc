@@ -1,0 +1,88 @@
+--- config_px4_sitl.yaml	2026-09-29 21:09:40.508766748 -0400
++++ config_inav_sitl.yaml	2026-09-29 21:50:42.505123542 -0400
+@@ -1,9 +1,9 @@
+ my_name: uav1
+ 
+ vehicle:
+-  autopilot: FCAutopilotType.PX4
++  autopilot: FCAutopilotType.INAV
+   uav_type: UAVType.Copter
+-  telem_type: TelemType.Mavlink2
++  telem_type: TelemType.MSPV2
+ 
+ core:
+   name: lattice_demo
+@@ -38,19 +38,18 @@
+       interval_s: 0.5
+       prefix: CORE
+ 
+-    # demo mission policy (no task targets are configured; tasks arrive over Lattice)
++    # demo mission policy; INAV POSHOLD hold accuracy sets the arrival radii
+     policy:
+       takeoff_altitude_m: 10.0
+       takeoff_altitude_ok_fraction: 0.8
+       post_takeoff_wait_s: 1.0
+-      arrival_radius_m: 3.0
+-      arrival_altitude_tolerance_m: 2.0
++      arrival_radius_m: 6.0
++      arrival_altitude_tolerance_m: 3.0
+       execution_timeout_s: 240.0
+       progress_interval_s: 1.0
+       fetch_interval_s: 0.5
+       state_timeout_s: 60.0
+       response_timeout_s: 20.0
+-      # Lattice link-loss failsafe bound; safe action when armed
+       link_loss_timeout_s: 60.0
+       failsafe_action: rtl
+       # null derives the home HAE datum from live telemetry
+@@ -65,30 +64,6 @@
+     port: 1883
+ 
+ plugins:
+-- plugin: px4_sitl_gz_launcher
+-  cfg:
+-    id: px4_sitl
+-    auto_start: true
+-
+-    px4:
+-      px4_dir: "../../px4dev/PX4-Autopilot/"
+-      sitl_vehicle: "gz_x500_mono_cam"
+-      companion_mavlink_port: 14540
+-      qgc_mavlink_port: 14550
+-      qgc_mavlink_enabled: false
+-      qgc_local_port: 18571
+-      home_lat: 36.530440
+-      home_lon: -83.216383
+-      home_alt: 0
+-      model_pose: ""
+-
+-    gazebo:
+-      gz_world: "default"
+-      gz_ip: 127.0.0.1
+-      gz_gui: true
+-      video_host_ip: 127.0.0.1
+-      video_host_port: 5601
+-
+ - plugin: lattice
+   cfg:
+     id: lattice
+@@ -115,14 +90,10 @@
+     poll_interval_s: 0.1
+     response_timeout_s: 20.0
+ 
+-- plugin: mavsdk_interface
++- plugin: msp_interface
+   cfg:
+-    id: mavsdk
++    id: mspapi
+     topic_ns: UAV
+-    is_interface: true
+-    conn_type: udp
+-    conn_str: udpin://0.0.0.0:14540
+-    mav_dialect: PX4
+-    mav_type: MAV_TYPE_QUADROTOR
+-    mav_sysid: 1
+-    mavsdk_log_debug: false
++    conn_type: tcp
++    # INAV JSBSim bench GCS MSP port (UART2 of the SITL)
++    conn_str: 127.0.0.1:5761
