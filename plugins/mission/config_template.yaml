@@ -1,0 +1,16 @@
+plugin: mission
+cfg:
+  # required bus client id for this mission plugin
+  id: mission
+  # required topic namespace shared with core/plugin clients (for example: MISSION)
+  topic_ns: MISSION
+  # required publish intervals in seconds keyed by MISSION.State field name
+  state_intervals:
+    Depth: 0.1
+    TaskIds: 0.1
+    TaskId: 0.1
+    State: 0.1
+    CancelRequested: 0.1
+    LastEvent: 0.1
+  loop_interval_s: 0.1
+  bus_poll_interval_s: 0.01

@@ -1,0 +1,143 @@
+# Lattice API interface contract for the MPFC bus.
+#
+# Bus topics follow the generic runtime patterns:
+#   <id>/LATTICE/REQUEST | <id>/LATTICE/RESPONSE
+#   <id>/LATTICE/STATE/<field> | <id>/LATTICE/EVENT/<event>
+#
+# This contract covers the API connection and token lifecycle only;
+# task and entity semantics are not part of it.
+
+version: 1
+
+name: LATTICE
+desc: "Lattice API connection, authentication, and link state contract."
+
+structs:
+  LATTICE:
+    variants:
+      - State
+      - Action
+      - Event
+
+  State:
+    parent: LATTICE
+    variants:
+      - StateLink
+      - StateAuth
+      - StateSystem
+
+  StateLink:
+    parent: State
+    variants:
+      Connected:
+        desc: Lattice client is constructed and the last token acquisition succeeded.
+        key: LATTICE.State.Link.Connected
+        fields:
+          Connected: bool
+
+      Endpoint:
+        desc: Lattice API base URL used for requests.
+        key: LATTICE.State.Link.Endpoint
+        fields:
+          Endpoint: string
+
+      ConnectAttempts:
+        desc: Connection attempts made by the interface.
+        key: LATTICE.State.Link.ConnectAttempts
+        fields:
+          ConnectAttempts: int
+
+  StateAuth:
+    parent: State
+    variants:
+      TokenValid:
+        desc: A bearer token is present and not past its refresh horizon.
+        key: LATTICE.State.Auth.TokenValid
+        fields:
+          TokenValid: bool
+
+  StateSystem:
+    parent: State
+    variants:
+      LastError:
+        desc: Last connection or token error detail.
+        key: LATTICE.State.System.LastError
+        fields:
+          LastError: string
+
+      LastErrorOperation:
+        desc: Operation that produced the last error.
+        key: LATTICE.State.System.LastErrorOperation
+        fields:
+          LastErrorOperation: string
+
+      LastErrorEndpoint:
+        desc: Endpoint that produced the last error.
+        key: LATTICE.State.System.LastErrorEndpoint
+        fields:
+          LastErrorEndpoint: string
+
+  Action:
+    parent: LATTICE
+    variants:
+      - ActionConnection
+
+  ActionConnection:
+    parent: Action
+    variants:
+      Connect:
+        desc: Open the connection and acquire a token when credentials are configured.
+        key: LATTICE.Action.Connection.Connect
+        fields: {}
+
+      Disconnect:
+        desc: Close the connection and release the transport.
+        key: LATTICE.Action.Connection.Disconnect
+        fields: {}
+
+      Status:
+        desc: Report current connection, endpoint, and token status.
+        key: LATTICE.Action.Connection.Status
+        fields: {}
+
+  Event:
+    parent: LATTICE
+    variants:
+      - EventLink
+      - EventAuth
+      - EventSystem
+
+  EventLink:
+    parent: Event
+    variants:
+      Connected:
+        desc: Connection transitioned to connected.
+        key: LATTICE.Event.Link.Connected
+        fields:
+          Endpoint: string
+
+      Disconnected:
+        desc: Connection transitioned to disconnected.
+        key: LATTICE.Event.Link.Disconnected
+        fields:
+          Endpoint: string
+
+  EventAuth:
+    parent: Event
+    variants:
+      TokenAcquired:
+        desc: A bearer token was acquired or refreshed.
+        key: LATTICE.Event.Auth.TokenAcquired
+        fields:
+          ExpiresAtMs: int
+
+  EventSystem:
+    parent: Event
+    variants:
+      Error:
+        desc: Connection or token error with operation and endpoint context.
+        key: LATTICE.Event.System.Error
+        fields:
+          Operation: string
+          Endpoint: string
+          Detail: string

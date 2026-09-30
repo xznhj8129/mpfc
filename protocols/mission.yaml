@@ -1,0 +1,203 @@
+# Generic task lifecycle contract for MPFC cores and plugins.
+#
+# Bus topics follow the generic runtime patterns:
+#   <id>/MISSION/REQUEST | <id>/MISSION/RESPONSE
+#   <id>/MISSION/STATE/<field> | <id>/MISSION/EVENT/<event>
+#
+# Lifecycle: Received -> Queued -> Active <-> Paused -> Completed.
+# Cancel drops a Received/Queued task and requests cancel of the
+# Active/Paused task; the request is completed by AcknowledgeCancel.
+
+version: 1
+
+name: MISSION
+desc: "Generic task and mission lifecycle state contract."
+
+enums:
+  MissionTaskState:
+    - Received
+    - Queued
+    - Active
+    - Paused
+    - Cancelled
+    - Completed
+
+  MissionTaskEvent:
+    - Queued
+    - Activated
+    - Paused
+    - Resumed
+    - CancelRequested
+    - Cancelled
+    - Completed
+    - DuplicateRejected
+
+  MissionCancelReason:
+    - Dropped
+    - Acknowledged
+
+structs:
+  MISSION:
+    variants:
+      - State
+      - Action
+      - Event
+
+  State:
+    parent: MISSION
+    variants:
+      - StateQueue
+      - StateActive
+      - StateSystem
+
+  StateQueue:
+    parent: State
+    variants:
+      Depth:
+        desc: Number of queued tasks.
+        key: MISSION.State.Queue.Depth
+        fields:
+          Depth: int
+
+      TaskIds:
+        desc: Queued task ids in queue order.
+        key: MISSION.State.Queue.TaskIds
+        fields:
+          TaskIds: list[string]
+
+  StateActive:
+    parent: State
+    variants:
+      TaskId:
+        desc: Active or paused task id; empty when the active slot is free.
+        key: MISSION.State.Active.TaskId
+        fields:
+          TaskId: string
+
+      State:
+        desc: State of the task holding the active slot.
+        key: MISSION.State.Active.State
+        fields:
+          State: string
+
+      CancelRequested:
+        desc: A cancel has been requested for the active slot task.
+        key: MISSION.State.Active.CancelRequested
+        fields:
+          CancelRequested: bool
+
+  StateSystem:
+    parent: State
+    variants:
+      LastEvent:
+        desc: Last task lifecycle event emitted.
+        key: MISSION.State.System.LastEvent
+        fields:
+          LastEvent: string
+
+  Action:
+    parent: MISSION
+    variants:
+      - ActionTask
+
+  ActionTask:
+    parent: Action
+    variants:
+      Submit:
+        desc: Admit a task id and queue it; an already tracked id is rejected.
+        key: MISSION.Action.Task.Submit
+        fields:
+          TaskId: string
+
+      Activate:
+        desc: Move a queued task into the free active slot.
+        key: MISSION.Action.Task.Activate
+        fields:
+          TaskId: string
+
+      Pause:
+        desc: Pause the active task.
+        key: MISSION.Action.Task.Pause
+        fields:
+          TaskId: string
+
+      Resume:
+        desc: Resume the paused task.
+        key: MISSION.Action.Task.Resume
+        fields:
+          TaskId: string
+
+      Cancel:
+        desc: Drop a queued task or request cancel of the active or paused task.
+        key: MISSION.Action.Task.Cancel
+        fields:
+          TaskId: string
+
+      AcknowledgeCancel:
+        desc: Confirm that a cancel-requested active or paused task stopped.
+        key: MISSION.Action.Task.AcknowledgeCancel
+        fields:
+          TaskId: string
+
+      Complete:
+        desc: Mark the active task completed.
+        key: MISSION.Action.Task.Complete
+        fields:
+          TaskId: string
+
+  Event:
+    parent: MISSION
+    variants:
+      - EventTask
+
+  EventTask:
+    parent: Event
+    variants:
+      Queued:
+        desc: Task admitted and queued.
+        key: MISSION.Event.Task.Queued
+        fields:
+          TaskId: string
+
+      Activated:
+        desc: Task moved into the active slot.
+        key: MISSION.Event.Task.Activated
+        fields:
+          TaskId: string
+
+      Paused:
+        desc: Active task paused.
+        key: MISSION.Event.Task.Paused
+        fields:
+          TaskId: string
+
+      Resumed:
+        desc: Paused task resumed.
+        key: MISSION.Event.Task.Resumed
+        fields:
+          TaskId: string
+
+      CancelRequested:
+        desc: Cancel requested for the active or paused task.
+        key: MISSION.Event.Task.CancelRequested
+        fields:
+          TaskId: string
+
+      Cancelled:
+        desc: Task cancelled; reason records the drop or the acknowledgement.
+        key: MISSION.Event.Task.Cancelled
+        fields:
+          TaskId: string
+          Reason: string
+
+      Completed:
+        desc: Task completed.
+        key: MISSION.Event.Task.Completed
+        fields:
+          TaskId: string
+
+      DuplicateRejected:
+        desc: Submit rejected because the task id is already tracked.
+        key: MISSION.Event.Task.DuplicateRejected
+        fields:
+          TaskId: string

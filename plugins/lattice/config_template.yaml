@@ -1,0 +1,34 @@
+plugin: lattice
+cfg:
+  # required bus client id for this Lattice interface
+  id: lattice
+  # required topic namespace shared with core/plugin clients (for example: LATTICE)
+  topic_ns: LATTICE
+  is_interface: true
+  # required Lattice API base URL (local Lattice-compatible server)
+  base_url: https://127.0.0.1:8443
+  # TLS verification: set false to disable, or set ca_bundle to a CA file path
+  tls_verify: true
+  ca_bundle: null
+  # token credentials: client_id + client_secret, or a static token
+  client_id: null
+  client_secret: null
+  token: null
+  # optional token endpoint override; defaults to <base_url>/api/v1/oauth/token
+  token_endpoint: null
+  # HTTP request timeout and SDK retry count
+  timeout_s: 10.0
+  max_retries: 2
+  # delay before a failed connection is retried
+  reconnect_secs: 5.0
+  # required publish intervals in seconds keyed by LATTICE.State field name
+  state_intervals:
+    Connected: 0.1
+    Endpoint: 0.5
+    ConnectAttempts: 0.5
+    TokenValid: 0.5
+    LastError: 0.5
+    LastErrorOperation: 0.5
+    LastErrorEndpoint: 0.5
+  loop_interval_s: 0.1
+  bus_poll_interval_s: 0.01

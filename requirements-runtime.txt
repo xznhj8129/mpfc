@@ -1,5 +1,5 @@
 # Core dependencies for the standard MPFC runtime and companion appliance.
-anduril-lattice-sdk
+anduril-lattice-sdk==5.1.0
 pymavlink
 mavsdk
 paho-mqtt>=1.6,<3
