@@ -18,6 +18,11 @@ cfg:
   mav_dialect: PX4
   mav_type: MAV_TYPE_QUADROTOR
   mav_sysid: 1
+  # required; mavsdk_server gRPC port, 0 picks a free loopback port so runtimes can share a host
+  mavsdk_server_port: 0
+  # required; this runtime's own MAVLink identity as seen by the FC; unique per runtime on a shared link
+  gcs_sysid: 245
+  gcs_compid: 190
   # required; enable mavsdk_server debug logging
   mavsdk_log_debug: false
   # required; enable normalized ControlOverride consumption via MAVSDK manual control

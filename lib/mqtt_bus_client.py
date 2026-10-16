@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Minimal MQTT client wrapper matching the sync bus client interface.
-Publishes JSON envelopes to hiveos-prefixed topics with QoS0/no retain.
+Publishes JSON envelopes to hiveos-prefixed topics with QoS0/no retain;
+retained QoS1 only for the runtime instance lock.
 """
 
 import json
@@ -23,7 +24,7 @@ class MqttPublishError(RuntimeError):
 
 
 class MqttBusClient:
-    def __init__(self, host: str, port: int, client_id: str, topic_prefix: str) -> None:
+    def __init__(self, host: str, port: int, client_id: str, topic_prefix: str, will_topic: str | None = None) -> None:
         self.host = host
         self.port = port
         self.client_id = client_id
@@ -37,8 +38,12 @@ class MqttBusClient:
         self.subscription_lock = threading.Lock()
         self.background_error: RuntimeError | None = None
         self.closed = False
-        self.client = mqtt.Client(client_id=client_id, clean_session=True, protocol=mqtt.MQTTv311)
+        # Broker session ids are global; plugin ids repeat across runtimes on one broker.
+        self.client = mqtt.Client(client_id=f"{topic_prefix}/{client_id}", clean_session=True, protocol=mqtt.MQTTv311)
         self.client.enable_logger()
+        if will_topic is not None:
+            # An empty retained will clears the retained message on unclean disconnect.
+            self.client.will_set(self._topic(will_topic), b"", qos=1, retain=True)
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
@@ -110,16 +115,22 @@ class MqttBusClient:
             return
         self._subscribe_topic(topic)
 
-    def publish(self, topic: str, payload: Dict) -> None:
+    def publish(self, topic: str, payload: Dict | None, retain: bool = False) -> None:
         if self.closed:
             return
         self._raise_background_error()
         full = self._topic(topic)
-        encoded = json.dumps(payload, separators=(",", ":")).encode(ENCODING)
-        result = self.client.publish(full, encoded, qos=0, retain=False)
+        # None publishes an empty payload, which clears a retained topic.
+        encoded = b"" if payload is None else json.dumps(payload, separators=(",", ":")).encode(ENCODING)
+        result = self.client.publish(full, encoded, qos=1 if retain else 0, retain=retain)
         status = result.rc
         if status != mqtt.MQTT_ERR_SUCCESS:
             raise MqttPublishError(full, status)
+        if retain:
+            # Retained state must reach the broker before a following disconnect.
+            result.wait_for_publish(timeout=MQTT_CONNECT_TIMEOUT_S)
+            if not result.is_published():
+                raise MqttPublishError(full, mqtt.MQTT_ERR_NO_CONN)
 
     def receive(self, timeout: float | None = None) -> tuple[str, Dict[str, Any]]:
         self._raise_background_error()

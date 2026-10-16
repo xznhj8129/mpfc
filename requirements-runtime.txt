@@ -6,3 +6,6 @@ paho-mqtt>=1.6,<3
 PyYAML>=6
 pydantic>=2.6
 msgpack>=1.0
+geographiclib>=2
+mgrs>=1
+geojson>=3

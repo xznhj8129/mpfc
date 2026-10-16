@@ -9,12 +9,12 @@ import pytest
 from anduril import Lattice
 from anduril.core.api_error import ApiError
 
+from flight_cores.lattice_demo.task import TaskDecoder
 from lib.lattice_specs import ORBIT_SPECIFICATION_URL, TRANSIT_SPECIFICATION_URL
 from plugins.lattice.lattice import (
     LatticeConfig,
     LatticeConnection,
     LatticeConnectionError,
-    TaskDecoder,
     TaskStatusVersions,
 )
 from protocols.namespace_loader import load_protocol_namespace
@@ -82,12 +82,12 @@ TRANSIT_SPEC = {
             "path": [
                 {
                     "waypoint": {
-                        "llaPoint": {
+                        "llaPoint": {"lla": {
                             "lat": 36.530440,
                             "lon": -83.216383,
                             "alt": 500.0,
                             "altitudeReference": "ALTITUDE_REFERENCE_HEIGHT_ABOVE_WGS84",
-                        }
+                        }}
                     }
                 }
             ]
@@ -167,7 +167,7 @@ def test_decode_entity_objective_uses_resolver() -> None:
     assert decoded.altitude_m == pytest.approx(30.0)
 
 
-def test_decode_entity_objective_without_altitude_uses_home_datum() -> None:
+def test_decode_entity_objective_without_altitude_is_rejected() -> None:
     spec = {
         "type": ORBIT_SPECIFICATION_URL,
         "objective": {"entityId": "target-1"},
@@ -183,10 +183,8 @@ def test_decode_entity_objective_without_altitude_uses_home_datum() -> None:
             }
         }
     }
-    decoder = TaskDecoder(resolve_entity=lambda entity_id: entity, resolve_home_hae=lambda: 38.0)
-    decoded = decoder.decode(make_task(spec))
-    assert decoded.altitude_reference == "Hae"
-    assert decoded.altitude_m == pytest.approx(38.0)
+    with pytest.raises(ValueError, match="no known altitude"):
+        TaskDecoder(resolve_entity=lambda _: entity).decode(make_task(spec))
 
 
 def test_decode_entity_objective_without_datum_is_rejected() -> None:
@@ -205,7 +203,7 @@ def test_decode_entity_objective_without_datum_is_rejected() -> None:
             }
         }
     }
-    decoder = TaskDecoder(resolve_entity=lambda entity_id: entity, resolve_home_hae=lambda: None)
+    decoder = TaskDecoder(resolve_entity=lambda entity_id: entity)
     with pytest.raises(ValueError):
         decoder.decode(make_task(spec))
 
@@ -231,14 +229,14 @@ def test_decode_rejects_missing_altitude() -> None:
 def test_status_versions_seed_adopt_and_next() -> None:
     versions = TaskStatusVersions()
     assert versions.get("t") is None
-    assert versions.next_version("t") is None
+    assert versions.get("t") is None
     assert versions.seed("t", 4) is True
     assert versions.seed("t", 4) is False
     assert versions.seed("t", 3) is False
-    assert versions.next_version("t") == 5
+    assert versions.get("t") == 4
     versions.adopt("t", 9)
     assert versions.get("t") == 9
-    assert versions.next_version("t") == 10
+    assert versions.get("t") == 9
     assert versions.seed("t", 5) is False
 
 

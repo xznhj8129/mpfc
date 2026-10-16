@@ -52,7 +52,9 @@ core:
       response_timeout_s: 20.0
       link_loss_timeout_s: 60.0
       failsafe_action: rtl
-      # null derives the home HAE datum from live telemetry
+      cancellation_action: rtl
+      cancellation_timeout_s: 240.0
+      # Configure WGS84 home HAE explicitly; AbsAltM telemetry is AMSL.
       home_altitude_hae_m: null
 
 bus_config:

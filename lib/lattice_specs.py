@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Lattice task specification URLs carried by the Lattice path.
 
-Defined once here because both the Lattice interface plugin (decode and
-entity task catalog) and cores (execution policy) must agree on them.
+Defined once here because both the Lattice interface plugin (entity task catalog) and cores (execution policy) must agree on them.
 """
 
 TRANSIT_SPECIFICATION_URL = "type.googleapis.com/anduril.tasks.v2.Transit"

@@ -4,8 +4,8 @@
 #   <id>/LATTICE/REQUEST | <id>/LATTICE/RESPONSE
 #   <id>/LATTICE/STATE/<field> | <id>/LATTICE/EVENT/<event>
 #
-# The interface owns the Lattice API connection, the agent listen, task
-# decoding into these shapes, versioned status reporting, and Lattice
+# The interface owns the Lattice API connection, the agent listen, native task
+# delivery through these shapes, versioned status reporting, and Lattice
 # entity publishing.  Vehicle commands and mission policy are not part of
 # this contract.
 
@@ -16,6 +16,7 @@ desc: "Lattice API connection, agent task translation, and entity state contract
 
 enums:
   LatticeTaskStatus:
+    - MachineReceipt
     - Ack
     - Executing
     - CancelRequested
@@ -89,26 +90,19 @@ structs:
     parent: State
     variants:
       PendingCount:
-        desc: Decoded agent tasks waiting to be fetched by a core.
+        desc: Native agent tasks waiting to be fetched by a core.
         key: LATTICE.State.Task.PendingCount
         fields:
           PendingCount: int
 
       LastTask:
-        desc: Last decoded agent task delivered to the bus.
+        desc: Last native agent task delivered to the bus.
         key: LATTICE.State.Task.LastTask
-        fields:
+        fields: &native_task_document
           TaskId: string
-          SpecificationType: string
-          DisplayName: string
-          LatitudeDeg: optional float
-          LongitudeDeg: optional float
-          AltitudeM: optional float
-          AltitudeReference: optional string
-          OrbitRadiusM: optional float
-          OrbitHeightM: optional float
-          OrbitDirection: optional string
           ReceivedAtMs: int
+          # Original native Task JSON, including the entire specification.
+          TaskJson: string
 
   StateEntity:
     parent: State
@@ -199,6 +193,7 @@ structs:
     variants:
       - ActionConnection
       - ActionTask
+      - ActionEntity
 
   ActionConnection:
     parent: Action
@@ -218,13 +213,28 @@ structs:
         key: LATTICE.Action.Connection.Status
         fields: {}
 
+  ActionEntity:
+    parent: Action
+    variants:
+      Get:
+        desc: Retrieve a native entity for the core to interpret.
+        key: LATTICE.Action.Entity.Get
+        fields:
+          EntityId: string
+        response_fields:
+          EntityJson: string
+
   ActionTask:
     parent: Action
     variants:
       Fetch:
-        desc: Fetch the oldest decoded agent task that has not been delivered yet.
+        desc: Fetch the oldest native agent task that has not been delivered yet.
         key: LATTICE.Action.Task.Fetch
         fields: {}
+        response_fields:
+          <<: *native_task_document
+          PendingCount: int
+          RecoveryTaskIds: list[string]
 
       Report:
         desc: Report one versioned task status transition to the Lattice endpoint.
@@ -272,20 +282,9 @@ structs:
     parent: Event
     variants:
       Received:
-        desc: Agent execute request decoded and waiting for a core to fetch.
+        desc: Native agent execute request and waiting for a core to fetch.
         key: LATTICE.Event.Task.Received
-        fields:
-          TaskId: string
-          SpecificationType: string
-          DisplayName: string
-          LatitudeDeg: optional float
-          LongitudeDeg: optional float
-          AltitudeM: optional float
-          AltitudeReference: optional string
-          OrbitRadiusM: optional float
-          OrbitHeightM: optional float
-          OrbitDirection: optional string
-          ReceivedAtMs: int
+        fields: *native_task_document
 
       DuplicateRejected:
         desc: Redelivered agent task id rejected; it is never fetched twice.

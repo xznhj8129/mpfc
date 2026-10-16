@@ -1,0 +1,38 @@
+plugin: mavlink_interface
+cfg:
+  # required bus client id for this pymavlink interface
+  id: mavlink
+  # required topic namespace shared with the UAV controller/core
+  topic_ns: UAV
+  is_interface: true
+  supports:
+    autopilot:
+    - FCAutopilotType.PX4
+    - FCAutopilotType.Ardupilot
+    - FCAutopilotType.INAV
+    telem_type:
+    - TelemType.Mavlink2
+  # required vehicle link: udp://:14540, udpin://0.0.0.0:14540, tcp://127.0.0.1:5760, /dev/ttyUSB0:57600
+  conn_str: udp://:14540
+  # vehicle to bind; null binds the first autopilot heartbeat (single-vehicle links only)
+  target_sysid: null
+  target_compid: null
+  # FcConnected goes false when the bound source is silent this long
+  link_stale_s: 3.0
+  # required publish intervals in seconds keyed by state field name
+  state_intervals:
+    FcConnected: 0.5
+    IsArmed: 0.1
+    IsInAir: 0.1
+    IsHomePositionOk: 0.5
+    AltitudeM: 0.1
+    Position: 0.2
+    AttitudeRad: 0.1
+    AngVelRadS: 0.1
+    FixType: 0.5
+    NumSat: 0.5
+    GpsInfo: 0.5
+    RawGps: 0.5
+    Battery: 0.5
+    FlightMode: 0.2
+    ActiveModeNames: 0.2

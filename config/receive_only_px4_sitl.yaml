@@ -1,0 +1,27 @@
+# Receive-only edge: observes a vehicle flown by someone else. No core, no transmit.
+# PX4 SITL instance 0 sends its GCS link to UDP 14550.
+my_name: observer1
+vehicle:
+  autopilot: FCAutopilotType.PX4
+  uav_type: UAVType.Copter
+  telem_type: TelemType.Mavlink2
+bus_config:
+  schema_path: bus_topics_schema.json
+  log_file: hivebus.log
+  endpoint:
+    type: mqtt
+    host: 127.0.0.1
+    port: 1883
+plugins:
+- plugin: uav_controller
+  cfg:
+    id: uav_controller
+    topic_ns: UAV
+    receive_only: true
+- plugin: mavlink_interface
+  cfg:
+    id: mavlink
+    topic_ns: UAV
+    conn_str: udp://:14550
+    target_sysid: 1
+    target_compid: 1

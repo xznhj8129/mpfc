@@ -9,6 +9,7 @@ from lib.mqtt_bus_client import MqttBusClient
 
 ENCODING = "utf-8"
 CONTROL_SHUTDOWN_TOPIC = "CONTROL/SHUTDOWN"
+INSTANCE_LOCK_TOPIC = "DIAG/main/INSTANCE"
 
 
 def load_config(path: Path) -> Dict[str, Any]:  # Load YAML config file into dict.
@@ -30,12 +31,12 @@ def apply_cfg(target: Any, cfg: Dict[str, Any], skip: set[str] | None = None) ->
         setattr(target, key, value)
 
 
-def connect_bus_client(bus_config: Dict[str, Any], client_id: str) -> MqttBusClient:  # Build MQTT bus client.
+def connect_bus_client(bus_config: Dict[str, Any], client_id: str, will_topic: str | None = None) -> MqttBusClient:  # Build MQTT bus client.
     endpoint = bus_config["endpoint"]
     host = endpoint["host"]
     port = endpoint["port"]
     topic_prefix = bus_config["topic_prefix"]
-    return MqttBusClient(host, port, client_id, topic_prefix=topic_prefix)
+    return MqttBusClient(host, port, client_id, topic_prefix=topic_prefix, will_topic=will_topic)
 
 
 def build_envelope(client_id: str, topic: str, data: Any) -> Dict[str, Any]:  # Build message envelope.

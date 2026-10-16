@@ -10,6 +10,7 @@ import asyncio
 import logging
 import math
 import queue
+import socket
 import threading
 import time
 import traceback
@@ -38,6 +39,12 @@ from protocols.namespace_loader import load_protocol_namespace
 REQUEST_QUEUE_TIMEOUT_S = 0.05
 POLL_INTERVAL_S = 0.1
 UAV = load_protocol_namespace("uav")
+
+
+def free_local_tcp_port() -> int:  # Ask the kernel for an unused loopback port for mavsdk_server.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
 
 
 class MavsdkInterface(PluginBase):
@@ -69,7 +76,8 @@ class MavsdkInterface(PluginBase):
         state_topics = build_state_scheduler_topics(base, self.state_intervals)
         self.state_scheduler = StateScheduler(self.client, self.client_id, state_topics)
 
-        self.drone = System()
+        self.mavsdk_server_port = int(self.mavsdk_server_port) or free_local_tcp_port()
+        self.drone = System(port=self.mavsdk_server_port, sysid=int(self.gcs_sysid), compid=int(self.gcs_compid))
         self.request_queue: "queue.Queue[Dict[str, Any]]" = queue.Queue()
         self.stop_event = threading.Event()
         self.loop_error: BaseException | None = None
@@ -453,7 +461,11 @@ class MavsdkInterface(PluginBase):
 
     async def _async_main(self) -> None:  # Run async MAVSDK tasks.
 
-        print(f"[PLUGIN] {self.client_id} connecting type={self.conn_type} address={self.system_address}",flush=True,)
+        print(
+            f"[PLUGIN] {self.client_id} connecting type={self.conn_type} address={self.system_address} "
+            f"mavsdk_server_port={self.mavsdk_server_port} gcs={self.gcs_sysid}/{self.gcs_compid}",
+            flush=True,
+        )
 
         await self.drone.connect(system_address=self.system_address)
 

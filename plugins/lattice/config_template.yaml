@@ -23,18 +23,33 @@ cfg:
   reconnect_secs: 5.0
   # required Lattice asset identity used by the agent selector and published entity
   asset_id: mpfc-uav
+  # required; entity display name (aliases.name), null uses asset_id
+  callsign: null
+  # required; false = receive-only edge: no agent listener, no task recovery, empty task catalog
+  accept_tasks: true
+  # required; video sources registered as Lattice Video API ingress streams <asset_id>.<source>
+  # and referenced from the entity, e.g. [{source: front, url: rtsp://127.0.0.1:8554/uav1-front}]
+  media: []
+  # required; null, or detector source + nadir camera for detection -> Lattice track entities <asset_id>.trk.<tracker_id>
+  # e.g. {source: {id: yolo, topic_ns: CV}, camera: {image_w: 1280, image_h: 720, hfov_deg: 90, vfov_deg: 60}, track_expiry_s: 10}
+  detections: null
   # required vehicle state interface consumed for entity publishing
   interface:
     id: uav_controller
     topic_ns: UAV
   # required vehicle state fields used to encode the published entity
   vehicle_state_keys:
-  - Position
-  - AttitudeRad
-  - Battery
+    - Position
+    - AttitudeRad
+    - Battery
   # Lattice entity refresh interval and expiry
   state_publish_interval_s: 1.0
   entity_expiry_s: 15.0
+  # Explicit WGS84 home HAE datum; null omits HAE from node information.
+  # AbsAltM from MSP/MAVSDK is AMSL, and RelAltM is home-relative, not AGL.
+  home_altitude_hae_m: null
+  # Reoffer a fetched task until the core acknowledges it.
+  task_fetch_lease_s: 30.0
   # agent listen long-poll timeout, bounded call retries
   listen_timeout_s: 300.0
   lattice_attempts: 3

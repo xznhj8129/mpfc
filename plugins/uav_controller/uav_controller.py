@@ -28,6 +28,7 @@ class UavController(PluginBase):
         self.response_timeout_s = float(cfg["response_timeout_s"])
         self.vehicle = cfg["vehicle"]
         self.backend = cfg["backend"]
+        self.receive_only = bool(cfg["receive_only"])
         self.backend_state_keys = list(cfg["backend_state_keys"])
         self.backend_event_keys = list(cfg["backend_event_keys"])
         self.arm_ready_since: float | None = None
@@ -147,6 +148,9 @@ class UavController(PluginBase):
         query_state_key = UAV.QueryToState.get(action)
         if query_state_key is not None:
             self._handle_query(request_id, action)
+            return
+        if self.receive_only:
+            self.enqueue_response(request_id, action, False, {"error": f"receive-only edge; action {action} refused"})
             return
         try:
             backend_response = self._send_backend_action(action, params)

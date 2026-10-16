@@ -12,7 +12,7 @@ from flight_cores.lattice_demo.lattice_demo import (
     command_altitude_m,
     observed_altitude_m,
 )
-from lib.altitude import hae_to_relative, home_hae_from_telemetry, relative_to_hae
+from lib.altitude import hae_to_relative, relative_to_hae
 from lib.lattice_specs import ORBIT_SPECIFICATION_URL, TRANSIT_SPECIFICATION_URL
 from lib.reference_frames import attitude_enu_quaternion
 
@@ -40,8 +40,8 @@ def _rotate(q, vector):
     return rotated[1], rotated[2], rotated[3]
 
 
-def test_home_hae_datum_derivation_and_round_trip() -> None:
-    home = home_hae_from_telemetry(138.0, 100.0)
+def test_explicit_home_hae_datum_round_trip() -> None:
+    home = 38.0
     assert home == pytest.approx(38.0)
     assert hae_to_relative(98.0, home) == pytest.approx(60.0)
     assert relative_to_hae(60.0, home) == pytest.approx(98.0)

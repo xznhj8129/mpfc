@@ -6,8 +6,8 @@ Usage:
     from flight_cores.lattice_demo.lattice_demo import run_core
     run_core(cfg, bus_config)
 
-The core is the mission policy layer of the demo: it fetches decoded tasks
-from the Lattice interface, drives them through the mission lifecycle
+The core is the mission policy layer of the demo: it fetches native tasks
+from the Lattice interface and interprets their specifications, drives them through the mission lifecycle
 plugin, executes them with the UAV controller, reports versioned status
 back through the Lattice interface, and applies the link-loss failsafe when
 the Lattice link is lost while armed.
@@ -20,11 +20,12 @@ Sequence per task:
 
 import math
 import time
-import traceback
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from lib.altitude import hae_to_relative, home_hae_from_telemetry, relative_to_hae
+from anduril import Entity, Task
+from flight_cores.lattice_demo.task import TaskDecoder
+from lib.altitude import hae_to_relative, relative_to_hae
 from lib.common import (
     apply_cfg,
     build_event_topics,
@@ -34,7 +35,7 @@ from lib.common import (
     build_topic_base,
 )
 from lib.core_base import CoreBase
-from lib.geo_utils import GPSposition, gps_distance_m
+from lib.geo_utils import GPSposition, gps_distance_m, gps_to_vector, vector_to_gps
 from lib.lattice_specs import ORBIT_SPECIFICATION_URL
 from protocols.namespace_loader import load_protocol_namespace
 
@@ -42,8 +43,17 @@ UAV = load_protocol_namespace("uav")
 LATTICE = load_protocol_namespace("lattice")
 MISSION = load_protocol_namespace("mission")
 
+# Bearing advance per orbit waypoint; the vehicle flies the circle as successive go-to points.
+ORBIT_STEP_DEG = 30.0
+ORBIT_CLOCKWISE = "ORBIT_CLOCKWISE"
+
+
 class LatticeDemoError(RuntimeError):
     """A demo execution step failed with visible diagnostics."""
+
+
+class TaskStatusUnavailable(RuntimeError):
+    """Execution status is unresolved; no further flight work may start."""
 
 
 class TaskInterrupted(RuntimeError):
@@ -76,6 +86,11 @@ class Destination:
             altitude_m=float(altitude),
             altitude_reference=str(reference),
         )
+
+
+def orbit_point(centre: "Destination", radius_m: float, bearing_deg: float) -> "Destination":  # Point on the orbit circle.
+    point = vector_to_gps(GPSposition(centre.latitude_deg, centre.longitude_deg), dist=radius_m, az=bearing_deg % 360.0)
+    return Destination(point.lat, point.lon, centre.altitude_m, centre.altitude_reference)
 
 
 def command_altitude_m(destination: Destination, home_hae_m: float | None) -> float:  # Destination -> home-relative command altitude.
@@ -153,6 +168,8 @@ class LatticeDemo(CoreBase):
         self.mission_response_topic = build_response_topic(self.mission["id"], self.mission["topic_ns"])
 
         state_topics = build_state_topics(interface_base, self.state_keys)
+        self.flight_state_topics = {state_topics[UAV.State.Flight.IsArmed], state_topics[UAV.State.Flight.IsInAir]}
+        self.flight_state_received_at: dict[str, float] = {}
         state_topics.update(build_state_topics(lattice_base, self.lattice_state_keys))
         self.init_bus(self.poll_interval_s, state_topics, self.interface_response_topic)
         self.bus.add_response_topic(self.lattice_response_topic)
@@ -176,6 +193,17 @@ class LatticeDemo(CoreBase):
         self.stop_reason: str | None = None
         self.failsafe_triggered = False
         self.last_fetch_at = 0.0
+        self.execution_blocked = False
+        # Tasks left unresolved by a previous MPFC run; flight stays blocked until each reaches a terminal status.
+        self.recovery_task_ids: set[str] = set()
+        self.recovery_cancel_waiting: set[str] = set()
+        self.executing_task = False
+        self.cancellation_in_progress = False
+        self.cancellation_action = str(policy["cancellation_action"])
+        self.cancellation_timeout_s = float(policy["cancellation_timeout_s"])
+        if self.cancellation_action != "rtl" or self.cancellation_timeout_s <= 0:
+            raise ValueError("Cancellation requires action=rtl and a positive cancellation_timeout_s")
+        self.task_decoder = TaskDecoder(resolve_entity=self._resolve_lattice_entity)
 
     # -- bus plumbing --------------------------------------------------------
 
@@ -190,10 +218,20 @@ class LatticeDemo(CoreBase):
 
     def _tick(self, wait_s: float = 0.0) -> None:  # Pump the bus and service demo duties.
         self._pump_messages(wait_s)
+        if (self.execution_blocked and not self.executing_task and not self.cancellation_in_progress
+                and self.active_task_id is not None and self.stop_reason == "cancel"):
+            task_id = self.active_task_id
+            self._cancel_active_task(task_id)
+            self._finish_cancelled_task(task_id)
+        recovery_cancels = self.recovery_task_ids & self.pending_cancels
+        if recovery_cancels and not self.cancellation_in_progress:
+            self._cancel_recovered_task(min(recovery_cancels))
         self._service_tasks()
         self._check_failsafe()
 
     def _handle_message(self, topic: str, payload: Dict[str, Any]) -> None:  # Handle subscribed bus messages.
+        if topic in self.flight_state_topics:
+            self.flight_state_received_at[topic] = time.monotonic()
         if topic in self.lattice_event_topics.values():
             data = payload["data"]
             if topic == self.lattice_event_topics[LATTICE.Event.Task.CancelRequested]:
@@ -212,6 +250,7 @@ class LatticeDemo(CoreBase):
             self._pump_messages(0.1)
 
     def _uav_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        self._check_stop()
         response = self._request(self.interface_request_topic, action, params)
         print(
             f"[MAVSDK_ACK] action={action} ok={response.get('ok')} data={response.get('data')}",
@@ -235,7 +274,11 @@ class LatticeDemo(CoreBase):
             params["ErrorCode"] = error_code
         if error_message is not None:
             params["ErrorMessage"] = error_message
-        response = self._request(self.lattice_request_topic, LATTICE.Action.Task.Report, params)
+        try:
+            response = self._request(self.lattice_request_topic, LATTICE.Action.Task.Report, params)
+        except LatticeDemoError as exc:
+            self.execution_blocked = True
+            raise TaskStatusUnavailable(f"Status reply unavailable task_id={task_id} status={status_key}; flight blocked") from exc
         if response.get("ok"):
             print(
                 f"[CORE] status task_id={task_id} status={response['data'].get('Status')} "
@@ -248,7 +291,16 @@ class LatticeDemo(CoreBase):
                 f"error={response.get('data', {}).get('error')}",
                 flush=True,
             )
+        if not response.get("ok"):
+            self.execution_blocked = True
+            raise TaskStatusUnavailable(f"Status unconfirmed task_id={task_id} status={status_key}; flight blocked")
         return response
+
+    def _resolve_lattice_entity(self, entity_id: str) -> Entity:
+        response = self._request(self.lattice_request_topic, LATTICE.Action.Entity.Get, {"EntityId": entity_id})
+        if not response.get("ok"):
+            raise LatticeDemoError(f"Entity retrieval failed entity_id={entity_id} data={response.get('data')}")
+        return Entity.model_validate_json(response["data"]["EntityJson"])
 
     def _mission_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return self._request(self.mission_request_topic, action, params)
@@ -256,17 +308,26 @@ class LatticeDemo(CoreBase):
     # -- task intake ---------------------------------------------------------
 
     def _service_tasks(self) -> None:  # Fetch and submit at most one task, then activate the next queued task.
+        if self.execution_blocked or self.recovery_task_ids:
+            return
         now = time.monotonic()
         if now - self.last_fetch_at >= float(self.fetch_interval_s):
             self.last_fetch_at = now
             response = self._request(self.lattice_request_topic, LATTICE.Action.Task.Fetch, {})
+            if response.get("ok") and response["data"].get("RecoveryTaskIds"):
+                self.recovery_task_ids = set(response["data"]["RecoveryTaskIds"])
+                print(f"[TASK_RECOVERY_BLOCKED] tasks={sorted(self.recovery_task_ids)}", flush=True)
+                return
             if response.get("ok") and response["data"].get("TaskId"):
-                self._submit_task(response["data"])
+                try:
+                    self._submit_task(response["data"])
+                except TaskStatusUnavailable as exc:
+                    print(f"[TASK_STATUS_UNRESOLVED] {exc}", flush=True)
+                    return
         if self.active_task_id is not None:
             return
         for task_id, task in list(self.tasks.items()):
             if task_id in self.pending_cancels:
-                self.pending_cancels.discard(task_id)
                 self._drop_queued_task(task_id)
                 return
             if task_id in self.pending_completes:
@@ -278,6 +339,19 @@ class LatticeDemo(CoreBase):
 
     def _submit_task(self, task: Dict[str, Any]) -> None:  # Submit one decoded task to the mission lifecycle.
         task_id = str(task["TaskId"])
+        if task_id in self.tasks:
+            self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.Ack)
+            return
+        try:
+            native = Task.model_validate_json(task["TaskJson"])
+            if not native.version or native.version.task_id != task_id:
+                raise ValueError("TaskId disagrees with native Task document")
+            task = self.task_decoder.decode(native).payload()
+        except ValueError as exc:
+            print(f"[TASK_REJECTED] task_id={task_id} cause={exc}", flush=True)
+            self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.DoneNotOk,
+                error_code=LATTICE.Enums.LatticeTaskErrorCode.Rejected, error_message=str(exc))
+            return
         response = self._mission_action(MISSION.Action.Task.Submit, {"TaskId": task_id})
         if not response.get("ok"):
             data = response.get("data") or {}
@@ -288,7 +362,6 @@ class LatticeDemo(CoreBase):
             return
         self.tasks[task_id] = task
         if task_id in self.pending_cancels:
-            self.pending_cancels.discard(task_id)
             self._drop_queued_task(task_id)
             return
         if task_id in self.pending_completes:
@@ -323,21 +396,33 @@ class LatticeDemo(CoreBase):
     # -- lifecycle actions ---------------------------------------------------
 
     def _on_cancel_requested(self, task_id: str) -> None:  # Apply a Lattice cancel request to the lifecycle.
+        if task_id in self.pending_cancels or (task_id == self.active_task_id and self.cancellation_in_progress):
+            return
+        self.pending_cancels.add(task_id)
         print(f"[TASK_CANCEL] task_id={task_id}", flush=True)
         if task_id == self.active_task_id:
-            response = self._mission_action(MISSION.Action.Task.Cancel, {"TaskId": task_id})
+            self.stop_reason = "cancel"
+            try:
+                response = self._mission_action(MISSION.Action.Task.Cancel, {"TaskId": task_id})
+            except LatticeDemoError as exc:
+                self.execution_blocked = True
+                raise TaskStatusUnavailable(f"Mission cancellation unavailable task_id={task_id} cause={exc}") from exc
             if response.get("ok") and response["data"].get("CancelRequested"):
-                self.stop_reason = "cancel"
                 return
-            print(f"[TASK_CANCEL_FAILED] task_id={task_id} error={response.get('data', {}).get('error')}", flush=True)
-            return
+            self.execution_blocked = True
+            raise TaskStatusUnavailable(f"Mission cancellation unconfirmed task_id={task_id} data={response.get('data')}")
         if task_id in self.tasks:
             self._drop_queued_task(task_id)
             return
-        self.pending_cancels.add(task_id)
+        if task_id in self.recovery_task_ids:
+            print(f"[TASK_RECOVERY_CANCEL] task_id={task_id}", flush=True)
+            return
         print(f"[TASK_CANCEL_PENDING] task_id={task_id}", flush=True)
 
     def _on_complete_requested(self, task_id: str) -> None:  # Apply a Lattice complete request to the lifecycle.
+        if task_id in self.pending_cancels or (task_id == self.active_task_id and self.cancellation_in_progress):
+            print(f"[TASK_COMPLETE_BLOCKED] task_id={task_id} cancellation pending", flush=True)
+            return
         print(f"[TASK_COMPLETE] task_id={task_id}", flush=True)
         if task_id == self.active_task_id:
             self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.DoneOk, progress=1.0)
@@ -354,15 +439,15 @@ class LatticeDemo(CoreBase):
         if not response.get("ok"):
             print(f"[TASK_QUEUED_CANCEL_FAILED] task_id={task_id} error={response.get('data', {}).get('error')}", flush=True)
             return
-        self.tasks.pop(task_id, None)
-        print(f"[TASK_QUEUED_CANCELLED] task_id={task_id}", flush=True)
-        self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.CancelRequested)
         self._lattice_report(
             task_id,
             LATTICE.Enums.LatticeTaskStatus.DoneNotOk,
             error_code=LATTICE.Enums.LatticeTaskErrorCode.Cancelled,
             error_message="task cancelled before execution",
         )
+        self.tasks.pop(task_id, None)
+        self.pending_cancels.discard(task_id)
+        print(f"[TASK_QUEUED_CANCELLED] task_id={task_id}", flush=True)
 
     def _complete_queued_task(self, task_id: str) -> None:  # Manager completed a queued task; it never executes.
         self._mission_action(MISSION.Action.Task.Cancel, {"TaskId": task_id})
@@ -382,24 +467,25 @@ class LatticeDemo(CoreBase):
     def _execute_task(self, task: Dict[str, Any]) -> None:  # Execute one active task end to end.
         task_id = str(task["TaskId"])
         outcome: str | None = None
+        cancel_confirmed = False
+        self.executing_task = True
         try:
             destination = Destination.from_task(task)
             self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.Executing, progress=0.0)
+            self._check_stop()
             self._prepare_vehicle(destination)
             if task.get("SpecificationType") == ORBIT_SPECIFICATION_URL:
-                self._execute_orbit(task_id, destination)
+                self._execute_orbit(task_id, task, destination)
             else:
                 self._execute_transit(task_id, destination)
+        except TaskStatusUnavailable as exc:
+            outcome = "unresolved"
+            print(f"[TASK_STATUS_UNRESOLVED] task_id={task_id} error={exc}", flush=True)
         except TaskInterrupted as exc:
             outcome = str(exc)
             if outcome == "cancel":
-                self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.CancelRequested)
-                self._lattice_report(
-                    task_id,
-                    LATTICE.Enums.LatticeTaskStatus.DoneNotOk,
-                    error_code=LATTICE.Enums.LatticeTaskErrorCode.Cancelled,
-                    error_message="task cancelled",
-                )
+                self._cancel_active_task(task_id)
+                cancel_confirmed = True
         except LatticeDemoError as exc:
             outcome = "failed"
             print(f"[TASK_FAILED] task_id={task_id} error={exc}", flush=True)
@@ -410,14 +496,81 @@ class LatticeDemo(CoreBase):
                 error_message=str(exc),
             )
         finally:
-            if outcome == "cancel":
-                self._mission_action(MISSION.Action.Task.AcknowledgeCancel, {"TaskId": task_id})
+            self.executing_task = False
+            if cancel_confirmed:
+                self._finish_cancelled_task(task_id)
+            elif self.execution_blocked:
+                print(f"[TASK_RETAINED] task_id={task_id} flight blocked pending status reconciliation", flush=True)
             else:
                 self._mission_action(MISSION.Action.Task.Complete, {"TaskId": task_id})
-            self.stop_reason = None
-            self.active_task_id = None
-            self.tasks.pop(task_id, None)
-            print(f"[TASK_ENDED] task_id={task_id} outcome={outcome or 'done_ok'}", flush=True)
+                self._release_task(task_id)
+                print(f"[TASK_ENDED] task_id={task_id} outcome={outcome or 'done_ok'}", flush=True)
+
+    def _release_task(self, task_id: str) -> None:
+        self.stop_reason = None
+        self.active_task_id = None
+        self.tasks.pop(task_id, None)
+        self.pending_cancels.discard(task_id)
+
+    def _finish_cancelled_task(self, task_id: str) -> None:
+        try:
+            response = self._mission_action(MISSION.Action.Task.AcknowledgeCancel, {"TaskId": task_id})
+        except LatticeDemoError as exc:
+            self.execution_blocked = True
+            raise TaskStatusUnavailable(f"Mission cancellation acknowledgment unavailable task_id={task_id} cause={exc}") from exc
+        if not response.get("ok"):
+            self.execution_blocked = True
+            raise TaskStatusUnavailable(f"Mission cancellation acknowledgment unconfirmed task_id={task_id} data={response.get('data')}")
+        self._release_task(task_id)
+        print(f"[TASK_ENDED] task_id={task_id} outcome=cancel", flush=True)
+
+    def _rtl_finished(self, accepted_at: float) -> bool:
+        return (self.state.get(UAV.State.Flight.IsArmed) is False
+                and self.state.get(UAV.State.Flight.IsInAir) is False
+                and all(self.flight_state_received_at.get(topic, 0) > accepted_at
+                        for topic in self.flight_state_topics))
+
+    def _cancel_recovered_task(self, task_id: str) -> None:  # End a task left unresolved by a previous run.
+        armed = self.state.get(UAV.State.Flight.IsArmed)
+        if armed is None:
+            # Unknown vehicle state is never taken as disarmed; retried every tick until telemetry arrives.
+            if task_id not in self.recovery_cancel_waiting:
+                self.recovery_cancel_waiting.add(task_id)
+                print(f"[TASK_RECOVERY_CANCEL_WAITING] task_id={task_id} no vehicle armed state yet", flush=True)
+            return
+        self.recovery_cancel_waiting.discard(task_id)
+        if armed:
+            self._cancel_active_task(task_id)
+        else:
+            self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.DoneNotOk,
+                error_code=LATTICE.Enums.LatticeTaskErrorCode.Cancelled,
+                error_message="Cancelled after MPFC restart; vehicle disarmed")
+        self.pending_cancels.discard(task_id)
+        self.recovery_task_ids.discard(task_id)
+        print(f"[TASK_ENDED] task_id={task_id} outcome=cancel recovered=true remaining={sorted(self.recovery_task_ids)}", flush=True)
+
+    def _cancel_active_task(self, task_id: str) -> None:
+        """Cancel flight through the controller; command receipt alone is not completion."""
+        self.cancellation_in_progress = True
+        self.stop_reason = None
+        try:
+            response = self._uav_action(UAV.Action.Flight.Rtl, {})
+            if not response.get("ok"):
+                raise LatticeDemoError(f"RTL rejected task_id={task_id} data={response.get('data')}")
+            accepted_at = time.monotonic()
+            print(f"[TASK_CANCEL_RTL] task_id={task_id} waiting for fresh landed/disarmed telemetry", flush=True)
+            self._wait_until(lambda: self._rtl_finished(accepted_at), self.cancellation_timeout_s,
+                f"RTL completion unconfirmed task_id={task_id} armed={self.state.get(UAV.State.Flight.IsArmed)} "
+                f"in_air={self.state.get(UAV.State.Flight.IsInAir)}")
+            self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.DoneNotOk,
+                error_code=LATTICE.Enums.LatticeTaskErrorCode.Cancelled,
+                error_message="Cancelled; RTL requested and vehicle observed landed and disarmed")
+            print(f"[TASK_CANCEL_RTL_CONFIRMED] task_id={task_id}", flush=True)
+        except LatticeDemoError as exc:
+            self.execution_blocked = True
+            raise TaskStatusUnavailable(f"Cancellation unresolved task_id={task_id}; flight blocked cause={exc}") from exc
+        finally:
+            self.cancellation_in_progress = False
 
     def _prepare_vehicle(self, destination: Destination) -> None:  # Arm and take off when the task needs flight.
         if bool(self.state.get(UAV.State.Flight.IsArmed)) and bool(self.state.get(UAV.State.Flight.IsInAir)):
@@ -558,11 +711,31 @@ class LatticeDemo(CoreBase):
                 )
             self._tick(0.2)
 
-    def _execute_orbit(self, task_id: str, destination: Destination) -> None:  # Hold the orbit point after arrival.
+    def _orbit_centre(self, task: Dict[str, Any], centre: Destination) -> Destination:  # Re-resolve a moving objective entity.
+        entity_id = task.get("OrbitEntityId")
+        if not entity_id:
+            return centre
+        objective = self.task_decoder.resolve_objective({"entityId": entity_id})
+        return Destination.from_task({**task, **{
+            "LatitudeDeg": objective["latitude_deg"],
+            "LongitudeDeg": objective["longitude_deg"],
+            "AltitudeM": objective["altitude_m"],
+            "AltitudeReference": objective["altitude_reference"],
+        }})
+
+    def _execute_orbit(self, task_id: str, task: Dict[str, Any], centre: Destination) -> None:  # Fly the orbit circle until cancelled or completed.
+        radius_m = float(task["OrbitRadiusM"])
+        step_deg = ORBIT_STEP_DEG if task.get("OrbitDirection", ORBIT_CLOCKWISE) == ORBIT_CLOCKWISE else -ORBIT_STEP_DEG
+        position = self._position()
+        bearing_deg = 0.0 if position is None else gps_to_vector(
+            GPSposition(centre.latitude_deg, centre.longitude_deg),
+            GPSposition(float(position["LatDeg"]), float(position["LonDeg"])),
+        ).az
+        destination = orbit_point(centre, radius_m, bearing_deg)
         print(
-            f"[TASK_ORBIT] task_id={task_id} lat={destination.latitude_deg} "
-            f"lon={destination.longitude_deg} altitude_m={destination.altitude_m} "
-            f"reference={destination.altitude_reference}",
+            f"[TASK_ORBIT] task_id={task_id} centre={centre.latitude_deg:.7f},{centre.longitude_deg:.7f} "
+            f"radius_m={radius_m} step_deg={step_deg} altitude_m={centre.altitude_m} "
+            f"reference={centre.altitude_reference} entity={task.get('OrbitEntityId')}",
             flush=True,
         )
         self._go_to(destination)
@@ -591,13 +764,24 @@ class LatticeDemo(CoreBase):
                 )
             self._tick(0.2)
         print(
-            f"[TASK_ORBIT_ARRIVED] task_id={task_id} horizontal_m={horizontal_m:.2f} "
+            f"[TASK_ORBIT_ON_STATION] task_id={task_id} horizontal_m={horizontal_m:.2f} "
             f"altitude_error_m={altitude_error_m:.2f}",
             flush=True,
         )
         self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.Executing, progress=1.0)
         while True:
             self._check_stop()
+            arrived, horizontal_m, _ = self._arrival(destination)
+            if arrived:
+                bearing_deg += step_deg
+                centre = self._orbit_centre(task, centre)
+                destination = orbit_point(centre, radius_m, bearing_deg)
+                print(
+                    f"[TASK_ORBIT_POINT] task_id={task_id} bearing_deg={bearing_deg % 360.0:.0f} "
+                    f"lat={destination.latitude_deg:.7f} lon={destination.longitude_deg:.7f}",
+                    flush=True,
+                )
+                self._go_to(destination)
             self._tick(0.2)
 
     # -- failsafe ------------------------------------------------------------
@@ -628,42 +812,26 @@ class LatticeDemo(CoreBase):
 
     # -- runtime -------------------------------------------------------------
 
-    def _resolve_home_hae(self) -> None:  # Resolve the home HAE datum from config or telemetry.
+    def _resolve_home_hae(self) -> None:  # Read the explicitly configured home HAE datum.
         if self.home_altitude_hae_m is not None:
             self.home_hae_m = float(self.home_altitude_hae_m)
             print(f"[HOME_ALTITUDE] source=config hae_m={self.home_hae_m:.3f}", flush=True)
             return
-        deadline = time.monotonic() + float(self.state_timeout_s)
-        while True:
-            position = self._position()
-            if position is not None:
-                self.home_hae_m = home_hae_from_telemetry(
-                    float(position["AbsAltM"]), float(position["RelAltM"])
-                )
-                print(
-                    f"[HOME_ALTITUDE] source=telemetry hae_m={self.home_hae_m:.3f} "
-                    f"abs_m={float(position['AbsAltM']):.3f} rel_m={float(position['RelAltM']):.3f}",
-                    flush=True,
-                )
-                return
-            if time.monotonic() > deadline:
-                raise LatticeDemoError(
-                    "home HAE datum unavailable: home_altitude_hae_m is not configured and no "
-                    f"position telemetry arrived within {float(self.state_timeout_s):.1f}s"
-                )
-            self._tick(0.2)
+        raise LatticeDemoError(
+            "Configure policy.home_altitude_hae_m: AbsAltM is AMSL, not HAE"
+        )
 
     def run(self) -> None:  # Run the Lattice demo loop.
         self.send_online()
         try:
             self._resolve_home_hae()
             while True:
-                self._tick(0.2)
+                try:
+                    self._tick(0.2)
+                except TaskStatusUnavailable as exc:
+                    print(f"[TASK_STATUS_UNRESOLVED] {exc}", flush=True)
         except KeyboardInterrupt:
             pass
-        except RuntimeError:
-            self.publish_error(traceback.format_exc().strip())
-            raise
         finally:
             self.stop()
 

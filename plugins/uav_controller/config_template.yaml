@@ -3,6 +3,8 @@ cfg:
   id: uav_controller
   topic_ns: UAV
   is_controller: true
+  # required; true refuses every action (vehicle flown by someone else); queries still answer
+  receive_only: false
   poll_interval_s: 0.1
   response_timeout_s: 20.0
   arm_ready_hold_s: 0.0

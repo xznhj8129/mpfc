@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Lattice agent interface plugin: connection, task translation, entity publishing.
+Lattice agent interface plugin: connection, native task delivery, entity publishing.
 
 Usage:
     from plugins.lattice.lattice import run_plugin
@@ -11,8 +11,9 @@ surface of MPFC:
 
 * it owns the API connection and token lifecycle declared in
   protocols/lattice.yaml;
-* it listens as the configured asset, decodes execute requests into the
-  protocol task shape, and rejects unsupported or malformed tasks visibly;
+* it listens as the configured asset and delivers intact native task documents;
+* it recovers unstarted work from the persistent Lattice task authority and
+  blocks ambiguous execution after restart;
 * it performs versioned task status updates seeded from the delivered task,
   adopting the version returned by the endpoint and resyncing on mismatch;
 * it encodes the published vehicle state into a Lattice entity and refreshes
@@ -22,14 +23,14 @@ No mission policy and no vehicle command logic live here; cores drive tasks
 and missions over the bus.
 """
 
-import collections
+import math
 import queue
+import re
 import threading
 import time
 import traceback
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Deque, Dict
+from typing import Any, Callable, Dict
 
 import httpx
 from anduril import (
@@ -38,11 +39,12 @@ from anduril import (
     ClassificationInformation,
     Entity,
     EntityIdsSelector,
-    Enu,
     GoogleProtobufAny,
     Health,
     Lattice,
     Location as LatticeLocation,
+    Media,
+    MediaItem,
     MilView,
     Ontology,
     Position,
@@ -50,7 +52,9 @@ from anduril import (
     Provenance,
     Quaternion,
     RequestTimeoutError,
+    RtspSettings,
     System,
+    Task,
     TaskCatalog,
     TaskDefinition,
     TaskError,
@@ -59,7 +63,8 @@ from anduril import (
 from anduril.core import ApiError
 from anduril.oauth.types.get_token_response import GetTokenResponse
 
-from lib.altitude import home_hae_from_telemetry, relative_to_hae
+from lib.altitude import relative_to_hae
+from lib.geo_utils import image_point_to_gps
 from lib.common import (
     build_event_topics,
     build_request_topic,
@@ -69,10 +74,10 @@ from lib.common import (
     build_topic_base,
 )
 from lib.lattice_specs import (
-    ORBIT_SPECIFICATION_URL,
     SUPPORTED_SPECIFICATION_URLS,
-    TRANSIT_SPECIFICATION_URL,
 )
+from lib.lattice_fields import _field
+from plugins.lattice.tasks import TaskDeliveries
 from lib.plugin_base import PluginBase
 from lib.reference_frames import attitude_enu_quaternion
 from lib.state_scheduler import StateScheduler
@@ -86,12 +91,17 @@ MPFC_PROGRESS_TYPE_URL = "type.googleapis.com/mpfc.TaskProgress"
 ENTITY_EXPIRY_S = 15.0
 DEFAULT_TOKEN_EXPIRES_IN_S = 3600
 TOKEN_EXPIRY_BUFFER_S = 120.0
+# Lattice allows 4-36 printable ASCII; MediaMTX path names and the REST path allow only these.
+INGRESS_ID_RE = re.compile(r"^[A-Za-z0-9_.~:-]{4,36}$")
+HTTP_CONFLICT = 409
+HTTP_UNAUTHORIZED = 401
 
 LATTICE_ERRORS = (ApiError, httpx.HTTPError)
 LATTICE_POLL_TIMEOUTS = (RequestTimeoutError, httpx.ReadTimeout, httpx.ReadError)
 
 # Bus status/error keys -> official Lattice API status and error codes.
 TASK_STATUS_BY_KEY = {
+    LATTICE.Enums.LatticeTaskStatus.MachineReceipt: "STATUS_MACHINE_RECEIPT",
     LATTICE.Enums.LatticeTaskStatus.Ack: "STATUS_ACK",
     LATTICE.Enums.LatticeTaskStatus.Executing: "STATUS_EXECUTING",
     LATTICE.Enums.LatticeTaskStatus.CancelRequested: "STATUS_CANCEL_REQUESTED",
@@ -103,10 +113,46 @@ TASK_ERROR_CODE_BY_KEY = {
     LATTICE.Enums.LatticeTaskErrorCode.Cancelled: "ERROR_CODE_CANCELLED",
     LATTICE.Enums.LatticeTaskErrorCode.Failed: "ERROR_CODE_FAILED",
 }
-ALTITUDE_REFERENCE_HAE = LATTICE.Enums.LatticeAltitudeReference.Hae
-ALTITUDE_REFERENCE_AGL = LATTICE.Enums.LatticeAltitudeReference.Agl
-ALTITUDE_REFERENCE_RELATIVE = LATTICE.Enums.LatticeAltitudeReference.Relative
-ALTITUDE_REFERENCE_ASL = LATTICE.Enums.LatticeAltitudeReference.Asl
+
+class MediaSource:
+    """One vehicle video source registered as a Lattice Video API ingress stream."""
+
+    def __init__(self, asset_id: str, cfg: Dict[str, Any]) -> None:
+        self.source = str(cfg["source"])
+        self.url = str(cfg["url"])
+        self.ingress_id = f"{asset_id}.{self.source}"
+        if not INGRESS_ID_RE.match(self.ingress_id):
+            raise ValueError(f"invalid ingress id {self.ingress_id!r}: 4-36 chars of A-Z a-z 0-9 _ . ~ : -")
+        self.registered = False
+
+    def media_item(self) -> MediaItem:  # Entity reference to the registered ingress.
+        return MediaItem(
+            item_identifier=self.source,
+            type="MEDIA_TYPE_VIDEO",
+            relative_path=f"api/v1/video/ingress_streams/{self.ingress_id}",
+        )
+
+
+class NadirCamera:
+    """Fixed downward camera, image top toward the vehicle nose; ground assumed flat at home height."""
+
+    def __init__(self, cfg: Dict[str, Any]) -> None:
+        self.image_w = float(cfg["image_w"])
+        self.image_h = float(cfg["image_h"])
+        self.fov = (float(cfg["hfov_deg"]), float(cfg["vfov_deg"]))
+
+    def ground_point(self, position: Dict[str, Any], yaw_rad: float, detection: Dict[str, Any]) -> tuple[float, float]:  # Box centre -> lat/lon.
+        norm_x = (float(detection["x1"]) + float(detection["x2"])) / 2.0 / self.image_w
+        norm_y = (float(detection["y1"]) + float(detection["y2"])) / 2.0 / self.image_h
+        point = image_point_to_gps(
+            {"lat": float(position["LatDeg"]), "lon": float(position["LonDeg"])},
+            float(position["RelAltM"]),
+            self.fov,
+            math.degrees(yaw_rad) % 360.0,
+            norm_x,
+            norm_y,
+        )
+        return point.lat, point.lon
 
 
 class LatticeConnectionError(RuntimeError):
@@ -115,227 +161,6 @@ class LatticeConnectionError(RuntimeError):
         self.endpoint = endpoint
         self.detail = detail
         super().__init__(f"lattice {operation} failed endpoint={endpoint} detail={detail}")
-
-
-def _field(node: Any, *names: str) -> Any:  # Read a field from SDK models, extra fields, or dicts.
-    if node is None:
-        return None
-    for name in names:
-        if isinstance(node, dict):
-            value = node.get(name)
-        else:
-            value = getattr(node, name, None)
-            if value is None and hasattr(node, "model_extra"):
-                value = (node.model_extra or {}).get(name)
-        if value is not None:
-            return value
-    return None
-
-
-def _float_field(node: Any, *names: str) -> float | None:  # Read an optional float field.
-    value = _field(node, *names)
-    if value is None:
-        return None
-    return float(value)
-
-
-def _altitude_reference(raw: Any, default: str) -> str:  # Normalize an SDK altitude reference to a protocol key.
-    if raw is None:
-        return default
-    name = str(raw).upper()
-    if "WGS84" in name or "ELLIPSOID" in name:
-        return ALTITUDE_REFERENCE_HAE
-    if "EGM96" in name or "MSL" in name or "MEAN_SEA" in name:
-        return ALTITUDE_REFERENCE_ASL
-    if "AGL" in name or "GROUND" in name:
-        return ALTITUDE_REFERENCE_AGL
-    return default
-
-
-@dataclass(frozen=True)
-class DecodedTask:
-    task_id: str
-    specification_type: str
-    display_name: str
-    latitude_deg: float | None
-    longitude_deg: float | None
-    altitude_m: float | None
-    altitude_reference: str | None
-    orbit_radius_m: float | None
-    orbit_height_m: float | None
-    orbit_direction: str | None
-    received_at_ms: int
-
-    def payload(self) -> Dict[str, Any]:  # Bus payload keyed by protocols/lattice.yaml field names.
-        return {
-            "TaskId": self.task_id,
-            "SpecificationType": self.specification_type,
-            "DisplayName": self.display_name,
-            "LatitudeDeg": self.latitude_deg,
-            "LongitudeDeg": self.longitude_deg,
-            "AltitudeM": self.altitude_m,
-            "AltitudeReference": self.altitude_reference,
-            "OrbitRadiusM": self.orbit_radius_m,
-            "OrbitHeightM": self.orbit_height_m,
-            "OrbitDirection": self.orbit_direction,
-            "ReceivedAtMs": self.received_at_ms,
-        }
-
-
-class TaskDecoder:
-    """Decode official Lattice task specifications into the bus task shape."""
-
-    def __init__(
-        self,
-        resolve_entity: Callable[[str], Any] | None = None,
-        resolve_home_hae: Callable[[], float | None] | None = None,
-    ) -> None:
-        self._resolve_entity = resolve_entity
-        self._resolve_home_hae = resolve_home_hae
-
-    def decode(self, task: Any) -> DecodedTask:  # Decode one SDK Task document.
-        version = _field(task, "version")
-        task_id = "" if version is None else str(_field(version, "task_id") or "")
-        specification = _field(task, "specification")
-        spec_url = "" if specification is None else str(_field(specification, "type") or "")
-        if not task_id:
-            raise ValueError("task document has no task_id")
-        if spec_url not in SUPPORTED_SPECIFICATION_URLS:
-            raise ValueError(f"unsupported task specification {spec_url!r}")
-        display_name = _field(task, "display_name")
-        if spec_url == TRANSIT_SPECIFICATION_URL:
-            destination = self._transit_destination(specification)
-            orbit_radius_m = orbit_height_m = orbit_direction = None
-        else:
-            orbit = self._orbit_spec(specification)
-            destination = orbit["destination"]
-            orbit_radius_m = orbit["radius_m"]
-            orbit_height_m = orbit["height_m"]
-            orbit_direction = orbit["direction"]
-        return DecodedTask(
-            task_id=task_id,
-            specification_type=spec_url,
-            display_name="" if display_name is None else str(display_name),
-            latitude_deg=destination["latitude_deg"],
-            longitude_deg=destination["longitude_deg"],
-            altitude_m=destination["altitude_m"],
-            altitude_reference=destination["altitude_reference"],
-            orbit_radius_m=orbit_radius_m,
-            orbit_height_m=orbit_height_m,
-            orbit_direction=orbit_direction,
-            received_at_ms=int(time.time() * 1000),
-        )
-
-    def _resolve_objective(self, objective: Any) -> Dict[str, Any]:  # Resolve a task objective to lat/lon/altitude.
-        if not isinstance(objective, dict):
-            raise ValueError("task objective must be an object")
-        entity_id = _field(objective, "entityId", "entity_id")
-        if entity_id:
-            if self._resolve_entity is None:
-                raise ValueError(f"objective entity {entity_id} cannot be resolved by this interface")
-            entity = self._resolve_entity(str(entity_id))
-            if entity is None:
-                raise ValueError(f"objective entity {entity_id} not found")
-            location = _field(entity, "location")
-            position = _field(location, "position") if location is not None else None
-            if position is None:
-                raise ValueError(f"objective entity {entity_id} has no known position")
-            latitude = _float_field(position, "latitude_degrees", "latitudeDegrees")
-            longitude = _float_field(position, "longitude_degrees", "longitudeDegrees")
-            if latitude is None or longitude is None:
-                raise ValueError(f"objective entity {entity_id} has no usable position")
-            altitude = _float_field(position, "altitude_hae_meters", "altitudeHaeMeters")
-            reference = ALTITUDE_REFERENCE_HAE
-            if altitude is None:
-                altitude = _float_field(position, "altitude_agl_meters", "altitudeAglMeters")
-                reference = ALTITUDE_REFERENCE_AGL
-            if altitude is None:
-                # An objective with no published altitude has no datum of its
-                # own; use the explicit home HAE datum, logged, never silent.
-                home_hae = None if self._resolve_home_hae is None else self._resolve_home_hae()
-                if home_hae is None:
-                    raise ValueError(
-                        f"objective entity {entity_id} has no altitude and the home HAE datum is unavailable"
-                    )
-                altitude = home_hae
-                reference = ALTITUDE_REFERENCE_HAE
-                print(
-                    f"[OBJECTIVE_DATUM] entity={entity_id} has no published altitude; "
-                    f"using home HAE datum hae_m={altitude:.3f}",
-                    flush=True,
-                )
-            return {
-                "latitude_deg": latitude,
-                "longitude_deg": longitude,
-                "altitude_m": altitude,
-                "altitude_reference": reference,
-            }
-        point = _field(objective, "point")
-        if point:
-            lla = _field(point, "lla")
-            if not isinstance(lla, dict):
-                raise ValueError("point objective has no lla")
-            return self._lla_destination(lla)
-        # Sample-app Orbit objectives carry the lla oneof directly.
-        lla = _field(objective, "lla")
-        if isinstance(lla, dict):
-            return self._lla_destination(lla)
-        raise ValueError(f"unsupported task objective {objective!r}")
-
-    @staticmethod
-    def _lla_destination(lla: dict) -> Dict[str, Any]:  # Decode a LLA waypoint.
-        latitude = _float_field(lla, "latitudeDegrees", "latitude_degrees", "lat")
-        longitude = _float_field(lla, "longitudeDegrees", "longitude_degrees", "lon")
-        altitude = _float_field(lla, "altitudeHaeM", "altitude_hae_meters", "alt", "altitudeM")
-        if latitude is None or longitude is None:
-            raise ValueError(f"objective lla missing lat/lon: {lla}")
-        if altitude is None:
-            raise ValueError(f"objective lla missing altitude: {lla}")
-        reference = _altitude_reference(
-            _field(lla, "altitudeReference", "altitude_reference"), ALTITUDE_REFERENCE_HAE
-        )
-        return {
-            "latitude_deg": latitude,
-            "longitude_deg": longitude,
-            "altitude_m": altitude,
-            "altitude_reference": reference,
-        }
-
-    def _transit_destination(self, specification: Any) -> Dict[str, Any]:  # Decode a Transit final waypoint.
-        plan = _field(specification, "plan")
-        route = _field(plan, "route")
-        path = _field(route, "path")
-        if not isinstance(path, list) or not path:
-            raise ValueError("Transit task has no route path")
-        segment = path[-1]
-        waypoint = _field(segment, "waypoint")
-        if waypoint:
-            lla = _field(waypoint, "llaPoint", "lla_point")
-            if isinstance(lla, dict):
-                return self._lla_destination(lla)
-        loiter = _field(segment, "loiter")
-        if loiter:
-            center = _field(loiter, "center", "loiterCenter")
-            if isinstance(center, dict):
-                return self._lla_destination(center)
-        raise ValueError("Transit task final path segment has no point")
-
-    def _orbit_spec(self, specification: Any) -> Dict[str, Any]:  # Decode a sample-app Orbit task.
-        objective = _field(specification, "objective")
-        destination = self._resolve_objective(objective)
-        radius = _float_field(specification, "orbitRadius", "orbit_radius")
-        height = _float_field(specification, "orbitHeight", "orbit_height")
-        if radius is None:
-            raise ValueError("Orbit task missing orbitRadius")
-        if height is None:
-            raise ValueError("Orbit task missing orbitHeight")
-        direction = str(_field(specification, "orbitDirection", "orbit_direction") or "ORBIT_CLOCKWISE")
-        return {
-            "destination": destination,
-            "radius_m": radius,
-            "height_m": height,
-            "direction": direction,
-        }
 
 
 class TaskStatusVersions:
@@ -356,12 +181,6 @@ class TaskStatusVersions:
 
     def get(self, task_id: str) -> int | None:  # Current version, None when unseeded.
         return self._versions.get(task_id)
-
-    def next_version(self, task_id: str) -> int | None:  # Version for the next update, None when unseeded.
-        version = self._versions.get(task_id)
-        if version is None:
-            return None
-        return version + 1
 
 
 class LatticeConfig:
@@ -430,6 +249,14 @@ class LatticeConnection:
                 if self._token is None or time.time() >= self._token_expires_at:
                     self._refresh_token()
         return self._token
+
+    def invalidate_token(self) -> bool:  # Drop a rejected token so the next request re-authenticates; False for a static token.
+        if self.config.token:
+            return False
+        with self._token_lock:
+            self._token = None
+            self._token_expires_at = 0.0
+        return True
 
     def build_client(self, timeout_s: float | None = None) -> Lattice:  # Build an SDK client sharing this transport and token.
         return Lattice(
@@ -531,10 +358,20 @@ class LatticePlugin(PluginBase):
         self.state_intervals = cfg["state_intervals"]
         self.loop_interval_s = float(cfg["loop_interval_s"])
         self.asset_id = str(cfg["asset_id"])
+        self.callsign = self.asset_id if cfg["callsign"] is None else str(cfg["callsign"])
         self.state_publish_interval_s = float(cfg.get("state_publish_interval_s", 1.0))
         self.entity_expiry_s = float(cfg.get("entity_expiry_s", ENTITY_EXPIRY_S))
         self.interface = dict(cfg["interface"])
         self.vehicle_state_keys = list(cfg["vehicle_state_keys"])
+        self.accept_tasks = bool(cfg["accept_tasks"])
+        self.media_sources = [MediaSource(self.asset_id, item) for item in cfg["media"]]
+        detections_cfg = cfg["detections"]
+        self.detection_topic: str | None = None
+        if detections_cfg is not None:
+            source = detections_cfg["source"]
+            self.detection_topic = f"{build_topic_base(source['id'], source['topic_ns'])}/STATE/detections"
+            self.camera = NadirCamera(detections_cfg["camera"])
+            self.track_expiry_s = float(detections_cfg["track_expiry_s"])
         self.lattice_config = LatticeConfig(cfg)
         self.connection = LatticeConnection(self.lattice_config)
 
@@ -565,15 +402,14 @@ class LatticePlugin(PluginBase):
         interface_base = build_topic_base(self.interface["id"], self.interface["topic_ns"])
         self.vehicle_state_topics = build_state_topics(interface_base, self.vehicle_state_keys)
         self.init_bus(float(cfg["bus_poll_interval_s"]), state_topics=self.vehicle_state_topics)
+        if self.detection_topic is not None:
+            self.client.subscribe(self.detection_topic)
 
-        self.decoder = TaskDecoder(
-            resolve_entity=self._get_target_entity,
-            resolve_home_hae=lambda: self.entity_home_hae_m,
-        )
         self.status_versions = TaskStatusVersions()
-        self.pending_tasks: Deque[DecodedTask] = collections.deque()
-        self.seen_task_ids: set[str] = set()
-        self.last_task: DecodedTask | None = None
+        self.deliveries = TaskDeliveries(float(cfg.get("task_fetch_lease_s", 30.0)))
+        self.recovery_ready = False
+        self.next_task_recovery_at = 0.0
+        self.next_receipt_retry_at = 0.0
         self.agent_requests: "queue.Queue[Any]" = queue.Queue()
         self.listener_stop = threading.Event()
         self.listener_thread: threading.Thread | None = None
@@ -582,7 +418,8 @@ class LatticePlugin(PluginBase):
         self.entity_publish_count = 0
         self.last_entity_publish_ms = 0
         self.last_entity_fields: Dict[str, Any] = {}
-        self.entity_home_hae_m: float | None = None
+        home_hae = cfg.get("home_altitude_hae_m")
+        self.entity_home_hae_m: float | None = None if home_hae is None else float(home_hae)
 
         self.connect_enabled = True
         self._published_connected = False
@@ -646,10 +483,10 @@ class LatticePlugin(PluginBase):
             LATTICE.State.Link.LastOkAgeS, time.monotonic() - self.last_lattice_ok_at
         )
 
-    def _sync_task_state(self) -> None:  # Publish decoded task queue state.
-        self.state_scheduler.update(LATTICE.State.Task.PendingCount, len(self.pending_tasks))
-        if self.last_task is not None:
-            self.state_scheduler.update(LATTICE.State.Task.LastTask, self.last_task.payload())
+    def _sync_task_state(self) -> None:
+        self.state_scheduler.update(LATTICE.State.Task.PendingCount, self.deliveries.pending_count)
+        if self.deliveries.last_task is not None:
+            self.state_scheduler.update(LATTICE.State.Task.LastTask, self.deliveries.last_task.payload())
 
     def _sync_entity_state(self) -> None:  # Publish last entity encode state.
         if not self.last_entity_fields:
@@ -689,6 +526,9 @@ class LatticePlugin(PluginBase):
                 self._log_lattice_error(
                     operation, exc, attempt, task_id, expected_version
                 )
+                # The server forgets issued tokens on restart; a 401 means re-authenticate, not retry the same token.
+                if isinstance(exc, ApiError) and exc.status_code == HTTP_UNAUTHORIZED and self.connection.invalidate_token():
+                    print(f"[PLUGIN] {self.client_id} token rejected operation={operation}; re-authenticating", flush=True)
             except LatticeConnectionError as exc:
                 self._log_lattice_error(
                     operation, exc, attempt, task_id, expected_version
@@ -770,75 +610,91 @@ class LatticePlugin(PluginBase):
                 request = self.agent_requests.get_nowait()
             except queue.Empty:
                 return
-            try:
-                execute_request = _field(request, "execute_request")
-                cancel_request = _field(request, "cancel_request")
-                complete_request = _field(request, "complete_request")
-                if execute_request is not None:
-                    self._register_execute(execute_request)
-                elif cancel_request is not None:
-                    task_id = str(_field(cancel_request, "task_id") or "")
-                    print(f"[TASK_CANCEL_REQUEST] task_id={task_id}", flush=True)
-                    self._publish_event(LATTICE.Event.Task.CancelRequested, {"TaskId": task_id})
-                elif complete_request is not None:
-                    task_id = str(_field(complete_request, "task_id") or "")
-                    print(f"[TASK_COMPLETE_REQUEST] task_id={task_id}", flush=True)
-                    self._publish_event(LATTICE.Event.Task.CompleteRequested, {"TaskId": task_id})
-            except Exception as exc:
-                print(
-                    f"[TASK_HANDLING_FAILED] endpoint={self.lattice_config.base_url} "
-                    f"error={type(exc).__name__}: {exc}\n{traceback.format_exc().strip()}",
-                    flush=True,
-                )
+            execute_request = _field(request, "execute_request")
+            cancel_request = _field(request, "cancel_request")
+            complete_request = _field(request, "complete_request")
+            if execute_request is not None:
+                self._register_execute(execute_request)
+            elif cancel_request is not None:
+                task_id = str(_field(cancel_request, "task_id") or "")
+                print(f"[TASK_CANCEL_REQUEST] task_id={task_id}", flush=True)
+                self._publish_event(LATTICE.Event.Task.CancelRequested, {"TaskId": task_id})
+            elif complete_request is not None:
+                task_id = str(_field(complete_request, "task_id") or "")
+                print(f"[TASK_COMPLETE_REQUEST] task_id={task_id}", flush=True)
+                self._publish_event(LATTICE.Event.Task.CompleteRequested, {"TaskId": task_id})
 
-    def _register_execute(self, execute_request: Any) -> None:  # Decode one execute request into the pending queue.
+    def _register_execute(self, execute_request: Any) -> None:
         task = _field(execute_request, "task")
         if task is None:
             raise ValueError("execute request has no task")
-        version = _field(task, "version")
-        task_id = "" if version is None else str(_field(version, "task_id") or "")
-        status_version = 0 if version is None else int(_field(version, "status_version") or 0)
-        if self.status_versions.seed(task_id, status_version):
-            print(f"[TASK_STATUS_SEED] task_id={task_id} version={status_version}", flush=True)
-        if task_id in self.seen_task_ids:
-            print(f"[TASK_DUPLICATE] task_id={task_id} dropped", flush=True)
+        task = Task.model_validate(task)
+        admitted = self.deliveries.admit(task)
+        task_id = task.version.task_id
+        if not admitted:
+            print(f"[TASK_DUPLICATE] task_id={task_id} retained; no duplicate bus admission", flush=True)
             self._publish_event(LATTICE.Event.Task.DuplicateRejected, {"TaskId": task_id})
             return
-        self.seen_task_ids.add(task_id)
-        try:
-            decoded = self.decoder.decode(task)
-        except ValueError as exc:
-            print(
-                f"[TASK_REJECTED] task_id={task_id} cause={exc} "
-                f"endpoint={self.lattice_config.base_url}",
-                flush=True,
-            )
-            self._update_status(
-                task_id,
-                LATTICE.Enums.LatticeTaskStatus.DoneNotOk,
-                error_code=LATTICE.Enums.LatticeTaskErrorCode.Rejected,
-                error_message=str(exc),
-            )
-            return
-        self.pending_tasks.append(decoded)
-        self.last_task = decoded
+        self.status_versions.seed(task_id, task.version.status_version)
+        self._receive_task(task_id)
+
+    def _receive_task(self, task_id: str) -> None:
+        accepted, _ = self._update_status(task_id, LATTICE.Enums.LatticeTaskStatus.MachineReceipt)
+        if accepted:
+            self.deliveries.received(task_id)
+            self._publish_event(LATTICE.Event.Task.Received, self.deliveries.pending[task_id].payload())
+            print(f"[TASK_RECEIVED] task_id={task_id} pending={self.deliveries.pending_count}", flush=True)
         self._sync_task_state()
-        self._publish_event(LATTICE.Event.Task.Received, decoded.payload())
-        print(
-            f"[TASK_RECEIVED] task_id={task_id} spec={decoded.specification_type} "
-            f"pending={len(self.pending_tasks)}",
-            flush=True,
-        )
+
+    def _recover_tasks(self) -> None:
+        """Reconcile acceptance from the persistent native task authority before offering work."""
+        now = time.monotonic()
+        if self.recovery_ready or now < self.next_task_recovery_at or not self.connection.connected:
+            return
+        self.next_task_recovery_at = now + self.lattice_config.reconnect_secs
+        recovered = []
+        page_token = None
+        seen_tokens = set()
+        try:
+            while True:
+                page = self._lattice_call("query_tasks", lambda: self.connection.client.tasks.query_tasks(page_token=page_token))
+                recovered.extend(page.tasks or [])
+                page_token = page.next_page_token
+                if not page_token:
+                    break
+                if page_token in seen_tokens:
+                    raise RuntimeError("Lattice task query repeated a page token")
+                seen_tokens.add(page_token)
+        except LatticeTransportError as exc:
+            self._surface_transport_error("query_tasks", exc)
+            return
+        for task in recovered:
+            assignee = _field(_field(_field(task, "relations"), "assignee"), "system")
+            if _field(assignee, "entity_id") != self.asset_id or task.is_executed_elsewhere:
+                continue
+            self.status_versions.seed(task.version.task_id, task.version.status_version)
+            self.deliveries.restore(task)
+            if task.status.status in TaskDeliveries.RECOVERABLE:
+                print(f"[TASK_RECOVERED] task_id={task.version.task_id} status={task.status.status}", flush=True)
+            if task.status.status == "STATUS_CANCEL_REQUESTED":
+                # The manager cancelled while no edge was listening; the request is not redelivered.
+                print(f"[TASK_RECOVERED_CANCEL] task_id={task.version.task_id}", flush=True)
+                self._publish_event(LATTICE.Event.Task.CancelRequested, {"TaskId": task.version.task_id})
+        self.recovery_ready = True
+        if self.deliveries.blocked:
+            self._record_error(LatticeConnectionError("task_recovery", self.lattice_config.base_url,
+                f"Unresolved tasks {sorted(self.deliveries.blocked)}; flight blocked. Reconcile their terminal status before restarting MPFC."))
+        self._sync_task_state()
+
+    def _retry_receipts(self) -> None:
+        now = time.monotonic()
+        if not self.connection.connected or now < self.next_receipt_retry_at:
+            return
+        self.next_receipt_retry_at = now + self.lattice_config.reconnect_secs
+        for task_id in list(self.deliveries.unreceipted):
+            self._receive_task(task_id)
 
     # -- task status ---------------------------------------------------------
-
-    def _get_target_entity(self, entity_id: str) -> Any:  # Fetch a Lattice entity for objective resolution.
-        try:
-            return self._lattice_call(
-                "get_entity", lambda: self.connection.client.entities.get_entity(entity_id)
-            )
-        except LatticeTransportError:
-            return None
 
     def _resync_status_version(self, task_id: str, expected_version: int | None) -> int | None:
         """Re-fetch a task and adopt its endpoint-authoritative status version."""
@@ -853,6 +709,7 @@ class LatticePlugin(PluginBase):
             return None
         actual_version = int(_field(_field(task, "version"), "status_version") or 0)
         self.status_versions.adopt(task_id, actual_version)
+        self.resynced_task = task
         print(
             f"[TASK_STATUS_RESYNC] task_id={task_id} expected_version={expected_version} "
             f"actual_version={actual_version}",
@@ -883,11 +740,9 @@ class LatticePlugin(PluginBase):
             if sdk_error_code is None:
                 raise ValueError(f"unknown task error code key {error_code!r}")
             error = TaskError(code=sdk_error_code, message=error_message or "")
-        expected_version = self.status_versions.next_version(task_id)
+        expected_version = self.status_versions.get(task_id)
         if expected_version is None:
             expected_version = self._resync_status_version(task_id, None)
-            if expected_version is not None:
-                expected_version = expected_version + 1
         if expected_version is None:
             print(
                 f"[TASK_STATUS_FAILED] task_id={task_id} status={status} "
@@ -902,18 +757,10 @@ class LatticePlugin(PluginBase):
             )
         new_status = TaskStatus(status=status, task_error=error, progress=progress_document)
 
-        def _call(status_version: int) -> Any:
-            return self.connection.client.tasks.update_task_status(
-                task_id=task_id,
-                status_version=status_version,
-                new_status=new_status,
-                author=Principal(system=System(entity_id=self.asset_id)),
-            )
-
         try:
             updated = self._lattice_call(
                 "update_task_status",
-                lambda: _call(expected_version),
+                lambda: self._submit_status(task_id, expected_version, new_status),
                 task_id=task_id,
                 expected_version=expected_version,
             )
@@ -929,11 +776,26 @@ class LatticePlugin(PluginBase):
                 )
                 self._surface_transport_error("update_task_status", exc)
                 return False, None
-            retry_version = actual_version + 1
+            remote_status = self.resynced_task.status
+            if (remote_status.model_dump(exclude_none=True) == new_status.model_dump(exclude_none=True)
+                    and self.resynced_task.last_updated_by == Principal(system=System(entity_id=self.asset_id))):
+                self.deliveries.acknowledge(task_id, status)
+                return True, actual_version
+            resolves_cancel = (remote_status.status == "STATUS_CANCEL_REQUESTED"
+                               and status == "STATUS_DONE_NOT_OK" and error is not None
+                               and error.code == "ERROR_CODE_CANCELLED")
+            if (not resolves_cancel and str(remote_status.status) not in
+                    {"STATUS_SENT", "STATUS_MACHINE_RECEIPT", "STATUS_ACK", "STATUS_EXECUTING"}):
+                self.deliveries.reconcile(self.resynced_task)
+                return False, actual_version
+            if status == "STATUS_MACHINE_RECEIPT" and remote_status.status != "STATUS_SENT":
+                self.deliveries.reconcile(self.resynced_task)
+                return False, actual_version
+            retry_version = actual_version
             try:
                 updated = self._lattice_call(
                     "update_task_status",
-                    lambda: _call(retry_version),
+                    lambda: self._submit_status(task_id, retry_version, new_status),
                     task_id=task_id,
                     expected_version=retry_version,
                 )
@@ -947,13 +809,14 @@ class LatticePlugin(PluginBase):
                 self._surface_transport_error("update_task_status", retry_exc)
                 return False, None
         actual_version = int(_field(_field(updated, "version"), "status_version") or 0)
-        if actual_version != expected_version:
+        if actual_version != expected_version + 1:
             print(
                 f"[TASK_STATUS_RESYNC] task_id={task_id} expected_version={expected_version} "
                 f"actual_version={actual_version}",
                 flush=True,
             )
         self.status_versions.adopt(task_id, actual_version)
+        self.deliveries.acknowledge(task_id, status)
         print(
             f"[TASK_STATUS] task_id={task_id} status={status} version={actual_version} "
             f"progress={progress}",
@@ -970,7 +833,54 @@ class LatticePlugin(PluginBase):
         )
         return True, actual_version
 
+    def _submit_status(self, task_id: str, version: int, new_status: TaskStatus) -> Any:
+        return self.connection.client.tasks.update_task_status(task_id=task_id, status_version=version,
+            new_status=new_status, author=Principal(system=System(entity_id=self.asset_id)))
+
     # -- entity publishing ---------------------------------------------------
+
+    def _create_ingress(self, item: MediaSource) -> bool:  # Create the ingress; False when the id already exists.
+        try:
+            self.connection.client.video.create_ingress_stream(
+                ingress_id=item.ingress_id, title=item.ingress_id, rtsp=RtspSettings(url=item.url)
+            )
+        except ApiError as exc:
+            if exc.status_code == HTTP_CONFLICT:
+                return False
+            raise
+        return True
+
+    def _register_media(self) -> None:  # Register configured video sources as ingress streams once per connection.
+        if not self.connection.connected:
+            for item in self.media_sources:
+                item.registered = False
+            return
+        for item in self.media_sources:
+            if item.registered:
+                continue
+            try:
+                created = self._lattice_call("create_ingress_stream", lambda: self._create_ingress(item))
+                if not created:
+                    existing = self._lattice_call(
+                        "get_ingress_stream", lambda: self.connection.client.video.get_ingress_stream(item.ingress_id)
+                    ).ingress_stream
+                    existing_url = None if existing.rtsp is None else existing.rtsp.url
+                    if existing_url != item.url:
+                        print(
+                            f"[PLUGIN] {self.client_id} ingress {item.ingress_id} url changed "
+                            f"from={existing_url} to={item.url}; re-creating",
+                            flush=True,
+                        )
+                        self._lattice_call(
+                            "delete_ingress_stream",
+                            lambda: self.connection.client.video.delete_ingress_stream(item.ingress_id),
+                        )
+                        self._lattice_call("create_ingress_stream", lambda: self._create_ingress(item))
+            except LatticeTransportError as exc:
+                self._surface_transport_error("register_media", exc)
+                continue
+            item.registered = True
+            print(f"[PLUGIN] {self.client_id} ingress registered id={item.ingress_id} url={item.url}", flush=True)
 
     def _publish_entity_state(self) -> bool:  # Encode and publish the vehicle state as a Lattice entity.
         position = self.state.get(UAV.State.Navigation.Position)
@@ -978,15 +888,9 @@ class LatticePlugin(PluginBase):
             return False
         attitude = self.state.get(UAV.State.Attitude.AttitudeRad)
         relative_alt_m = float(position["RelAltM"])
-        absolute_alt_m = float(position["AbsAltM"])
-        if self.entity_home_hae_m is None:
-            self.entity_home_hae_m = home_hae_from_telemetry(absolute_alt_m, relative_alt_m)
-            print(
-                f"[ENTITY_HAE] source=telemetry hae_m={self.entity_home_hae_m:.3f} "
-                f"abs_m={absolute_alt_m:.3f} rel_m={relative_alt_m:.3f}",
-                flush=True,
-            )
-        hae_alt_m = relative_to_hae(relative_alt_m, self.entity_home_hae_m)
+        # AbsAltM is AMSL; it cannot establish a WGS84 ellipsoid datum.
+        hae_alt_m = (None if self.entity_home_hae_m is None else
+                     relative_to_hae(relative_alt_m, self.entity_home_hae_m))
         attitude_enu = None
         if attitude is not None:
             w, x, y, z = attitude_enu_quaternion(
@@ -997,7 +901,7 @@ class LatticePlugin(PluginBase):
             entity_id=self.asset_id,
             is_live=True,
             expiry_time=datetime.now(timezone.utc) + timedelta(seconds=self.entity_expiry_s),
-            aliases=Aliases(name=f"MPFC {self.client_id}"),
+            aliases=Aliases(name=self.callsign),
             data_classification=Classification(
                 default=ClassificationInformation(level="CLASSIFICATION_LEVELS_UNCLASSIFIED")
             ),
@@ -1009,7 +913,6 @@ class LatticePlugin(PluginBase):
                 position=Position(
                     latitude_degrees=float(position["LatDeg"]),
                     longitude_degrees=float(position["LonDeg"]),
-                    altitude_agl_meters=relative_alt_m,
                     altitude_hae_meters=hae_alt_m,
                 ),
                 attitude_enu=attitude_enu,
@@ -1030,7 +933,10 @@ class LatticePlugin(PluginBase):
                 task_definitions=[
                     TaskDefinition(task_specification_url=url) for url in SUPPORTED_SPECIFICATION_URLS
                 ]
+                if self.accept_tasks
+                else []
             ),
+            media=Media(media=[item.media_item() for item in self.media_sources if item.registered]),
         )
         try:
             self._lattice_call(
@@ -1045,11 +951,11 @@ class LatticePlugin(PluginBase):
         self.last_entity_fields = {
             LATTICE.State.Entity.LatitudeDeg: float(position["LatDeg"]),
             LATTICE.State.Entity.LongitudeDeg: float(position["LonDeg"]),
-            LATTICE.State.Entity.AltitudeAglM: relative_alt_m,
-            LATTICE.State.Entity.AltitudeHaeM: hae_alt_m,
             LATTICE.State.Entity.PublishCount: self.entity_publish_count,
             LATTICE.State.Entity.LastPublishAtMs: self.last_entity_publish_ms,
         }
+        if hae_alt_m is not None:
+            self.last_entity_fields[LATTICE.State.Entity.AltitudeHaeM] = hae_alt_m
         if attitude_enu is not None:
             self.last_entity_fields.update(
                 {
@@ -1061,6 +967,42 @@ class LatticePlugin(PluginBase):
             )
         self._sync_entity_state()
         return True
+
+    def _publish_track(self, envelope: Dict[str, Any]) -> None:  # Geolocate one detection and publish it as a track entity.
+        detection = envelope["data"]
+        position = self.state.get(UAV.State.Navigation.Position)
+        attitude = self.state.get(UAV.State.Attitude.AttitudeRad)
+        if "tracker_id" not in detection or position is None or attitude is None or not self.connection.connected:
+            print(
+                f"[TRACK_SKIPPED] class={detection.get('class_name')} tracker_id={detection.get('tracker_id')} "
+                f"position={position is not None} attitude={attitude is not None} connected={self.connection.connected}",
+                flush=True,
+            )
+            return
+        lat, lon = self.camera.ground_point(position, float(attitude["Yaw"]), detection)
+        observed_at = datetime.fromtimestamp(envelope["time"] / 1000.0, timezone.utc)
+        track_id = f"{self.asset_id}.trk.{detection['tracker_id']}"
+        entity = Entity(
+            entity_id=track_id,
+            is_live=True,
+            expiry_time=observed_at + timedelta(seconds=self.track_expiry_s),
+            aliases=Aliases(name=f"{detection['class_name']} {detection['tracker_id']}"),
+            location=LatticeLocation(
+                position=Position(latitude_degrees=lat, longitude_degrees=lon, altitude_hae_meters=self.entity_home_hae_m)
+            ),
+            mil_view=MilView(disposition="DISPOSITION_UNKNOWN", environment="ENVIRONMENT_LAND"),
+            ontology=Ontology(template="TEMPLATE_TRACK"),
+            provenance=Provenance(
+                integration_name=f"mpfc.{self.client_id}",
+                data_type=f"MPFC detection {detection['class_name']} conf={detection['confidence']}",
+                source_id=self.asset_id,
+                source_update_time=observed_at,
+            ),
+        )
+        try:
+            self._lattice_call("publish_track", lambda: self.connection.client.entities.publish_entity(**entity.model_dump()))
+        except LatticeTransportError as exc:
+            self._surface_transport_error("publish_track", exc)
 
     def _maybe_publish_entity_state(self) -> None:  # Publish the entity on its configured interval.
         if self.state.get(UAV.State.Navigation.Position) is None:
@@ -1074,16 +1016,22 @@ class LatticePlugin(PluginBase):
 
     # -- bus request handling ------------------------------------------------
 
-    def _handle_fetch(self, request_id: str, action: str) -> None:  # Fetch a decoded task for a core.
-        decoded = self.pending_tasks.popleft() if self.pending_tasks else None
-        data: Dict[str, Any] = {
-            "PendingCount": len(self.pending_tasks),
-            "TaskId": "" if decoded is None else decoded.task_id,
-        }
-        if decoded is not None:
-            data.update(decoded.payload())
+    def _handle_fetch(self, request_id: str, action: str) -> None:
+        if not self.recovery_ready:
+            self.enqueue_response(request_id, action, False, {"error": "Task recovery has not completed"})
+            return
+        task = self.deliveries.fetch()
+        data = {"PendingCount": self.deliveries.pending_count, "TaskId": "" if task is None else task.task_id,
+                "RecoveryTaskIds": sorted(self.deliveries.blocked)}
+        if task is not None:
+            data.update(task.payload())
         self._sync_task_state()
         self.enqueue_response(request_id, action, True, data)
+
+    def _handle_entity_get(self, request_id: str, action: str, params: Dict[str, Any]) -> None:
+        entity = self._lattice_call("get_entity", lambda: self.connection.client.entities.get_entity(params["EntityId"]))
+        self.enqueue_response(request_id, action, True,
+            {"EntityJson": entity.model_dump_json(by_alias=True, exclude_unset=True)})
 
     def _handle_report(self, request_id: str, action: str, params: Dict[str, Any]) -> None:  # Report one task status.
         task_id = str(params["TaskId"])
@@ -1150,6 +1098,9 @@ class LatticePlugin(PluginBase):
             if action == LATTICE.Action.Connection.Status:
                 self.enqueue_response(request_id, action, True, self._status_data())
                 return
+            if action == LATTICE.Action.Entity.Get:
+                self._handle_entity_get(request_id, action, params)
+                return
             if action == LATTICE.Action.Task.Fetch:
                 self._handle_fetch(request_id, action)
                 return
@@ -1182,7 +1133,8 @@ class LatticePlugin(PluginBase):
     # -- runtime -------------------------------------------------------------
 
     def run(self) -> None:  # Run Lattice agent interface loop.
-        self._start_listener()
+        if self.accept_tasks:
+            self._start_listener()
         self.send_online()
         self._sync_connection_state()
         self._sync_task_state()
@@ -1191,7 +1143,11 @@ class LatticePlugin(PluginBase):
             while True:
                 if self.connect_enabled:
                     self.connection.ensure_connected()
-                self._drain_agent_requests()
+                if self.accept_tasks:
+                    self._recover_tasks()
+                    self._drain_agent_requests()
+                    self._retry_receipts()
+                self._register_media()
                 self._maybe_publish_entity_state()
                 self._sync_connection_state()
                 self.state_scheduler.flush()
@@ -1199,6 +1155,8 @@ class LatticePlugin(PluginBase):
                 deadline = time.monotonic() + self.loop_interval_s
                 while time.monotonic() < deadline:
                     topic, payload = self._pump_once(deadline)
+                    if topic is not None and topic == self.detection_topic:
+                        self._publish_track(payload)
                     if topic == self.request_topic:
                         self._handle_request(payload["data"])
         except (KeyboardInterrupt, SystemExit):

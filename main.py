@@ -6,9 +6,11 @@ Usage:
 MAIN_CONFIG must point to a YAML config shaped like flight_cores/test_core/config.yaml.
 """
 
+import ctypes
 import importlib
 import multiprocessing as mp
 import os
+import signal
 import time
 import sys
 import queue
@@ -17,14 +19,53 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from lib.common import CONTROL_SHUTDOWN_TOPIC, build_envelope, connect_bus_client, load_config
-from lib.mqtt_bus_client import MqttPublishError
+from lib.common import CONTROL_SHUTDOWN_TOPIC, INSTANCE_LOCK_TOPIC, build_envelope, connect_bus_client, load_config
+from lib.mqtt_bus_client import MqttBusClient, MqttPublishError
 from protocols.namespace_loader import load_protocol_namespace
 
 CONFIG_ENV = "MAIN_CONFIG"
 PLACEHOLDER_RE = re.compile(r"<([A-Za-z0-9_]+)>")
 ENUM_TOKEN_RE = re.compile(r"[^A-Za-z0-9]+")
+# Window for the broker to deliver a retained instance lock after subscribing.
+INSTANCE_LOCK_WAIT_S = 1.0
+PR_SET_PDEATHSIG = 1
+LIBC = ctypes.CDLL(None, use_errno=True)
 UAV = load_protocol_namespace("uav")
+
+
+def run_child(supervisor_pid: int, runner: Any, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:  # Child entry: die with the supervisor.
+    # SIGINT so children unwind through their KeyboardInterrupt cleanup (mavsdk_server, links).
+    # Background launches can inherit SIGINT ignored, and Python then installs no handler: restore it.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    if LIBC.prctl(PR_SET_PDEATHSIG, signal.SIGINT) != 0:
+        raise OSError(ctypes.get_errno(), "prctl(PR_SET_PDEATHSIG) failed")
+    if os.getppid() != supervisor_pid:
+        return
+    runner(cfg, bus_config)
+
+
+class InstanceAlreadyRunning(RuntimeError):
+    pass
+
+
+def claim_instance(bus_client: MqttBusClient, instance_name: str, endpoint: Dict[str, Any]) -> None:  # Refuse a second runtime with the same name on one broker.
+    bus_client.subscribe(INSTANCE_LOCK_TOPIC)
+    deadline = time.monotonic() + INSTANCE_LOCK_WAIT_S
+    while (remaining := deadline - time.monotonic()) > 0:
+        try:
+            topic, message = bus_client.receive(timeout=remaining)
+        except queue.Empty:
+            break
+        if topic == INSTANCE_LOCK_TOPIC:
+            holder = message["data"]
+            bus_client.close()
+            raise InstanceAlreadyRunning(
+                f"instance {instance_name} already running on broker {endpoint['host']}:{endpoint['port']} "
+                f"host={holder['host']} pid={holder['pid']}; if that runtime is gone, clear the lock with "
+                f"mosquitto_pub -h {endpoint['host']} -p {endpoint['port']} -r -n -t {bus_client.topic_prefix}/{INSTANCE_LOCK_TOPIC}"
+            )
+    holder = {"host": os.uname().nodename, "pid": os.getpid()}
+    bus_client.publish(INSTANCE_LOCK_TOPIC, build_envelope("main", INSTANCE_LOCK_TOPIC, holder), retain=True)
 
 
 def parse_runtime_overrides(argv: list[str]) -> Dict[str, str]:  # Parse `--key=value` CLI overrides.
@@ -62,14 +103,21 @@ def cast_override_value(raw: str, existing: Any) -> Any:  # Cast raw override to
     raise RuntimeError(f"unsupported override type {existing_type.__name__}")
 
 
+def core_config_of(config: Dict[str, Any]) -> Dict[str, Any] | None:  # Core cfg, or None for a runtime without a core (receive-only edge).
+    core = config.get("core")
+    return None if core is None else core["cfg"]
+
+
 def apply_runtime_overrides(config: Dict[str, Any], overrides: Dict[str, str]) -> None:  # Apply CLI overrides to config.
-    core_cfg = config["core"]["cfg"]
+    core_cfg = core_config_of(config)
     for key, raw_value in overrides.items():
         if key == "my_name":
             config["my_name"] = cast_override_value(raw_value, config["my_name"])
-            if "my_name" in core_cfg:
+            if core_cfg is not None and "my_name" in core_cfg:
                 core_cfg["my_name"] = cast_override_value(raw_value, core_cfg["my_name"])
             continue
+        if core_cfg is None:
+            raise RuntimeError(f"override {key} needs a core; this runtime has none")
         if key not in core_cfg:
             raise RuntimeError(f"override key not found in core.cfg {key}")
         core_cfg[key] = cast_override_value(raw_value, core_cfg[key])
@@ -187,8 +235,8 @@ def plugin_supports_vehicle(plugin_cfg: Dict[str, Any], vehicle: Dict[str, str])
 
 def configure_runtime_plugins(config: Dict[str, Any], vehicle: Dict[str, str] | None) -> None:  # Bind core to controller/backend plugins after template merge and enum resolution.
     plugins_raw = config["plugins"]
-    core_cfg = config["core"]["cfg"]
-    if vehicle is not None:
+    core_cfg = core_config_of(config)
+    if vehicle is not None and core_cfg is not None:
         core_cfg["vehicle"] = dict(vehicle)
     controller_plugins = [entry for entry in plugins_raw if entry.get("cfg", {}).get("is_controller")]
     if len(controller_plugins) > 1:
@@ -215,12 +263,14 @@ def configure_runtime_plugins(config: Dict[str, Any], vehicle: Dict[str, str] | 
         controller_cfg["backend_state_keys"] = list(backend_cfg["state_intervals"].keys())
         controller_cfg["backend_event_keys"] = list(backend_cfg.get("event_keys", []))
         controller_cfg["vehicle"] = dict(vehicle)
+        if core_cfg is None:
+            return
         expected_interface = {"id": controller_cfg["id"], "topic_ns": controller_cfg["topic_ns"]}
         if "interface" in core_cfg and core_cfg["interface"] != expected_interface:
             raise RuntimeError(f"core interface must target controller expected={expected_interface} actual={core_cfg['interface']}")
         core_cfg["interface"] = expected_interface
         return
-    if "interface" in core_cfg:
+    if core_cfg is None or "interface" in core_cfg:
         return
     interface_plugins = [entry for entry in plugins_raw if entry.get("cfg", {}).get("is_interface")]
     if len(interface_plugins) == 1:
@@ -250,9 +300,13 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
     if not schema_path.is_absolute():
         schema_path = base_dir / schema_path
 
+    core_cfg = core_config_of(config)
+    instance_name = config["my_name"] if core_cfg is None else core_cfg.get("my_name", config["my_name"])
     log_file = Path(raw_bus_config["log_file"])
     if not log_file.is_absolute():
-        log_file = repo_root / log_file
+        # Relative logs are per instance so runtimes sharing a checkout do not interleave.
+        log_file = repo_root / "logs" / instance_name / log_file
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     endpoint_cfg = raw_bus_config["endpoint"]
     etype = endpoint_cfg.get("type")
@@ -265,9 +319,12 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
         endpoint = {"type": "unix", "path": str(endpoint_path)}
     else:
         endpoint = endpoint_cfg
-    instance_name = config["core"]["cfg"].get("my_name", config["my_name"])
     topic_prefix = f"hiveos/{instance_name}"
     bus_config = {"schema_path": str(schema_path), "log_file": str(log_file), "endpoint": endpoint, "topic_prefix": topic_prefix}
+
+    # A same-name broker session would take over the holder's session and fire its will, clearing the lock.
+    bus_client = connect_bus_client(bus_config, f"main.{os.getpid()}", will_topic=INSTANCE_LOCK_TOPIC)
+    claim_instance(bus_client, instance_name, endpoint)
 
     log_fd = os.open(str(log_file), os.O_WRONLY | os.O_CREAT | os.O_APPEND)
     log_handle = os.fdopen(log_fd, "a", buffering=1)
@@ -292,11 +349,11 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
     print(f"[MAIN] using config {config_path}:\n{config_dump}", flush=True)
 
     plugins_raw = config["plugins"]
-    core_config = config["core"]
-    core_name = core_config["name"]
-    core_cfg = core_config["cfg"]
-    core_module = importlib.import_module(f"flight_cores.{core_name}.{core_name}")
-    core_runner = getattr(core_module, "run_core")
+    core_runner = None
+    if core_cfg is not None:
+        core_name = config["core"]["name"]
+        core_module = importlib.import_module(f"flight_cores.{core_name}.{core_name}")
+        core_runner = getattr(core_module, "run_core")
 
     plugin_entries: List[Dict[str, Any]] = []
     for entry in plugins_raw:
@@ -306,19 +363,23 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
         plugin_runner = getattr(plugin_module, "run_plugin")
         plugin_entries.append({"cfg": plugin_cfg, "runner": plugin_runner})
 
-    core_proc = mp.Process(target=core_runner, args=(core_cfg, bus_config), name=f"core-{core_cfg.get('id','?')}")
-    core_proc.start()
+    supervisor_pid = os.getpid()
+    core_proc = None
+    if core_runner is not None:
+        core_proc = mp.Process(
+            target=run_child, args=(supervisor_pid, core_runner, core_cfg, bus_config), name=f"core-{core_cfg.get('id','?')}"
+        )
+        core_proc.start()
     plugin_procs = []
     for entry in plugin_entries:
         plugin_cfg = entry["cfg"]
         proc = mp.Process(
-            target=entry["runner"], args=(plugin_cfg, bus_config), name=f"plugin-{plugin_cfg.get('id','?')}"
+            target=run_child, args=(supervisor_pid, entry["runner"], plugin_cfg, bus_config), name=f"plugin-{plugin_cfg.get('id','?')}"
         )
         proc.start()
         plugin_procs.append(proc)
 
     all_procs = [proc for proc in [core_proc] + plugin_procs if proc is not None]
-    bus_client = connect_bus_client(bus_config, "main")
     bus_client.subscribe("DIAG/#")
     bus_client.subscribe(CONTROL_SHUTDOWN_TOPIC)
 
@@ -373,6 +434,7 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
                 time.sleep(0.1)
                 alive = [proc for proc in all_procs if proc.is_alive()]
         try:
+            bus_client.publish(INSTANCE_LOCK_TOPIC, None, retain=True)
             bus_client.close()
         except Exception:
             pass
