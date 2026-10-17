@@ -30,19 +30,23 @@ import threading
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, Callable, Dict
 
 import httpx
+import numpy as np
 from anduril import (
     Aliases,
     Classification,
     ClassificationInformation,
     Entity,
+    ErrorEllipse,
     EntityIdsSelector,
     GoogleProtobufAny,
     Health,
     Lattice,
     Location as LatticeLocation,
+    LocationUncertainty,
     Media,
     MediaItem,
     MilView,
@@ -53,6 +57,7 @@ from anduril import (
     Quaternion,
     RequestTimeoutError,
     RtspSettings,
+    Status as EntityStatus,
     System,
     Task,
     TaskCatalog,
@@ -62,9 +67,10 @@ from anduril import (
 )
 from anduril.core import ApiError
 from anduril.oauth.types.get_token_response import GetTokenResponse
+from anduril.types.entity_manager_t_mat3 import EntityManagerTMat3
+from froggeolib import GimbalCamera, GPSposition
 
 from lib.altitude import relative_to_hae
-from lib.geo_utils import image_point_to_gps
 from lib.common import (
     build_event_topics,
     build_request_topic,
@@ -86,9 +92,43 @@ from protocols.namespace_loader import load_protocol_namespace
 LATTICE = load_protocol_namespace("lattice")
 UAV = load_protocol_namespace("uav")
 
+
+class PlatformActivity(str, Enum):
+    returning = "RETURN TO BASE (RTB)"
+    landing = "LANDING"
+    airborne = "AIRBORNE"
+    armed = "ARMED"
+    grounded = "ON GROUND"
+
+
+ACTIVITY_MODES = {
+    "BOXNAVRTH": PlatformActivity.returning,
+    "RETURN_TO_LAUNCH": PlatformActivity.returning,
+    "LAND": PlatformActivity.landing,
+}
+
+
+def platform_activity(state: Dict[str, Any]) -> PlatformActivity | None:
+    """Describe observed autopilot state; task intent alone is not vehicle activity."""
+    armed = state.get(UAV.State.Flight.IsArmed)
+    in_air = state.get(UAV.State.Flight.IsInAir)
+    if armed is False and in_air is False:
+        return PlatformActivity.grounded
+    modes = state.get(UAV.State.Flight.ActiveModeNames) or []
+    for mode in modes:
+        if mode in ACTIVITY_MODES:
+            return ACTIVITY_MODES[mode]
+    if in_air is True:
+        return PlatformActivity.airborne
+    if armed is True:
+        return PlatformActivity.armed
+    return None
+
 MPFC_PROGRESS_TYPE_URL = "type.googleapis.com/mpfc.TaskProgress"
 
 ENTITY_EXPIRY_S = 15.0
+# Published geospatial contacts use the TAK marker lifetime, not detector-box expiry.
+TRACK_EXPIRY_S = 86400.0
 DEFAULT_TOKEN_EXPIRES_IN_S = 3600
 TOKEN_EXPIRY_BUFFER_S = 120.0
 # Lattice allows 4-36 printable ASCII; MediaMTX path names and the REST path allow only these.
@@ -133,26 +173,43 @@ class MediaSource:
         )
 
 
-class NadirCamera:
-    """Fixed downward camera, image top toward the vehicle nose; ground assumed flat at home height."""
+class DetectionCamera:
+    """Geolocate detector boxes using the calibrated stabilized camera and level ground."""
 
     def __init__(self, cfg: Dict[str, Any]) -> None:
         self.image_w = float(cfg["image_w"])
         self.image_h = float(cfg["image_h"])
-        self.fov = (float(cfg["hfov_deg"]), float(cfg["vfov_deg"]))
+        self.projection = GimbalCamera(**cfg)
 
-    def ground_point(self, position: Dict[str, Any], yaw_rad: float, detection: Dict[str, Any]) -> tuple[float, float]:  # Box centre -> lat/lon.
-        norm_x = (float(detection["x1"]) + float(detection["x2"])) / 2.0 / self.image_w
-        norm_y = (float(detection["y1"]) + float(detection["y2"])) / 2.0 / self.image_h
-        point = image_point_to_gps(
-            {"lat": float(position["LatDeg"]), "lon": float(position["LonDeg"])},
+    def image_center(self, detection: Dict[str, Any]) -> tuple[float, float]:
+        return ((float(detection["x1"]) + float(detection["x2"])) / 2 / self.image_w,
+                (float(detection["y1"]) + float(detection["y2"])) / 2 / self.image_h)
+
+    def ground_point(self, position: Dict[str, Any], yaw_rad: float, detection: Dict[str, Any]) -> tuple[float, float] | None:
+        norm_x, norm_y = self.image_center(detection)
+        point = self.projection.ground_point(
+            GPSposition(float(position["LatDeg"]), float(position["LonDeg"])),
             float(position["RelAltM"]),
-            self.fov,
             math.degrees(yaw_rad) % 360.0,
             norm_x,
             norm_y,
         )
-        return point.lat, point.lon
+        return (point.lat, point.lon) if point is not None else None
+
+    def uncertainty(self, position: Dict[str, Any], yaw_rad: float, detection: Dict[str, Any]) -> LocationUncertainty | None:
+        norm_x, norm_y = self.image_center(detection)
+        covariance = self.projection.ground_covariance(float(position['RelAltM']), math.degrees(yaw_rad), norm_x, norm_y)
+        if covariance is None:
+            return None
+        east, cross, north = covariance
+        values, axes = np.linalg.eigh([[east, cross], [cross, north]])
+        scale = -2 * math.log(1 - .9)
+        return LocationUncertainty(
+            position_enu_cov=EntityManagerTMat3(mxx=east, mxy=cross, myy=north),
+            position_error_ellipse=ErrorEllipse(probability=.9,
+                semi_major_axis_m=math.sqrt(max(0, float(values[1])) * scale),
+                semi_minor_axis_m=math.sqrt(max(0, float(values[0])) * scale),
+                orientation_d=math.degrees(math.atan2(float(axes[0, 1]), float(axes[1, 1]))) % 180))
 
 
 class LatticeConnectionError(RuntimeError):
@@ -370,8 +427,8 @@ class LatticePlugin(PluginBase):
         if detections_cfg is not None:
             source = detections_cfg["source"]
             self.detection_topic = f"{build_topic_base(source['id'], source['topic_ns'])}/STATE/detections"
-            self.camera = NadirCamera(detections_cfg["camera"])
-            self.track_expiry_s = float(detections_cfg["track_expiry_s"])
+            self.camera = DetectionCamera(detections_cfg["camera"])
+            self.track_expiry_s = float(detections_cfg.get("track_expiry_s", TRACK_EXPIRY_S))
         self.lattice_config = LatticeConfig(cfg)
         self.connection = LatticeConnection(self.lattice_config)
 
@@ -725,6 +782,7 @@ class LatticePlugin(PluginBase):
         progress: float | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
+        result: GoogleProtobufAny | None = None,
     ) -> tuple[bool, int | None]:
         """Update one task status; failures are logged, never silently dropped.
 
@@ -755,7 +813,7 @@ class LatticePlugin(PluginBase):
             progress_document = GoogleProtobufAny(
                 type=MPFC_PROGRESS_TYPE_URL, progress=max(0.0, min(1.0, float(progress)))
             )
-        new_status = TaskStatus(status=status, task_error=error, progress=progress_document)
+        new_status = TaskStatus(status=status, task_error=error, progress=progress_document, result=result)
 
         try:
             updated = self._lattice_call(
@@ -892,6 +950,7 @@ class LatticePlugin(PluginBase):
         hae_alt_m = (None if self.entity_home_hae_m is None else
                      relative_to_hae(relative_alt_m, self.entity_home_hae_m))
         attitude_enu = None
+        activity = platform_activity(self.state)
         if attitude is not None:
             w, x, y, z = attitude_enu_quaternion(
                 attitude["Roll"], attitude["Pitch"], attitude["Yaw"]
@@ -902,6 +961,7 @@ class LatticePlugin(PluginBase):
             is_live=True,
             expiry_time=datetime.now(timezone.utc) + timedelta(seconds=self.entity_expiry_s),
             aliases=Aliases(name=self.callsign),
+            status=EntityStatus(platform_activity=activity) if activity is not None else None,
             data_classification=Classification(
                 default=ClassificationInformation(level="CLASSIFICATION_LEVELS_UNCLASSIFIED")
             ),
@@ -979,7 +1039,13 @@ class LatticePlugin(PluginBase):
                 flush=True,
             )
             return
-        lat, lon = self.camera.ground_point(position, float(attitude["Yaw"]), detection)
+        point = self.camera.ground_point(position, float(attitude["Yaw"]), detection)
+        if point is None:
+            print(f"[TRACK_SKIPPED] class={detection['class_name']} tracker_id={detection['tracker_id']} "
+                  f"camera_pitch_deg={self.camera.projection.pitch_deg} reason=image_ray_above_horizon", flush=True)
+            return
+        lat, lon = point
+        uncertainty = self.camera.uncertainty(position, float(attitude['Yaw']), detection)
         observed_at = datetime.fromtimestamp(envelope["time"] / 1000.0, timezone.utc)
         track_id = f"{self.asset_id}.trk.{detection['tracker_id']}"
         entity = Entity(
@@ -990,6 +1056,7 @@ class LatticePlugin(PluginBase):
             location=LatticeLocation(
                 position=Position(latitude_degrees=lat, longitude_degrees=lon, altitude_hae_meters=self.entity_home_hae_m)
             ),
+            location_uncertainty=uncertainty,
             mil_view=MilView(disposition="DISPOSITION_UNKNOWN", environment="ENVIRONMENT_LAND"),
             ontology=Ontology(template="TEMPLATE_TRACK"),
             provenance=Provenance(
@@ -1046,6 +1113,7 @@ class LatticePlugin(PluginBase):
                 progress=None if progress is None else float(progress),
                 error_code=None if error_code is None else str(error_code),
                 error_message=None if error_message is None else str(error_message),
+                result=GoogleProtobufAny.model_validate_json(params["ResultJson"]) if params.get("ResultJson") else None,
             )
         except ValueError as exc:
             self.enqueue_response(

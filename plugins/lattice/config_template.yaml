@@ -30,8 +30,9 @@ cfg:
   # required; video sources registered as Lattice Video API ingress streams <asset_id>.<source>
   # and referenced from the entity, e.g. [{source: front, url: rtsp://127.0.0.1:8554/uav1-front}]
   media: []
-  # required; null, or detector source + nadir camera for detection -> Lattice track entities <asset_id>.trk.<tracker_id>
-  # e.g. {source: {id: yolo, topic_ns: CV}, camera: {image_w: 1280, image_h: 720, hfov_deg: 90, vfov_deg: 60}, track_expiry_s: 10}
+  # required; null, or detector source + stabilized gimbal camera for detection -> Lattice track entities <asset_id>.trk.<tracker_id>
+  # Geospatial contacts default to the TAK marker lifetime: 86400 seconds from the last observation.
+  # e.g. {source: {id: yolo, topic_ns: CV}, camera: {image_w: 1280, image_h: 720, hfov_deg: 90, vfov_deg: 60, pitch_deg: -45, min_pitch_deg: -90, max_pitch_deg: 10}}
   detections: null
   # required vehicle state interface consumed for entity publishing
   interface:
@@ -42,6 +43,9 @@ cfg:
     - Position
     - AttitudeRad
     - Battery
+    - IsArmed
+    - IsInAir
+    - ActiveModeNames
   # Lattice entity refresh interval and expiry
   state_publish_interval_s: 1.0
   entity_expiry_s: 15.0

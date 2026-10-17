@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package mpfc.tasks.v1;
+
+// Land at the current position. Complete only after fresh telemetry confirms
+// the aircraft is on the ground and disarmed. No navigation target is implied.
+message Land {}
+
+// Use the autopilot's configured return-to-launch procedure, including landing.
+// Complete only after fresh telemetry confirms ground contact and disarm.
+message ReturnToLaunch {}
+
+// Search the polygon carried by a Lattice GEO entity. Heights are above the
+// polygon's explicit WGS84 altitude; lane spacing is measured on the ground.
+message SearchArea {
+  string area_entity_id = 1;
+  double height_above_area_m = 2;
+  double lane_spacing_m = 3;
+}
+
+message SearchAreaResult {
+  string area_entity_id = 1;
+  uint32 waypoints_completed = 2;
+  uint32 waypoints_total = 3;
+  double area_square_meters = 4;
+}

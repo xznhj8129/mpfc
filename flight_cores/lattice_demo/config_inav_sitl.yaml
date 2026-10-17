@@ -11,6 +11,10 @@ core:
     id: lattice_core
     poll_interval_s: 0.2
 
+    search:
+      # direction_of_travel faces the next destination; lane holds the survey-lane heading, including joins.
+      heading_mode: direction_of_travel
+
     lattice:
       id: lattice
       topic_ns: LATTICE

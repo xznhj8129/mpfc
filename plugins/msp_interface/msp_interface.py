@@ -463,15 +463,11 @@ class MspInterface(PluginBase):
             self.enqueue_response(request_id, action, True, {"Armed": True})
             return
         if action == UAV.Action.Flight.Takeoff:
-            # INAV launch is owned outside this MSP link: the bench hands the
-            # vehicle over already airborne in NAV POSHOLD + GCS NAV, so the
-            # command contract is satisfied by holding the current target.
-            print(
-                f"[MSP] takeoff mapped to hold: platform handed over airborne "
-                f"alt_target_m={self.takeoff_altitude_m}",
-                flush=True,
-            )
-            self.enqueue_response(request_id, action, True, {})
+            airborne = self.latest_state.get(UAV.State.Flight.IsInAir) is True
+            armed = self.latest_state.get(UAV.State.Flight.IsArmed) is True
+            self.enqueue_response(request_id, action, airborne and armed,
+                {"AlreadyAirborne": True} if airborne and armed else
+                {"error": "MSP autonomous takeoff is not implemented; an external pilot must establish flight"})
             return
         if action == UAV.Action.Flight.Land:
             with self.api_lock:

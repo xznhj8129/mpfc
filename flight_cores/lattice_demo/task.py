@@ -4,8 +4,9 @@ import math
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict
+from google.protobuf.json_format import ParseDict, ParseError
 from lib.lattice_fields import _field, _float_field
-from lib.lattice_specs import TRANSIT_SPECIFICATION_URL, SUPPORTED_SPECIFICATION_URLS
+from lib.lattice_specs import CUSTOM_SPECIFICATIONS, TRANSIT_SPECIFICATION_URL, SUPPORTED_SPECIFICATION_URLS
 from protocols.namespace_loader import load_protocol_namespace
 
 LATTICE = load_protocol_namespace("lattice")
@@ -82,7 +83,16 @@ class TaskDecoder:
         if spec_url not in SUPPORTED_SPECIFICATION_URLS:
             raise ValueError(f"unsupported task specification {spec_url!r}")
         display_name = _field(task, "display_name")
-        if spec_url == TRANSIT_SPECIFICATION_URL:
+        if spec_url in CUSTOM_SPECIFICATIONS:
+            document = specification.model_dump(by_alias=True, exclude_none=True)
+            document.pop("@type")
+            try:
+                ParseDict(document, CUSTOM_SPECIFICATIONS[spec_url]())
+            except ParseError as cause:
+                raise ValueError(f"Invalid task specification: {cause}") from cause
+            destination = dict.fromkeys(("latitude_deg", "longitude_deg", "altitude_m", "altitude_reference"))
+            orbit_radius_m = orbit_height_m = orbit_direction = orbit_entity_id = None
+        elif spec_url == TRANSIT_SPECIFICATION_URL:
             destination = self._transit_destination(specification)
             orbit_radius_m = orbit_height_m = orbit_direction = orbit_entity_id = None
         else:

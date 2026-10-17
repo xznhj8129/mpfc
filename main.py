@@ -28,9 +28,20 @@ PLACEHOLDER_RE = re.compile(r"<([A-Za-z0-9_]+)>")
 ENUM_TOKEN_RE = re.compile(r"[^A-Za-z0-9]+")
 # Window for the broker to deliver a retained instance lock after subscribing.
 INSTANCE_LOCK_WAIT_S = 1.0
+SECRET_CONFIG_KEYS = frozenset({"token", "client_secret", "password", "private_key", "api_key"})
 PR_SET_PDEATHSIG = 1
 LIBC = ctypes.CDLL(None, use_errno=True)
 UAV = load_protocol_namespace("uav")
+
+
+def redacted_config(value: Any) -> Any:
+    """Keep credentials out of the startup configuration log."""
+    if isinstance(value, dict):
+        return {key: "<REDACTED>" if key in SECRET_CONFIG_KEYS else redacted_config(item)
+                for key, item in value.items()}
+    if isinstance(value, list):
+        return [redacted_config(item) for item in value]
+    return value
 
 
 def run_child(supervisor_pid: int, runner: Any, cfg: Dict[str, Any], bus_config: Dict[str, Any]) -> None:  # Child entry: die with the supervisor.
@@ -292,7 +303,7 @@ def start_from_config(config_path: Path, overrides: Dict[str, str]) -> None:
     vehicle = resolve_vehicle_config(config)
     resolve_plugin_supports(config)
     configure_runtime_plugins(config, vehicle)
-    config_dump = json.dumps(config, indent=2, sort_keys=True)
+    config_dump = json.dumps(redacted_config(config), indent=2, sort_keys=True)
     base_dir = config_path.parent
     raw_bus_config = config["bus_config"]
 

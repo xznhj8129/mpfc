@@ -245,6 +245,7 @@ structs:
           Progress: optional float
           ErrorCode: optional string
           ErrorMessage: optional string
+          ResultJson: optional string
 
   Event:
     parent: LATTICE

@@ -23,7 +23,11 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from anduril import Entity, Task
+from anduril import Entity, GoogleProtobufAny, Task
+from froggeolib import GimbalCamera
+from geographiclib.geodesic import Geodesic
+from google.protobuf.json_format import MessageToDict, ParseDict
+from flight_cores.lattice_demo.search import AreaSearchPlan, SearchHeadingMode
 from flight_cores.lattice_demo.task import TaskDecoder
 from lib.altitude import hae_to_relative, relative_to_hae
 from lib.common import (
@@ -36,7 +40,8 @@ from lib.common import (
 )
 from lib.core_base import CoreBase
 from lib.geo_utils import GPSposition, gps_distance_m, gps_to_vector, vector_to_gps
-from lib.lattice_specs import ORBIT_SPECIFICATION_URL
+from lib.lattice_specs import LAND_SPECIFICATION_URL, ORBIT_SPECIFICATION_URL, RETURN_TO_LAUNCH_SPECIFICATION_URL, SEARCH_AREA_SPECIFICATION_URL
+from lib.lattice_flight_pb2 import SearchArea, SearchAreaResult
 from protocols.namespace_loader import load_protocol_namespace
 
 UAV = load_protocol_namespace("uav")
@@ -46,6 +51,11 @@ MISSION = load_protocol_namespace("mission")
 # Bearing advance per orbit waypoint; the vehicle flies the circle as successive go-to points.
 ORBIT_STEP_DEG = 30.0
 ORBIT_CLOCKWISE = "ORBIT_CLOCKWISE"
+DEFAULT_SEARCH_HEADING_MODE = SearchHeadingMode.DIRECTION_OF_TRAVEL
+RECOVERY_ACTIONS = {
+    LAND_SPECIFICATION_URL: UAV.Action.Flight.Land,
+    RETURN_TO_LAUNCH_SPECIFICATION_URL: UAV.Action.Flight.Rtl,
+}
 
 
 class LatticeDemoError(RuntimeError):
@@ -204,6 +214,8 @@ class LatticeDemo(CoreBase):
         if self.cancellation_action != "rtl" or self.cancellation_timeout_s <= 0:
             raise ValueError("Cancellation requires action=rtl and a positive cancellation_timeout_s")
         self.task_decoder = TaskDecoder(resolve_entity=self._resolve_lattice_entity)
+        self.camera = GimbalCamera(**cfg["camera"]) if cfg.get("camera") is not None else None
+        self.search_heading_mode = SearchHeadingMode(cfg.get("search", {}).get("heading_mode", DEFAULT_SEARCH_HEADING_MODE))
 
     # -- bus plumbing --------------------------------------------------------
 
@@ -266,6 +278,7 @@ class LatticeDemo(CoreBase):
         progress: float | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
+        result: GoogleProtobufAny | None = None,
     ) -> Dict[str, Any]:
         params: Dict[str, Any] = {"TaskId": task_id, "Status": status_key}
         if progress is not None:
@@ -274,6 +287,8 @@ class LatticeDemo(CoreBase):
             params["ErrorCode"] = error_code
         if error_message is not None:
             params["ErrorMessage"] = error_message
+        if result is not None:
+            params["ResultJson"] = result.model_dump_json(by_alias=True)
         try:
             response = self._request(self.lattice_request_topic, LATTICE.Action.Task.Report, params)
         except LatticeDemoError as exc:
@@ -470,14 +485,19 @@ class LatticeDemo(CoreBase):
         cancel_confirmed = False
         self.executing_task = True
         try:
-            destination = Destination.from_task(task)
             self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.Executing, progress=0.0)
             self._check_stop()
-            self._prepare_vehicle(destination)
-            if task.get("SpecificationType") == ORBIT_SPECIFICATION_URL:
-                self._execute_orbit(task_id, task, destination)
+            if task["SpecificationType"] in RECOVERY_ACTIONS:
+                self._execute_recovery(task_id, RECOVERY_ACTIONS[task["SpecificationType"]])
+            elif task["SpecificationType"] == SEARCH_AREA_SPECIFICATION_URL:
+                self._execute_search(task_id, task)
             else:
-                self._execute_transit(task_id, destination)
+                destination = Destination.from_task(task)
+                self._prepare_vehicle(destination)
+                if task["SpecificationType"] == ORBIT_SPECIFICATION_URL:
+                    self._execute_orbit(task_id, task, destination)
+                else:
+                    self._execute_transit(task_id, destination)
         except TaskStatusUnavailable as exc:
             outcome = "unresolved"
             print(f"[TASK_STATUS_UNRESOLVED] task_id={task_id} error={exc}", flush=True)
@@ -524,11 +544,30 @@ class LatticeDemo(CoreBase):
         self._release_task(task_id)
         print(f"[TASK_ENDED] task_id={task_id} outcome=cancel", flush=True)
 
-    def _rtl_finished(self, accepted_at: float) -> bool:
+    def _landed_after(self, accepted_at: float) -> bool:
         return (self.state.get(UAV.State.Flight.IsArmed) is False
                 and self.state.get(UAV.State.Flight.IsInAir) is False
                 and all(self.flight_state_received_at.get(topic, 0) > accepted_at
                         for topic in self.flight_state_topics))
+
+    def _execute_recovery(self, task_id: str, action: str) -> None:
+        self._wait_until(
+            lambda: all(self.state.get(key) is not None for key in
+                        (UAV.State.Flight.IsArmed, UAV.State.Flight.IsInAir)),
+            float(self.state_timeout_s), f"Recovery requires known flight state task_id={task_id}",
+        )
+        accepted_at = time.monotonic()
+        if self.state.get(UAV.State.Flight.IsArmed) or self.state.get(UAV.State.Flight.IsInAir):
+            response = self._uav_action(action, {})
+            if not response.get("ok"):
+                raise LatticeDemoError(f"Recovery rejected action={action} data={response.get('data')}")
+        print(f"[TASK_RECOVERY] task_id={task_id} action={action} waiting for landed/disarmed telemetry", flush=True)
+        self._wait_until(
+            lambda: self._landed_after(accepted_at), float(self.execution_timeout_s),
+            f"Recovery unconfirmed task_id={task_id} action={action}",
+        )
+        self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.DoneOk, progress=1.0)
+        print(f"[TASK_RECOVERY_CONFIRMED] task_id={task_id} action={action}", flush=True)
 
     def _cancel_recovered_task(self, task_id: str) -> None:  # End a task left unresolved by a previous run.
         armed = self.state.get(UAV.State.Flight.IsArmed)
@@ -559,7 +598,7 @@ class LatticeDemo(CoreBase):
                 raise LatticeDemoError(f"RTL rejected task_id={task_id} data={response.get('data')}")
             accepted_at = time.monotonic()
             print(f"[TASK_CANCEL_RTL] task_id={task_id} waiting for fresh landed/disarmed telemetry", flush=True)
-            self._wait_until(lambda: self._rtl_finished(accepted_at), self.cancellation_timeout_s,
+            self._wait_until(lambda: self._landed_after(accepted_at), self.cancellation_timeout_s,
                 f"RTL completion unconfirmed task_id={task_id} armed={self.state.get(UAV.State.Flight.IsArmed)} "
                 f"in_air={self.state.get(UAV.State.Flight.IsInAir)}")
             self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.DoneNotOk,
@@ -642,7 +681,14 @@ class LatticeDemo(CoreBase):
                 raise LatticeDemoError(error)
             self._tick(0.1)
 
-    def _go_to(self, destination: Destination) -> None:  # Command the vehicle to the destination.
+    def _bearing_to(self, destination: Destination) -> float:
+        position = self._position()
+        if position is None:
+            raise LatticeDemoError("Aircraft position unavailable for camera/vehicle heading")
+        return Geodesic.WGS84.Inverse(float(position["LatDeg"]), float(position["LonDeg"]),
+                                     destination.latitude_deg, destination.longitude_deg)["azi1"] % 360
+
+    def _go_to(self, destination: Destination, yaw_deg: float | None = None) -> None:
         altitude_m = command_altitude_m(destination, self.home_hae_m)
         response = self._uav_action(
             UAV.Action.Navigation.GoTo,
@@ -650,7 +696,7 @@ class LatticeDemo(CoreBase):
                 "Latitude": destination.latitude_deg,
                 "Longitude": destination.longitude_deg,
                 "AltitudeM": altitude_m,
-                "YawDeg": 0.0,
+                "YawDeg": self._bearing_to(destination) if yaw_deg is None else yaw_deg,
             },
         )
         if not response.get("ok"):
@@ -711,6 +757,42 @@ class LatticeDemo(CoreBase):
                 )
             self._tick(0.2)
 
+    def _execute_search(self, task_id: str, task: Dict[str, Any]) -> None:
+        native = Task.model_validate_json(task["TaskJson"])
+        document = native.specification.model_dump(by_alias=True, exclude_none=True)
+        document.pop("@type")
+        specification = ParseDict(document, SearchArea())
+        area = self._resolve_lattice_entity(specification.area_entity_id)
+        if self.camera is None:
+            raise LatticeDemoError("Area search requires a configured camera calibration")
+        try:
+            plan = AreaSearchPlan.build(area, specification.height_above_area_m, specification.lane_spacing_m, self.camera)
+        except ValueError as cause:
+            raise LatticeDemoError(str(cause)) from cause
+        destinations = [Destination(point.latitude_degrees, point.longitude_degrees,
+                                    point.altitude_hae_meters, LATTICE.Enums.LatticeAltitudeReference.Hae)
+                        for point in plan.waypoints]
+        if not destinations:
+            raise LatticeDemoError(f"Search plan has no waypoints area={area.entity_id}")
+        print(f"[TASK_SEARCH] task_id={task_id} area={area.entity_id} lanes={len(destinations)//2} "
+              f"waypoints={len(destinations)} area_m2={plan.area_square_meters:.1f} heading_mode={self.search_heading_mode.value}", flush=True)
+        self._prepare_vehicle(destinations[0])
+        for index, destination in enumerate(destinations):
+            self._check_stop()
+            heading = plan.headings_deg[index] if self.search_heading_mode is SearchHeadingMode.LANE else None
+            self._go_to(destination, yaw_deg=heading)
+            self._wait_until(lambda: self._arrival(destination)[0], float(self.execution_timeout_s),
+                             f"Search waypoint timed out task_id={task_id} waypoint={index+1}/{len(destinations)}")
+            self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.Executing,
+                                 progress=(index + 1) / len(destinations))
+            print(f"[TASK_SEARCH_POINT] task_id={task_id} waypoint={index+1}/{len(destinations)}", flush=True)
+        result = SearchAreaResult(area_entity_id=area.entity_id, waypoints_completed=len(destinations),
+                                  waypoints_total=len(destinations), area_square_meters=plan.area_square_meters)
+        self._lattice_report(task_id, LATTICE.Enums.LatticeTaskStatus.DoneOk, progress=1.0,
+                             result=GoogleProtobufAny(type=f"type.googleapis.com/{result.DESCRIPTOR.full_name}",
+                                                      **MessageToDict(result)))
+        print(f"[TASK_SEARCH_COMPLETE] task_id={task_id} area={area.entity_id}", flush=True)
+
     def _orbit_centre(self, task: Dict[str, Any], centre: Destination) -> Destination:  # Re-resolve a moving objective entity.
         entity_id = task.get("OrbitEntityId")
         if not entity_id:
@@ -738,7 +820,7 @@ class LatticeDemo(CoreBase):
             f"reference={centre.altitude_reference} entity={task.get('OrbitEntityId')}",
             flush=True,
         )
-        self._go_to(destination)
+        self._go_to(destination, yaw_deg=self._bearing_to(centre))
         arrived, horizontal_m, altitude_error_m = self._arrival(destination)
         horizontal_denominator = max(horizontal_m, float(self.arrival_radius_m), 0.01) if not arrived else 1.0
         altitude_denominator = (
@@ -781,7 +863,7 @@ class LatticeDemo(CoreBase):
                     f"lat={destination.latitude_deg:.7f} lon={destination.longitude_deg:.7f}",
                     flush=True,
                 )
-                self._go_to(destination)
+                self._go_to(destination, yaw_deg=self._bearing_to(centre))
             self._tick(0.2)
 
     # -- failsafe ------------------------------------------------------------
