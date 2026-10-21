@@ -9,7 +9,7 @@ Liftoff conventions used
 
 This section is the practical contract used by the `hiveos` integration layer.
 
-### Raw Liftoff telemetry fields (as consumed by Skynet tools)
+### Raw Liftoff telemetry fields (as consumed by Colossus tools)
 
 From the existing Liftoff tooling, raw telemetry packet fields are interpreted as:
 
