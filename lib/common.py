@@ -1,5 +1,6 @@
 import queue
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict
 
@@ -39,11 +40,11 @@ def connect_bus_client(bus_config: Dict[str, Any], client_id: str, will_topic: s
     return MqttBusClient(host, port, client_id, topic_prefix=topic_prefix, will_topic=will_topic)
 
 
-def build_envelope(client_id: str, topic: str, data: Any) -> Dict[str, Any]:  # Build message envelope.
+def build_envelope(client_id: str, topic: str, data: Any, observed_at_ms: int | None = None) -> Dict[str, Any]:
     return {
         "client": client_id,
         "topic": topic,
-        "time": int(time.time() * 1000),
+        "time": int(time.time() * 1000) if observed_at_ms is None else observed_at_ms,
         "data": data,
     }
 
@@ -92,6 +93,7 @@ class BusRouter:
         self.subscribe = subscribe
         self.poll_interval_s = float(poll_interval_s)
         self.state: Dict[str, Any] = {}
+        self.state_observed_at: dict[str, datetime] = {}
         self.responses: Dict[str, Dict[str, Any]] = {}
         self.state_topics: Dict[str, str] = {}
         self.response_topics: set[str] = set()
@@ -138,6 +140,7 @@ class BusRouter:
 
         if topic in self.state_topics:
             state_key = self.state_topics[topic]
+            self.state_observed_at[state_key] = datetime.fromtimestamp(payload["time"] / 1000, timezone.utc)
             state_payload = payload["data"]
             if type(state_payload) is dict and len(state_payload) == 1:
                 field_name = state_key.rsplit(".", 1)[-1]

@@ -37,13 +37,10 @@ import httpx
 import numpy as np
 from anduril import (
     Aliases,
-    Classification,
-    ClassificationInformation,
     Entity,
     ErrorEllipse,
     EntityIdsSelector,
     GoogleProtobufAny,
-    Health,
     Lattice,
     Location as LatticeLocation,
     LocationUncertainty,
@@ -54,14 +51,10 @@ from anduril import (
     Position,
     Principal,
     Provenance,
-    Quaternion,
     RequestTimeoutError,
     RtspSettings,
-    Status as EntityStatus,
     System,
     Task,
-    TaskCatalog,
-    TaskDefinition,
     TaskError,
     TaskStatus,
 )
@@ -70,7 +63,6 @@ from anduril.oauth.types.get_token_response import GetTokenResponse
 from anduril.types.entity_manager_t_mat3 import EntityManagerTMat3
 from froggeolib import GimbalCamera, GPSposition
 
-from lib.altitude import relative_to_hae
 from lib.common import (
     build_event_topics,
     build_request_topic,
@@ -79,13 +71,10 @@ from lib.common import (
     build_state_topics,
     build_topic_base,
 )
-from lib.lattice_specs import (
-    SUPPORTED_SPECIFICATION_URLS,
-)
 from lib.lattice_fields import _field
 from plugins.lattice.tasks import TaskDeliveries
+from plugins.lattice.picture import VehiclePicture, VehiclePublication
 from lib.plugin_base import PluginBase
-from lib.reference_frames import attitude_enu_quaternion
 from lib.state_scheduler import StateScheduler
 from protocols.namespace_loader import load_protocol_namespace
 
@@ -167,9 +156,8 @@ class MediaSource:
 
     def media_item(self) -> MediaItem:  # Entity reference to the registered ingress.
         return MediaItem(
-            item_identifier=self.source,
+            item_identifier=self.ingress_id,
             type="MEDIA_TYPE_VIDEO",
-            relative_path=f"api/v1/video/ingress_streams/{self.ingress_id}",
         )
 
 
@@ -477,6 +465,12 @@ class LatticePlugin(PluginBase):
         self.last_entity_fields: Dict[str, Any] = {}
         home_hae = cfg.get("home_altitude_hae_m")
         self.entity_home_hae_m: float | None = None if home_hae is None else float(home_hae)
+        self.picture = VehiclePicture(VehiclePublication(
+            asset_id=self.asset_id, callsign=self.callsign, integration_name=f"mpfc.{self.client_id}",
+            expiry_s=self.entity_expiry_s, telemetry_freshness_s=cfg["telemetry_freshness_s"],
+            home_altitude_hae_m=self.entity_home_hae_m,
+            relationships=cfg["relationships"], group_details=cfg["group_details"],
+        ))
 
         self.connect_enabled = True
         self._published_connected = False
@@ -940,91 +934,38 @@ class LatticePlugin(PluginBase):
             item.registered = True
             print(f"[PLUGIN] {self.client_id} ingress registered id={item.ingress_id} url={item.url}", flush=True)
 
-    def _publish_entity_state(self) -> bool:  # Encode and publish the vehicle state as a Lattice entity.
-        position = self.state.get(UAV.State.Navigation.Position)
-        if position is None:
-            return False
-        attitude = self.state.get(UAV.State.Attitude.AttitudeRad)
-        relative_alt_m = float(position["RelAltM"])
-        # AbsAltM is AMSL; it cannot establish a WGS84 ellipsoid datum.
-        hae_alt_m = (None if self.entity_home_hae_m is None else
-                     relative_to_hae(relative_alt_m, self.entity_home_hae_m))
-        attitude_enu = None
-        activity = platform_activity(self.state)
-        if attitude is not None:
-            w, x, y, z = attitude_enu_quaternion(
-                attitude["Roll"], attitude["Pitch"], attitude["Yaw"]
-            )
-            attitude_enu = Quaternion(w=w, x=x, y=y, z=z)
-        entity = Entity(
-            entity_id=self.asset_id,
-            is_live=True,
-            expiry_time=datetime.now(timezone.utc) + timedelta(seconds=self.entity_expiry_s),
-            aliases=Aliases(name=self.callsign),
-            status=EntityStatus(platform_activity=activity) if activity is not None else None,
-            data_classification=Classification(
-                default=ClassificationInformation(level="CLASSIFICATION_LEVELS_UNCLASSIFIED")
-            ),
-            health=Health(
-                connection_status="CONNECTION_STATUS_ONLINE",
-                health_status="HEALTH_STATUS_HEALTHY",
-            ),
-            location=LatticeLocation(
-                position=Position(
-                    latitude_degrees=float(position["LatDeg"]),
-                    longitude_degrees=float(position["LonDeg"]),
-                    altitude_hae_meters=hae_alt_m,
-                ),
-                attitude_enu=attitude_enu,
-            ),
-            mil_view=MilView(
-                disposition="DISPOSITION_FRIENDLY",
-                environment="ENVIRONMENT_AIR",
-                platform_type="UAV",
-            ),
-            ontology=Ontology(template="TEMPLATE_ASSET", platform_type="UAV"),
-            provenance=Provenance(
-                integration_name=f"mpfc.{self.client_id}",
-                data_type="MPFC UAV",
-                source_id=self.client_id,
-                source_update_time=datetime.now(timezone.utc),
-            ),
-            task_catalog=TaskCatalog(
-                task_definitions=[
-                    TaskDefinition(task_specification_url=url) for url in SUPPORTED_SPECIFICATION_URLS
-                ]
-                if self.accept_tasks
-                else []
-            ),
-            media=Media(media=[item.media_item() for item in self.media_sources if item.registered]),
+    def _publish_entity_state(self) -> bool:
+        entity = self.picture.entity(
+            self.state, self.bus.state_observed_at,
+            Media(media=[item.media_item() for item in self.media_sources if item.registered]),
+            self.accept_tasks, platform_activity(self.state),
         )
         try:
-            self._lattice_call(
-                "publish_entity",
-                lambda: self.connection.client.entities.publish_entity(**entity.model_dump()),
-            )
+            self._lattice_call("publish_entity", lambda: self.connection.client.entities.publish_entity(
+                **entity.model_dump(exclude_unset=True, exclude_none=True)))
         except LatticeTransportError as exc:
             self._surface_transport_error("publish_entity", exc)
             return False
         self.entity_publish_count += 1
         self.last_entity_publish_ms = int(time.time() * 1000)
         self.last_entity_fields = {
-            LATTICE.State.Entity.LatitudeDeg: float(position["LatDeg"]),
-            LATTICE.State.Entity.LongitudeDeg: float(position["LonDeg"]),
             LATTICE.State.Entity.PublishCount: self.entity_publish_count,
             LATTICE.State.Entity.LastPublishAtMs: self.last_entity_publish_ms,
         }
-        if hae_alt_m is not None:
-            self.last_entity_fields[LATTICE.State.Entity.AltitudeHaeM] = hae_alt_m
-        if attitude_enu is not None:
-            self.last_entity_fields.update(
-                {
-                    LATTICE.State.Entity.AttitudeEnuW: float(attitude_enu.w),
-                    LATTICE.State.Entity.AttitudeEnuX: float(attitude_enu.x),
-                    LATTICE.State.Entity.AttitudeEnuY: float(attitude_enu.y),
-                    LATTICE.State.Entity.AttitudeEnuZ: float(attitude_enu.z),
-                }
-            )
+        if entity.location is not None:
+            position = entity.location.position
+            self.last_entity_fields[LATTICE.State.Entity.LatitudeDeg] = position.latitude_degrees
+            self.last_entity_fields[LATTICE.State.Entity.LongitudeDeg] = position.longitude_degrees
+            if position.altitude_hae_meters is not None:
+                self.last_entity_fields[LATTICE.State.Entity.AltitudeHaeM] = position.altitude_hae_meters
+            attitude = entity.location.attitude_enu
+            if attitude is not None:
+                self.last_entity_fields.update({
+                    LATTICE.State.Entity.AttitudeEnuW: attitude.w,
+                    LATTICE.State.Entity.AttitudeEnuX: attitude.x,
+                    LATTICE.State.Entity.AttitudeEnuY: attitude.y,
+                    LATTICE.State.Entity.AttitudeEnuZ: attitude.z,
+                })
         self._sync_entity_state()
         return True
 
@@ -1032,10 +973,14 @@ class LatticePlugin(PluginBase):
         detection = envelope["data"]
         position = self.state.get(UAV.State.Navigation.Position)
         attitude = self.state.get(UAV.State.Attitude.AttitudeRad)
-        if "tracker_id" not in detection or position is None or attitude is None or not self.connection.connected:
+        now = datetime.now(timezone.utc)
+        navigation_fresh = self.picture.fresh(self.bus.state_observed_at, UAV.State.Navigation.Position, now)
+        attitude_fresh = self.picture.fresh(self.bus.state_observed_at, UAV.State.Attitude.AttitudeRad, now)
+        if ("tracker_id" not in detection or position is None or attitude is None or not self.connection.connected
+                or not navigation_fresh or not attitude_fresh):
             print(
                 f"[TRACK_SKIPPED] class={detection.get('class_name')} tracker_id={detection.get('tracker_id')} "
-                f"position={position is not None} attitude={attitude is not None} connected={self.connection.connected}",
+                f"position_fresh={navigation_fresh} attitude_fresh={attitude_fresh} connected={self.connection.connected}",
                 flush=True,
             )
             return
@@ -1072,8 +1017,6 @@ class LatticePlugin(PluginBase):
             self._surface_transport_error("publish_track", exc)
 
     def _maybe_publish_entity_state(self) -> None:  # Publish the entity on its configured interval.
-        if self.state.get(UAV.State.Navigation.Position) is None:
-            return
         if not self.connection.connected:
             return
         now = time.time()

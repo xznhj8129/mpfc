@@ -1,0 +1,33 @@
+# Field observer: flight remains with the operator's GCS. Provision connection/identity before use.
+my_name: field-observer
+vehicle:
+  autopilot: FCAutopilotType.PX4
+  uav_type: UAVType.Copter
+  telem_type: TelemType.Mavlink2
+bus_config:
+  schema_path: bus_topics_schema.json
+  log_file: hivebus.log
+  endpoint:
+    type: mqtt
+    host: 127.0.0.1
+    port: 1883
+plugins:
+- plugin: uav_controller
+  cfg:
+    id: uav_controller
+    topic_ns: UAV
+    receive_only: true
+- plugin: mavlink_interface
+  cfg:
+    id: mavlink
+    topic_ns: UAV
+    conn_str: tcp://127.0.0.1:5760
+    target_sysid: 1
+    target_compid: 1
+- plugin: lattice
+  cfg:
+    id: lattice
+    topic_ns: LATTICE
+    asset_id: field-uav
+    accept_tasks: false
+    media: []

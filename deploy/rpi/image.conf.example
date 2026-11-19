@@ -9,6 +9,7 @@ wfb-ng=no
 driver=rtl8812eu
 wifi_channel=161
 wifi_region=CA
+ldpc=yes
 
 [provisioning]
 directory=

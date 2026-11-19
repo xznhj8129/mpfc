@@ -426,3 +426,27 @@ mpfc/
 ```bash
 pip install -r requirements.txt
 ```
+
+## Field sharing contract
+
+- Prepare destination, CA, credentials, stable identities and source bindings in YAML before field use: `config/field.example.yaml`.
+- Laptop: open the prepared launcher, select sources, Share. Stop ends local capture before remote cleanup.
+- Phone: ATAK supplies operator position/presence; OpenTAK ICU supplies camera video. Operator identity is `tak:<ATAK UID>`.
+- MPFC owns receive-only MAVLink telemetry through its normal supervisor. No flight core, task listener or vehicle commands are enabled.
+- Multiple aircraft have separate identities and explicit MAVLink system/component bindings. Native Lattice group relationships associate operator and aircraft.
+- Video uses the native Lattice Video API and FFmpeg/SRT. `MediaItem.itemIdentifier` is the ingress ID. Video needs no position.
+- Sharing requires remote confirmation for every selected source. Missing position remains unavailable; stale coordinates are cleared.
+- Interrupted publishers restart visibly. OAuth reconnects after relay restart. Stop restores displaced media overrides and archives session streams.
+- Device configuration and permissions are preparation work. Physical ATAK/camera verification requires those devices.
+
+Install `requirements-runtime.txt`, FFmpeg, Mosquitto and Zenity in the prepared laptop runtime. Then:
+
+```bash
+python -m field_launcher --config field.yaml prepare-laptop --output Share.desktop
+python -m field_launcher --config field.yaml prepare-phone --output phone-setup.html
+```
+
+Open `Share.desktop` on the laptop. On the phone, import the generated camera destination once; open OpenTAK ICU from ATAK and tap Start Stream.
+`python -m field_launcher --config field.yaml share --headless` shares all prepared sources until SIGINT/SIGTERM.
+
+Phone import contract: [OpenTAK ICU](https://github.com/brian7704/OpenTAK_ICU), `Preferences`, `OnBoardingActivity`, `Camera2Service`.

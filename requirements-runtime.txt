@@ -5,6 +5,9 @@ mavsdk
 paho-mqtt>=1.6,<3
 PyYAML>=6
 pydantic>=2.6
+protobuf>=4.21,<7
+numpy
+froggeolib @ git+https://github.com/xznhj8129/froggeolib.git@37c548811d1ad39db7fd1c0f29007d6a21b0ecdf
 msgpack>=1.0
 geographiclib>=2
 mgrs>=1

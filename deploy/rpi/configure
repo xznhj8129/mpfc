@@ -25,6 +25,7 @@ wfb_ng=no
 wfb_driver=
 wfb_channel=161
 wfb_region=CA
+wfb_ldpc=yes
 if ask_yes_no 'Include WFB-NG' n; then
     wfb_ng=yes
     echo 'WFB-NG radio driver:'
@@ -40,6 +41,9 @@ if ask_yes_no 'Include WFB-NG' n; then
     done
     wfb_channel=$(ask_default 'WiFi channel' 161)
     wfb_region=$(ask_default 'Regulatory region (ISO alpha-2)' CA)
+    if ! ask_yes_no 'Ground receiver decodes LDPC (answer n for a Ubiquiti Rocket M5 / AR9280 ground head)' y; then
+        wfb_ldpc=no
+    fi
 fi
 
 mkdir -p "$(dirname -- "${CONFIG}")"
@@ -56,6 +60,7 @@ wfb-ng=${wfb_ng}
 driver=${wfb_driver}
 wifi_channel=${wfb_channel}
 wifi_region=${wfb_region}
+ldpc=${wfb_ldpc}
 
 [provisioning]
 directory=${provisioning}

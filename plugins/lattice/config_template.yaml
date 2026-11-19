@@ -27,6 +27,11 @@ cfg:
   callsign: null
   # required; false = receive-only edge: no agent listener, no task recovery, empty task catalog
   accept_tasks: true
+  # Native SDK components owned by this publisher; field setup supplies group membership.
+  relationships: null
+  group_details: null
+  # Location and attitude expire independently of the edge process and live video.
+  telemetry_freshness_s: 3.0
   # required; video sources registered as Lattice Video API ingress streams <asset_id>.<source>
   # and referenced from the entity, e.g. [{source: front, url: rtsp://127.0.0.1:8554/uav1-front}]
   media: []
@@ -40,6 +45,7 @@ cfg:
     topic_ns: UAV
   # required vehicle state fields used to encode the published entity
   vehicle_state_keys:
+    - FcConnected
     - Position
     - AttitudeRad
     - Battery

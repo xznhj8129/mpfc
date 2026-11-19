@@ -67,6 +67,7 @@ wfb-ng=yes
 driver=rtl8812eu
 wifi_channel=161
 wifi_region=CA
+ldpc=yes
 
 [provisioning]
 directory=/path/to/provisioning
@@ -93,7 +94,7 @@ image-build implementation:
 ```
 
 It writes `deploy/rpi/image.conf`, asks whether WFB-NG is wanted, asks for the
-WFB radio driver and basic radio settings when selected, and can invoke
+WFB radio driver, basic radio settings and LDPC when selected, and can invoke
 `build-image` after writing the file.
 
 New optional capabilities belong under:
@@ -124,8 +125,15 @@ The component:
   `linux-headers-rpi-v8` packages before building the patched driver;
 - builds the selected patched Realtek driver through DKMS for the target Pi v8
   kernel, explicitly rather than using the build host's `uname`;
-- writes `/etc/wifibroadcast.cfg` from the selected channel/region;
-- enables `wifibroadcast@drone.service`;
+- writes `/etc/wifibroadcast.cfg` from the selected channel, region and LDPC
+  setting;
+- enables `wifibroadcast.service` and `wifibroadcast@drone.service`. The drone
+  instance is only wanted by the parent unit, so both must be enabled for WFB to
+  start at boot;
+- adds a `wifibroadcast@.service` drop-in that runs `rfkill unblock wlan` before
+  each start. Raspberry Pi OS soft-blocks every radio at boot until a WiFi
+  country is set (`/etc/modprobe.d/rfkill_default.conf`), the WFB card included,
+  and WFB-NG does not unblock it;
 - keeps WFB-NG away from the FC serial device: MPFC remains the owner of the
   physical MAVLink endpoint. WFB's drone MAVLink profile listens on local UDP
   `127.0.0.1:14550` for an explicit bridge/router if one is later desired;
@@ -134,8 +142,20 @@ The component:
   `wlanX` name into the image.
 
 The component pins its WFB package/driver inputs in its installer and records the
-actual WFB version, driver, driver revision, target kernel, channel, and region in
-the final image manifest.
+actual WFB version, driver, driver revision, target kernel, channel, region and
+LDPC setting in the final image manifest. WFB-NG comes from the apt.wfb-ng.org
+`release-26.11` channel at an exact version, with the `wfb-ng-26.11` tag as the
+source-build fallback. The ground station and every WFB cluster node must run
+the same WFB-NG release, so change these pins together with the ground side.
+
+`ldpc` defaults to `yes`, the upstream setting. Set `ldpc=no` when the ground
+receiver cannot decode LDPC, for example a Ubiquiti Rocket M5 (Atheros AR9280)
+used as a WFB cluster receive node. Otherwise that receiver cannot decode the
+vehicle's LDPC-coded frames.
+
+Connect the USB radio before powering the Pi. On a Zero 2 W, a radio plugged in
+while running failed to enumerate (`device descriptor read/64, error -71`) and
+only came up after a reboot.
 
 WFB-NG expects the drone key at `/etc/drone.key`. The appliance keeps the
 canonical provisioning boundary at `/home/mpfc/keys`, so the component installs:
@@ -334,6 +354,7 @@ mpfc.service
 WFB-NG image additionally enables:
 
 ```text
+wifibroadcast.service
 wifibroadcast@drone.service
 ```
 

@@ -53,9 +53,9 @@ class UavController(PluginBase):
         for topic in self.backend_event_topics.values():
             self.client.subscribe(topic)
 
-    def _publish_state(self, key: str, payload: Any) -> None:
+    def _publish_state(self, key: str, payload: Any, observed_at_ms: int | None = None) -> None:
         topic = self.state_publish_topics[key]
-        self.client.publish(topic, build_envelope(self.client_id, topic, payload))
+        self.client.publish(topic, build_envelope(self.client_id, topic, payload, observed_at_ms))
 
     def _build_sensor_config_state(self) -> Dict[str, Any] | None:
         raw_sensor_config = self.state.get(UAV.State.Sensor.SensorConfig)
@@ -101,7 +101,7 @@ class UavController(PluginBase):
         topic, payload = self._pump_once(deadline)
         if topic in self.backend_state_topic_to_key:
             state_key = self.backend_state_topic_to_key[topic]
-            self._publish_state(state_key, payload["data"])
+            self._publish_state(state_key, payload["data"], payload["time"])
             if state_key in {UAV.State.Sensor.SensorConfig, UAV.State.Navigation.Position}:
                 sensor_config = self._build_sensor_config_state()
                 if sensor_config is not None:

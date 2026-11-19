@@ -1,0 +1,33 @@
+# Prepare before field use. Replace the destination, credentials, identities and physical source bindings.
+connection:
+  url: https://asuka.example.test:8443
+  ca: certs/server.crt
+  client_id: mpfc
+  client_secret: REPLACE_WITH_ISSUED_SECRET
+group_id: field-team
+group_name: Field team
+mqtt_port: 18884
+state_directory: field-state
+phone:
+  tak_uid: REPLACE_WITH_ATAK_DEVICE_UID
+  callsign: Operator
+  ingress_id: operator.camera
+assets:
+- entity_id: field-uav-1
+  name: Aircraft 1
+  telemetry:
+    connection: tcp://127.0.0.1:5760
+    target_sysid: 1
+    target_compid: 1
+  videos:
+  - name: Front camera
+    input:
+      kind: v4l2
+      device: /dev/v4l/by-id/REPLACE_WITH_CAMERA_ID
+- entity_id: field-uav-2
+  name: Aircraft 2 video only
+  videos:
+  - name: Camera
+    input:
+      kind: rtsp
+      url: rtsp://camera.example.test/live

@@ -29,6 +29,7 @@ class StateScheduler:
             self.last_sent[key] = 0.0
 
         self.state: Dict[str, Any] = {}
+        self.observed_at_ms: dict[str, int] = {}
         self.pending: set[str] = set()
         self.lock = threading.Lock()
 
@@ -37,6 +38,7 @@ class StateScheduler:
             raise RuntimeError(f"unknown state key {key}")
         with self.lock:
             self.state[key] = value
+            self.observed_at_ms[key] = int(time.time() * 1000)
             self.pending.add(key)
 
     def snapshot(self) -> Dict[str, Any]:
@@ -45,7 +47,7 @@ class StateScheduler:
 
     def flush(self) -> None:
         now = time.monotonic()
-        to_publish: list[tuple[str, Any]] = []
+        to_publish: list[tuple[str, Any, int]] = []
         with self.lock:
             for key in list(self.pending):
                 last = self.last_sent[key]
@@ -54,13 +56,13 @@ class StateScheduler:
                 value = self.state[key]
                 self.last_sent[key] = now
                 self.pending.discard(key)
-                to_publish.append((key, value))
+                to_publish.append((key, value, self.observed_at_ms[key]))
 
-        for key, value in to_publish:
+        for key, value, observed_at_ms in to_publish:
             topic = self.topics[key]
             payload = value
             if type(payload) is not dict:
                 field_name = key.rsplit(".", 1)[-1]
                 payload = {field_name: value}
-            envelope = build_envelope(self.client_id, topic, payload)
+            envelope = build_envelope(self.client_id, topic, payload, observed_at_ms)
             self.client.publish(topic, envelope)

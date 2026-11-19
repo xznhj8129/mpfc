@@ -3,9 +3,12 @@ set -Eeuo pipefail
 
 : "${MPFC_IMAGE_CONFIG:?MPFC_IMAGE_CONFIG is required}"
 
-WFB_APT_CHANNEL=master
+# The ground station and every cluster node must run the same WFB-NG release.
+# release-26.11 holds the 26.11 release build; the source fallback is the wfb-ng-26.11 tag.
+WFB_APT_CHANNEL=release-26.11
+WFB_APT_VERSION=26.11.16.42392
 WFB_SOURCE_REPO=https://github.com/svpcom/wfb-ng.git
-WFB_SOURCE_COMMIT=3504a3870189fdc4bb1f7e2a2f141a740973a185
+WFB_SOURCE_COMMIT=5ebc4926c50c819ae887665b7c2dc9fb843044f0
 RTL8812AU_REPO=https://github.com/svpcom/rtl8812au.git
 RTL8812AU_COMMIT=6e75916416de1dce5ecd37f824896bebf96aaf8f
 RTL8812EU_REPO=https://github.com/svpcom/rtl8812eu.git
@@ -20,14 +23,22 @@ section = "wfb-ng"
 print(cfg.get(section, "driver", fallback=""))
 print(cfg.get(section, "wifi_channel", fallback="161"))
 print(cfg.get(section, "wifi_region", fallback="CA"))
+print(cfg.get(section, "ldpc", fallback="yes"))
 PY
 )
 DRIVER=${CFG[0]}
 WIFI_CHANNEL=${CFG[1]}
 WIFI_REGION=${CFG[2]}
+LDPC=${CFG[3]}
 case "${DRIVER}" in
     rtl8812au|rtl8812eu) ;;
     *) echo "wfb-ng requires driver=rtl8812au or rtl8812eu" >&2; exit 1 ;;
+esac
+# LDPC must be off when the ground receiver cannot decode it (Ubiquiti Rocket M5 / Atheros AR9280).
+case "${LDPC}" in
+    yes) WFB_LDPC=1 ;;
+    no) WFB_LDPC=0 ;;
+    *) echo "invalid WFB-NG ldpc: ${LDPC} (expected yes or no)" >&2; exit 1 ;;
 esac
 [[ ${WIFI_CHANNEL} =~ ^[0-9]+$ ]] || { echo "invalid WFB-NG wifi_channel: ${WIFI_CHANNEL}" >&2; exit 1; }
 [[ ${WIFI_REGION} =~ ^[A-Za-z]{2}$ ]] || { echo "invalid WFB-NG wifi_region: ${WIFI_REGION}" >&2; exit 1; }
@@ -56,7 +67,7 @@ if ! apt-get update; then
 fi
 
 WFB_INSTALL_SOURCE="apt.wfb-ng.org/${WFB_APT_CHANNEL}"
-if ! apt-get install -y --no-install-recommends wfb-ng; then
+if ! apt-get install -y --no-install-recommends "wfb-ng=${WFB_APT_VERSION}-0~$(lsb_release -cs)"; then
     echo "WFB-NG apt package unavailable; falling back to pinned source build" >&2
     apt-get install -y --no-install-recommends \
         python3-all python3-all-dev python3-venv libpcap-dev libsodium-dev libevent-dev \
@@ -124,6 +135,9 @@ cat > /etc/wifibroadcast.cfg <<EOF_WFB
 wifi_channel = ${WIFI_CHANNEL}
 wifi_region = '${WIFI_REGION}'
 
+[base]
+ldpc = ${WFB_LDPC}
+
 [drone_mavlink]
 peer = 'listen://127.0.0.1:14550'
 
@@ -132,7 +146,18 @@ peer = 'listen://0.0.0.0:5602'
 EOF_WFB
 
 ln -sfn /home/mpfc/keys/drone.key /etc/drone.key
-systemctl enable wifibroadcast@drone.service >/dev/null
+
+# raspberrypi-sys-mods' /etc/modprobe.d/rfkill_default.conf soft-blocks every radio at boot until a
+# WiFi country is set. That includes the WFB card, and WFB-NG does not unblock it before bringing it up.
+RFKILL=$(command -v rfkill)
+install -d -m 0755 /etc/systemd/system/wifibroadcast@.service.d
+cat > /etc/systemd/system/wifibroadcast@.service.d/rfkill.conf <<EOF_RFKILL
+[Service]
+ExecStartPre=-${RFKILL} unblock wlan
+EOF_RFKILL
+
+# wifibroadcast@drone is WantedBy=wifibroadcast.service, so the parent must be enabled for WFB to start at boot.
+systemctl enable wifibroadcast.service wifibroadcast@drone.service >/dev/null
 
 install -d -m 0755 /etc/mpfc/components
 WFB_VERSION=$(dpkg-query -W -f='${Version}' wfb-ng 2>/dev/null || printf unknown)
@@ -144,6 +169,7 @@ wfb_driver_revision=${DRIVER_COMMIT}
 wfb_kernel=${KERNEL_VERSION}
 wfb_wifi_channel=${WIFI_CHANNEL}
 wfb_wifi_region=${WIFI_REGION}
+wfb_ldpc=${LDPC}
 EOF_MANIFEST
 
 rm -rf /tmp/wfb-driver /tmp/wfb-ng-source
